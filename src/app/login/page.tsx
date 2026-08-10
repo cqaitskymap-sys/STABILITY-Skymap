@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { SkymapLogo } from "@/components/brand/skymap-logo";
 import { Button, Card, Input } from "@/components/ui";
 import { friendlyError } from "@/lib/utils";
 import { seedDemoData } from "@/services/seed";
@@ -61,15 +62,11 @@ function LoginForm() {
     <div className="relative flex min-h-screen items-center justify-center px-4 py-10">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(13,148,136,0.16),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(37,99,235,0.12),transparent_30%),linear-gradient(180deg,#f8fafc,#eef6f5)]" />
       <Card className="relative w-full max-w-md overflow-hidden">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-teal-700 to-sky-700 px-6 py-6 text-white">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-white/15 p-2.5">
-              <FlaskConical className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-lg font-semibold">SKYMAP Stability</p>
-              <p className="text-sm text-teal-50">Sample Inventory Management</p>
-            </div>
+        <div className="border-b border-slate-800 bg-slate-950 px-6 py-7 text-white">
+          <div className="flex flex-col items-center text-center">
+            <SkymapLogo priority className="h-16 w-auto max-w-[220px]" />
+            <p className="mt-3 text-sm font-medium text-sky-200">Stability Sample Inventory</p>
+            <p className="mt-1 text-xs text-slate-400">Pharmaceutical Quality Assurance</p>
           </div>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-6 py-6">
@@ -100,10 +97,12 @@ function LoginForm() {
             Sign in
           </Button>
           <Button type="button" variant="outline" className="w-full" loading={seeding} onClick={initializeDemo}>
-            Initialize Demo Environment
+            Initialize / Repair Demo Access
           </Button>
           <p className="text-center text-xs text-slate-500">
-            Demo: admin@stability.local / Admin@123
+            Admin: admin@stability.local / Admin@123
+            <br />
+            If signup shows a console 400, just use Sign in — the admin account already exists.
           </p>
         </form>
       </Card>

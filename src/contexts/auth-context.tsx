@@ -78,7 +78,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
-    const p = await loadOrCreateProfile(cred.user);
+    let p = await loadOrCreateProfile(cred.user);
+
+    // Keep demo admin elevated even if profile was first created with default role.
+    if (email.toLowerCase() === "admin@stability.local" && p.role !== "Admin") {
+      p = {
+        ...p,
+        role: "Admin",
+        displayName: p.displayName || "System Admin",
+        updatedAt: nowISO(),
+      };
+      await setDoc(doc(getDb(), COLLECTIONS.users, cred.user.uid), p, { merge: true });
+    }
+
     setProfile(p);
     await writeAuditLog({
       action: "Login",
@@ -103,29 +115,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, [profile]);
 
+  const ensureAdminProfile = useCallback(async (firebaseUser: User) => {
+    await updateProfile(firebaseUser, { displayName: "System Admin" }).catch(() => undefined);
+    const p = await loadOrCreateProfile(firebaseUser, "Admin");
+    const adminProfile: AppUser = {
+      ...p,
+      role: "Admin",
+      displayName: "System Admin",
+      email: firebaseUser.email || p.email,
+      updatedAt: nowISO(),
+    };
+    await setDoc(doc(getDb(), COLLECTIONS.users, firebaseUser.uid), adminProfile, { merge: true });
+    setProfile(adminProfile);
+    setUser(firebaseUser);
+  }, []);
+
   const registerDemoAdmin = useCallback(async () => {
     const email = "admin@stability.local";
     const password = "Admin@123";
+
+    // Prefer sign-in first — admin is often already created.
+    try {
+      const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+      await ensureAdminProfile(cred.user);
+      return;
+    } catch (signInError: unknown) {
+      const signInCode =
+        typeof signInError === "object" && signInError && "code" in signInError
+          ? String((signInError as { code: string }).code)
+          : "";
+      const signInMsg = signInError instanceof Error ? signInError.message : "";
+      const canCreate =
+        signInCode.includes("user-not-found") ||
+        signInCode.includes("invalid-credential") ||
+        signInMsg.includes("user-not-found") ||
+        signInMsg.includes("invalid-credential");
+      if (!canCreate) throw signInError;
+    }
+
     try {
       const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
-      await updateProfile(cred.user, { displayName: "System Admin" });
-      const p = await loadOrCreateProfile(cred.user, "Admin");
-      // Force Admin role
-      await setDoc(
-        doc(getDb(), COLLECTIONS.users, cred.user.uid),
-        { ...p, role: "Admin", displayName: "System Admin", updatedAt: nowISO() },
-        { merge: true }
-      );
-      setProfile({ ...p, role: "Admin", displayName: "System Admin" });
+      await ensureAdminProfile(cred.user);
     } catch (error: unknown) {
+      const code =
+        typeof error === "object" && error && "code" in error
+          ? String((error as { code: string }).code)
+          : "";
       const msg = error instanceof Error ? error.message : "";
-      if (msg.includes("email-already-in-use")) {
-        await login(email, password);
+      if (code.includes("email-already-in-use") || msg.includes("email-already-in-use")) {
+        const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+        await ensureAdminProfile(cred.user);
         return;
       }
       throw error;
     }
-  }, [login]);
+  }, [ensureAdminProfile]);
 
   const hasPermission = useCallback(
     (permission: Permission) => can(profile?.role, permission),

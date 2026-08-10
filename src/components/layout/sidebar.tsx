@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { SkymapLogo } from "@/components/brand/skymap-logo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -96,20 +97,26 @@ export function Sidebar({
 
   const content = (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
-        <div className={cn("min-w-0", collapsed && "mx-auto")}>
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-700 text-white">
-              <FlaskConical className="h-5 w-5" />
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3">
+        <Link
+          href="/stability/dashboard"
+          className={cn("min-w-0 rounded-lg bg-slate-950 px-2 py-1.5", collapsed && "mx-auto px-1.5")}
+          onClick={onClose}
+          aria-label="SKYMAP Stability Dashboard"
+        >
+          {collapsed ? (
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden">
+              <SkymapLogo variant="compact" className="h-10 w-auto max-w-none scale-125" />
             </div>
-            {!collapsed ? (
-              <div>
-                <p className="truncate text-sm font-semibold text-slate-900">SKYMAP Stability</p>
-                <p className="truncate text-xs text-slate-500">Sample Inventory</p>
-              </div>
-            ) : null}
-          </div>
-        </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              <SkymapLogo className="h-11 w-auto max-w-[158px]" />
+              <p className="px-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+                Stability Inventory
+              </p>
+            </div>
+          )}
+        </Link>
         <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" onClick={onClose} aria-label="Close menu">
           <X className="h-5 w-5" />
         </button>
