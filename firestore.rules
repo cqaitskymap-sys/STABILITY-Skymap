@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function hasRole(roles) {
+      return isSignedIn() && userDoc().role in roles;
+    }
+    function isAdmin() {
+      return hasRole(['Admin']);
+    }
+    function isQAManagerOrAdmin() {
+      return hasRole(['Admin', 'QA Manager']);
+    }
+    function isQAStaff() {
+      return hasRole(['Admin', 'QA Manager', 'QA User']);
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow delete: if isAdmin();
+    }
+
+    match /counters/{docId} {
+      allow read, write: if isQAStaff();
+    }
+
+    match /products/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isQAManagerOrAdmin();
+    }
+    match /batches/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isQAManagerOrAdmin();
+    }
+    match /studyTypes/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+    match /storageConditions/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+    match /pullPoints/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+    match /chambers/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+    match /storageLocations/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+    match /units/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isAdmin();
+    }
+
+    match /stabilityStudies/{docId} {
+      allow read: if isQAStaff();
+      allow create, update: if isQAManagerOrAdmin();
+      allow delete: if false;
+    }
+    match /stabilitySamples/{docId} {
+      allow read: if isQAStaff();
+      allow create, update: if isQAStaff();
+      allow delete: if false;
+    }
+    match /studyPullPoints/{docId} {
+      allow read: if isQAStaff();
+      allow create, update: if isQAStaff();
+      allow delete: if false;
+    }
+    match /sampleWithdrawals/{docId} {
+      allow read: if isQAStaff();
+      allow create: if isQAStaff();
+      allow update, delete: if false;
+    }
+    match /sampleMovements/{docId} {
+      allow read: if isQAStaff();
+      allow create: if isQAManagerOrAdmin();
+      allow update, delete: if false;
+    }
+    match /sampleDisposals/{docId} {
+      allow read: if isQAStaff();
+      allow create: if isQAManagerOrAdmin();
+      allow update, delete: if false;
+    }
+    match /inventoryReconciliations/{docId} {
+      allow read: if isQAStaff();
+      allow create, update: if isQAManagerOrAdmin();
+      allow delete: if false;
+    }
+    match /inventoryTransactions/{docId} {
+      allow read: if isQAStaff();
+      allow create: if isQAStaff();
+      allow update, delete: if false;
+    }
+    match /inventoryAlerts/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isQAStaff();
+    }
+    match /auditLogs/{docId} {
+      allow read: if isQAManagerOrAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+  }
+}

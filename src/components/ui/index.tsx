@@ -1,0 +1,374 @@
+"use client";
+
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
+import { AlertTriangle, Inbox, Loader2, type LucideIcon } from "lucide-react";
+
+export function Button({
+  className,
+  variant = "primary",
+  size = "md",
+  loading,
+  children,
+  disabled,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
+  size?: "sm" | "md" | "lg";
+  loading?: boolean;
+}) {
+  const variants = {
+    primary: "bg-teal-700 text-white hover:bg-teal-800 shadow-sm",
+    secondary: "bg-slate-100 text-slate-800 hover:bg-slate-200",
+    ghost: "bg-transparent text-slate-700 hover:bg-slate-100",
+    danger: "bg-rose-600 text-white hover:bg-rose-700",
+    outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+  };
+  const sizes = {
+    sm: "h-8 px-3 text-xs",
+    md: "h-10 px-4 text-sm",
+    lg: "h-11 px-5 text-sm",
+  };
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-50 disabled:pointer-events-none",
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+      {children}
+    </button>
+  );
+}
+
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string; hint?: string }>(
+  function Input({ className, label, error, hint, id, ...props }, ref) {
+    const inputId = id || props.name;
+    return (
+      <label className="block space-y-1.5">
+        {label ? (
+          <span className="text-sm font-medium text-slate-700">
+            {label}
+            {props.required ? <span className="text-rose-500"> *</span> : null}
+          </span>
+        ) : null}
+        <input
+          ref={ref}
+          id={inputId}
+          className={cn(
+            "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20",
+            error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200",
+            className
+          )}
+          {...props}
+        />
+        {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
+        {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+      </label>
+    );
+  }
+);
+
+export function Select({
+  className,
+  label,
+  error,
+  hint,
+  children,
+  id,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; error?: string; hint?: string; children: ReactNode }) {
+  const selectId = id || props.name;
+  return (
+    <label className="block space-y-1.5">
+      {label ? (
+        <span className="text-sm font-medium text-slate-700">
+          {label}
+          {props.required ? <span className="text-rose-500"> *</span> : null}
+        </span>
+      ) : null}
+      <select
+        id={selectId}
+        className={cn(
+          "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20",
+          error && "border-rose-400",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </select>
+      {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
+      {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+    </label>
+  );
+}
+
+export function Textarea({
+  className,
+  label,
+  error,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string }) {
+  return (
+    <label className="block space-y-1.5">
+      {label ? (
+        <span className="text-sm font-medium text-slate-700">
+          {label}
+          {props.required ? <span className="text-rose-500"> *</span> : null}
+        </span>
+      ) : null}
+      <textarea
+        className={cn(
+          "min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20",
+          className
+        )}
+        {...props}
+      />
+      {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+    </label>
+  );
+}
+
+export function Card({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={cn("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function CardHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function Badge({
+  children,
+  tone = "slate",
+}: {
+  children: ReactNode;
+  tone?: "slate" | "green" | "yellow" | "orange" | "red" | "blue" | "teal" | "purple";
+}) {
+  const tones = {
+    slate: "bg-slate-100 text-slate-700",
+    green: "bg-emerald-50 text-emerald-700",
+    yellow: "bg-amber-50 text-amber-700",
+    orange: "bg-orange-50 text-orange-700",
+    red: "bg-rose-50 text-rose-700",
+    blue: "bg-sky-50 text-sky-700",
+    teal: "bg-teal-50 text-teal-700",
+    purple: "bg-indigo-50 text-indigo-700",
+  };
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", tones[tone])}>
+      {children}
+    </span>
+  );
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, "slate" | "green" | "yellow" | "orange" | "red" | "blue" | "teal" | "purple"> = {
+    Active: "green",
+    Available: "green",
+    Upcoming: "green",
+    Matched: "green",
+    Completed: "green",
+    Withdrawn: "blue",
+    "Partially Withdrawn": "teal",
+    "Due Soon": "yellow",
+    "Due Today": "orange",
+    Overdue: "red",
+    Missed: "red",
+    "Variance Found": "orange",
+    "Investigation Required": "red",
+    Adjusted: "purple",
+    Disposed: "slate",
+    Depleted: "slate",
+    "Fully Withdrawn": "blue",
+    "Under Reconciliation": "orange",
+    "Under Maintenance": "yellow",
+    Inactive: "slate",
+    Draft: "slate",
+  };
+  return <Badge tone={map[status] || "slate"}>{status}</Badge>;
+}
+
+export function StatCard({
+  title,
+  value,
+  icon: Icon,
+  hint,
+  tone = "teal",
+}: {
+  title: string;
+  value: string | number;
+  icon: LucideIcon;
+  hint?: string;
+  tone?: "teal" | "blue" | "indigo" | "amber" | "rose" | "emerald";
+}) {
+  const tones = {
+    teal: "bg-teal-50 text-teal-700",
+    blue: "bg-sky-50 text-sky-700",
+    indigo: "bg-indigo-50 text-indigo-700",
+    amber: "bg-amber-50 text-amber-700",
+    rose: "bg-rose-50 text-rose-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+  };
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500">{title}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+          {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+        </div>
+        <div className={cn("rounded-lg p-2.5", tones[tone])}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-500">
+        <Inbox className="h-6 w-6" />
+      </div>
+      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      {description ? <p className="mt-1 max-w-md text-sm text-slate-500">{description}</p> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
+}
+
+export function LoadingSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 p-4">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="h-12 animate-pulse rounded-lg bg-slate-100" />
+      ))}
+    </div>
+  );
+}
+
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="mb-3 rounded-full bg-rose-50 p-3 text-rose-600">
+        <AlertTriangle className="h-6 w-6" />
+      </div>
+      <h3 className="text-base font-semibold text-slate-900">Something went wrong</h3>
+      <p className="mt-1 max-w-md text-sm text-slate-500">{message}</p>
+      {onRetry ? (
+        <Button className="mt-4" variant="outline" onClick={onRetry}>
+          Try again
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  loading,
+  tone = "primary",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  loading?: boolean;
+  tone?: "primary" | "danger";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600">{description}</p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
+            {cancelLabel}
+          </Button>
+          <Button variant={tone === "danger" ? "danger" : "primary"} loading={loading} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+        {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+      </div>
+      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = "Search...",
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <Input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+      aria-label={placeholder}
+    />
+  );
+}
