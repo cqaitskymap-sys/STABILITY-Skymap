@@ -77,7 +77,7 @@ export function Header({
           <div className="hidden items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 sm:flex">
             <div className="text-right">
               <p className="text-sm font-medium text-slate-800">{profile?.displayName}</p>
-              <p className="text-xs text-slate-500">{profile?.email}</p>
+              <p className="text-xs text-slate-500">{profile?.employeeId || profile?.email}</p>
             </div>
             <Badge tone="teal">{profile?.role || "User"}</Badge>
           </div>

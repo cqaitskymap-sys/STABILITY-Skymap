@@ -7,6 +7,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
@@ -15,6 +16,8 @@ import {
   calcAvailableQuantity,
   derivePullStatus,
   nowISO,
+  pullDueUrgency,
+  resolveReconciliationStatus,
   todayISO,
 } from "@/lib/utils";
 import { nextSequentialId } from "@/services/ids";
@@ -43,6 +46,15 @@ function actor(user: AppUser) {
     performedBy: user.uid,
     performedByName: user.displayName || user.email,
   };
+}
+
+/** Firestore rejects `undefined` field values — omit them before writes. */
+function omitUndefined<T extends Record<string, unknown>>(input: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out as T;
 }
 
 async function createTransaction(input: Omit<InventoryTransaction, "id">) {
@@ -74,8 +86,17 @@ function studyStatusFromSample(sampleStatus: SampleStatus): StudyStatus {
 }
 
 export async function listStudies() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.stabilityStudies), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StabilityStudy));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.stabilityStudies), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StabilityStudy));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.stabilityStudies));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as StabilityStudy))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function getStudy(id: string) {
@@ -85,8 +106,44 @@ export async function getStudy(id: string) {
 }
 
 export async function listSamples() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.stabilitySamples), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StabilitySample));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.stabilitySamples), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StabilitySample));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.stabilitySamples));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as StabilitySample))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
+}
+
+export async function listSamplesByStudy(studyDocId: string) {
+  const snap = await getDocs(
+    query(collection(getDb(), COLLECTIONS.stabilitySamples), where("studyDocId", "==", studyDocId))
+  );
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as StabilitySample))
+    .sort((a, b) => String(a.sampleId || "").localeCompare(String(b.sampleId || "")));
+}
+
+export async function listTransactionsByStudy(studyId: string) {
+  const snap = await getDocs(
+    query(collection(getDb(), COLLECTIONS.inventoryTransactions), where("studyId", "==", studyId))
+  );
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as InventoryTransaction))
+    .sort((a, b) => String(b.performedAt || "").localeCompare(String(a.performedAt || "")));
+}
+
+export async function listTransactionsBySample(sampleDocId: string) {
+  const snap = await getDocs(
+    query(collection(getDb(), COLLECTIONS.inventoryTransactions), where("sampleDocId", "==", sampleDocId))
+  );
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as InventoryTransaction))
+    .sort((a, b) => String(b.performedAt || "").localeCompare(String(a.performedAt || "")));
 }
 
 export async function getSample(id: string) {
@@ -115,8 +172,17 @@ export async function listPullPoints(filters?: { studyDocId?: string; sampleDocI
 }
 
 export async function listWithdrawals() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.sampleWithdrawals), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleWithdrawal));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.sampleWithdrawals), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleWithdrawal));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.sampleWithdrawals));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SampleWithdrawal))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function getWithdrawal(id: string) {
@@ -126,28 +192,79 @@ export async function getWithdrawal(id: string) {
 }
 
 export async function listMovements() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.sampleMovements), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleMovement));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.sampleMovements), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleMovement));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.sampleMovements));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SampleMovement))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function listDisposals() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.sampleDisposals), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleDisposal));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.sampleDisposals), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SampleDisposal));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.sampleDisposals));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SampleDisposal))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function listReconciliations() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.inventoryReconciliations), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryReconciliation));
-}
-
-export async function listTransactions() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.inventoryTransactions), orderBy("performedAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryTransaction));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.inventoryReconciliations), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryReconciliation));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.inventoryReconciliations));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as InventoryReconciliation))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function listAlerts() {
-  const snap = await getDocs(query(collection(getDb(), COLLECTIONS.inventoryAlerts), orderBy("createdAt", "desc")));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryAlert));
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.inventoryAlerts), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryAlert));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.inventoryAlerts));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as InventoryAlert))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
+}
+
+export async function acknowledgeAlert(alertId: string) {
+  await updateDoc(doc(getDb(), COLLECTIONS.inventoryAlerts, alertId), {
+    acknowledged: true,
+  });
+}
+
+export async function listTransactions() {
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), COLLECTIONS.inventoryTransactions), orderBy("performedAt", "desc"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryTransaction));
+  } catch {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.inventoryTransactions));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as InventoryTransaction))
+      .sort((a, b) => String(b.performedAt || "").localeCompare(String(a.performedAt || "")));
+  }
 }
 
 export async function createStudyAndCharge(input: {
@@ -241,7 +358,7 @@ export async function createStudyAndCharge(input: {
 
   const batch = writeBatch(getDb());
   const studyRef = doc(collection(getDb(), COLLECTIONS.stabilityStudies));
-  batch.set(studyRef, studyPayload);
+  batch.set(studyRef, omitUndefined(studyPayload as unknown as Record<string, unknown>));
 
   const samplePayload: Omit<StabilitySample, "id"> = {
     sampleId,
@@ -278,7 +395,7 @@ export async function createStudyAndCharge(input: {
   };
 
   const sampleRef = doc(collection(getDb(), COLLECTIONS.stabilitySamples));
-  batch.set(sampleRef, samplePayload);
+  batch.set(sampleRef, omitUndefined(samplePayload as unknown as Record<string, unknown>));
 
   for (const pull of input.pullAllocations) {
     const pullRef = doc(collection(getDb(), COLLECTIONS.studyPullPoints));
@@ -306,7 +423,7 @@ export async function createStudyAndCharge(input: {
       createdAt: stamp,
       updatedAt: stamp,
     };
-    batch.set(pullRef, pullPayload);
+    batch.set(pullRef, omitUndefined(pullPayload as unknown as Record<string, unknown>));
   }
 
   const txPayload: Omit<InventoryTransaction, "id"> = {
@@ -324,7 +441,7 @@ export async function createStudyAndCharge(input: {
     performedByName: input.user.displayName || input.user.email,
     performedAt: stamp,
   };
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), txPayload);
+  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), omitUndefined(txPayload as unknown as Record<string, unknown>));
 
   batch.update(doc(getDb(), COLLECTIONS.chambers, input.chamberId), {
     usedCapacity: Number(chamber.usedCapacity || 0) + input.totalQuantity,
@@ -333,15 +450,19 @@ export async function createStudyAndCharge(input: {
 
   await batch.commit();
 
-  await writeAuditLog({
-    action: "Sample Charged / Study Created",
-    recordId: studyId,
-    recordType: "stabilityStudy",
-    newValue: { studyId, sampleId, totalQuantity: input.totalQuantity },
-    userId: input.user.uid,
-    userName: input.user.displayName || input.user.email,
-    userEmail: input.user.email,
-  });
+  try {
+    await writeAuditLog({
+      action: "Sample Charged / Study Created",
+      recordId: studyId,
+      recordType: "stabilityStudy",
+      newValue: { studyId, sampleId, totalQuantity: input.totalQuantity },
+      userId: input.user.uid,
+      userName: input.user.displayName || input.user.email,
+      userEmail: input.user.email,
+    });
+  } catch (auditErr) {
+    console.error("Study created but audit log failed:", auditErr);
+  }
 
   return { studyDocId: studyRef.id, sampleDocId: sampleRef.id, studyId, sampleId };
 }
@@ -393,8 +514,15 @@ export async function withdrawSample(input: {
   }
 
   const remainingPlanned = Math.max(0, pull.plannedQuantity - pull.actualQuantity);
-  if (input.actualQuantity > remainingPlanned && remainingPlanned > 0) {
-    // allow withdrawing up to available, but warn via validation only on available
+  if (remainingPlanned <= 0) {
+    throw new Error("This pull point is already fully withdrawn.");
+  }
+  if (input.actualQuantity > remainingPlanned) {
+    throw new Error(`Cannot withdraw more than remaining planned quantity (${remainingPlanned}).`);
+  }
+
+  if (!sample.chamberId) {
+    throw new Error("Sample chamber is missing; cannot update chamber capacity.");
   }
 
   const withdrawalId = await nextSequentialId("WDR");
@@ -409,6 +537,10 @@ export async function withdrawSample(input: {
     withdrawnQuantity: newWithdrawn,
     availableQuantity: newAvailable,
   });
+
+  const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
+  if (!chamberSnap.exists()) throw new Error("Chamber not found for this sample.");
+  const chamberUsed = Number(chamberSnap.data()?.usedCapacity || 0);
 
   const batch = writeBatch(getDb());
   const withdrawalRef = doc(collection(getDb(), COLLECTIONS.sampleWithdrawals));
@@ -470,7 +602,7 @@ export async function withdrawSample(input: {
   });
 
   batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
-    usedCapacity: Math.max(0, Number((await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId))).data()?.usedCapacity || 0) - input.actualQuantity),
+    usedCapacity: Math.max(0, chamberUsed - input.actualQuantity),
     updatedAt: stamp,
   });
 
@@ -518,13 +650,43 @@ export async function moveSample(input: {
   remarks?: string;
   user: AppUser;
 }) {
+  if (!input.movementDate?.trim()) throw new Error("Movement date is required.");
+  if (!input.movedBy?.trim()) throw new Error("Moved by is required.");
+  if (!input.reason?.trim()) throw new Error("Reason is required.");
+
   const sample = await getSample(input.sampleDocId);
   if (!sample) throw new Error("Sample not found.");
+  if (sample.status === "Disposed") throw new Error("Disposed samples cannot be moved.");
+  if (!sample.studyDocId) throw new Error("Sample study reference is missing.");
+
+  if (sample.chamberId === input.toChamberId && sample.locationId === input.toLocationId) {
+    throw new Error("Destination must differ from the current location.");
+  }
 
   const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, input.toChamberId));
   if (!chamberSnap.exists()) throw new Error("Destination chamber not found.");
   const chamber = chamberSnap.data();
   if (chamber.status === "Inactive") throw new Error("Cannot move samples to an inactive chamber.");
+
+  const locationSnap = await getDoc(doc(getDb(), COLLECTIONS.storageLocations, input.toLocationId));
+  if (!locationSnap.exists()) throw new Error("Destination location not found.");
+  const location = locationSnap.data();
+  if (location.status === "Inactive") throw new Error("Cannot move samples to an inactive location.");
+  if (location.chamberId !== input.toChamberId) {
+    throw new Error("Destination location does not belong to the selected chamber.");
+  }
+
+  const qty = Number(sample.availableQuantity || 0);
+  const changingChamber = sample.chamberId !== input.toChamberId;
+  if (changingChamber && qty > 0) {
+    const destUsed = Number(chamber.usedCapacity || 0);
+    const destCap = Number(chamber.capacity || 0);
+    if (destUsed + qty > destCap) {
+      throw new Error(
+        `Destination chamber capacity is insufficient (need ${qty}, free ${Math.max(0, destCap - destUsed)}).`
+      );
+    }
+  }
 
   const movementId = await nextSequentialId("MOV");
   const txId = await nextSequentialId("TRX");
@@ -547,8 +709,8 @@ export async function moveSample(input: {
     toLocationId: input.toLocationId,
     toLocationLabel: input.toLocationLabel,
     movementDate: input.movementDate,
-    movedBy: input.movedBy,
-    reason: input.reason,
+    movedBy: input.movedBy.trim(),
+    reason: input.reason.trim(),
     remarks: input.remarks,
     createdBy: input.user.uid,
     createdByName: input.user.displayName || input.user.email,
@@ -572,16 +734,18 @@ export async function moveSample(input: {
     updatedAt: stamp,
   });
 
-  if (sample.chamberId !== input.toChamberId) {
-    const fromSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
-    if (fromSnap.exists()) {
-      batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
-        usedCapacity: Math.max(0, Number(fromSnap.data().usedCapacity || 0) - sample.availableQuantity),
-        updatedAt: stamp,
-      });
+  if (changingChamber) {
+    if (sample.chamberId) {
+      const fromSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
+      if (fromSnap.exists()) {
+        batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
+          usedCapacity: Math.max(0, Number(fromSnap.data().usedCapacity || 0) - qty),
+          updatedAt: stamp,
+        });
+      }
     }
     batch.update(doc(getDb(), COLLECTIONS.chambers, input.toChamberId), {
-      usedCapacity: Number(chamber.usedCapacity || 0) + sample.availableQuantity,
+      usedCapacity: Number(chamber.usedCapacity || 0) + qty,
       updatedAt: stamp,
     });
   }
@@ -594,10 +758,10 @@ export async function moveSample(input: {
     productName: sample.productName,
     batchNumber: sample.batchNumber,
     transactionType: "SAMPLE_TRANSFERRED",
-    quantity: sample.availableQuantity,
+    quantity: qty,
     fromLocation: sample.locationLabel,
     toLocation: input.toLocationLabel,
-    reason: input.reason,
+    reason: input.reason.trim(),
     remarks: input.remarks,
     performedBy: input.user.uid,
     performedByName: input.user.displayName || input.user.email,
@@ -609,8 +773,8 @@ export async function moveSample(input: {
     action: "Sample Moved",
     recordId: movementId,
     recordType: "sampleMovement",
-    previousValue: { location: sample.locationLabel },
-    newValue: { location: input.toLocationLabel },
+    previousValue: { location: sample.locationLabel, chamber: sample.chamberName },
+    newValue: { location: input.toLocationLabel, chamber: input.toChamberName },
     userId: input.user.uid,
     userName: input.user.displayName || input.user.email,
     userEmail: input.user.email,
@@ -627,15 +791,18 @@ export async function reconcileSample(input: {
   adjust: boolean;
   user: AppUser;
 }) {
-  if (input.physicalQuantity < 0) throw new Error("Physical quantity cannot be negative.");
+  if (!Number.isFinite(input.physicalQuantity) || input.physicalQuantity < 0) {
+    throw new Error("Physical quantity cannot be negative.");
+  }
   const sample = await getSample(input.sampleDocId);
   if (!sample) throw new Error("Sample not found.");
 
   const variance = input.physicalQuantity - sample.availableQuantity;
-  let status: InventoryReconciliation["status"] = "Matched";
-  if (variance !== 0) status = Math.abs(variance) > 0 ? "Investigation Required" : "Matched";
-  if (variance !== 0 && !input.adjust) status = "Variance Found";
-  if (input.adjust && variance !== 0) status = "Adjusted";
+  const status = resolveReconciliationStatus(variance, input.adjust);
+
+  if (input.adjust && variance !== 0 && !input.reason?.trim()) {
+    throw new Error("Adjustment reason is required.");
+  }
 
   const reconciliationId = await nextSequentialId("REC");
   const stamp = nowISO();
@@ -653,7 +820,7 @@ export async function reconcileSample(input: {
     physicalQuantity: input.physicalQuantity,
     variance,
     status,
-    adjustmentQuantity: input.adjust ? variance : undefined,
+    adjustmentQuantity: input.adjust && variance !== 0 ? variance : undefined,
     reason: input.reason,
     remarks: input.remarks,
     performedBy: input.user.uid,
@@ -665,18 +832,32 @@ export async function reconcileSample(input: {
   batch.set(doc(collection(getDb(), COLLECTIONS.inventoryReconciliations)), payload);
 
   if (input.adjust && variance !== 0) {
-    if (!input.reason) throw new Error("Adjustment reason is required.");
     const newAvailable = input.physicalQuantity;
     const delta = sample.availableQuantity - newAvailable;
-    const newWithdrawn = sample.withdrawnQuantity; // keep withdrawn
+    const newWithdrawn = sample.withdrawnQuantity;
     // Adjust total so available formula holds: available = total - withdrawn - disposed
     const newTotal = newAvailable + newWithdrawn + sample.disposedQuantity;
+    const capacityDelta = newAvailable - sample.availableQuantity;
     const newStatus = sampleStatusFromQty({
       totalQuantity: newTotal,
       withdrawnQuantity: newWithdrawn,
       disposedQuantity: sample.disposedQuantity,
       availableQuantity: newAvailable,
     });
+
+    if (sample.chamberId && capacityDelta !== 0) {
+      const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
+      if (!chamberSnap.exists()) throw new Error("Chamber not found for this sample.");
+      const chamber = chamberSnap.data();
+      const nextUsed = Number(chamber.usedCapacity || 0) + capacityDelta;
+      if (capacityDelta > 0 && nextUsed > Number(chamber.capacity || 0)) {
+        throw new Error("Chamber capacity is insufficient for this adjustment quantity.");
+      }
+      batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
+        usedCapacity: Math.max(0, nextUsed),
+        updatedAt: stamp,
+      });
+    }
 
     batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
       totalQuantity: newTotal,
@@ -712,6 +893,17 @@ export async function reconcileSample(input: {
       status: "Under Reconciliation",
       updatedAt: stamp,
     });
+  } else if (sample.status === "Under Reconciliation") {
+    // Matched count clears prior under-reconciliation hold.
+    const cleared = sampleStatusFromQty(sample);
+    batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
+      status: cleared,
+      updatedAt: stamp,
+    });
+    batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
+      status: studyStatusFromSample(cleared),
+      updatedAt: stamp,
+    });
   }
 
   await batch.commit();
@@ -737,12 +929,24 @@ export async function disposeSample(input: {
   remarks?: string;
   user: AppUser;
 }) {
-  if (input.quantity <= 0) throw new Error("Disposal quantity must be greater than zero.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
+    throw new Error("Disposal quantity must be greater than zero.");
+  }
+  if (!input.disposalDate?.trim()) throw new Error("Disposal date is required.");
+  if (!input.disposedBy?.trim()) throw new Error("Disposed by is required.");
+  if (!input.reason) throw new Error("Disposal reason is required.");
+  if (input.reason === "Other" && !input.remarks?.trim()) {
+    throw new Error("Remarks are required when reason is Other.");
+  }
+
   const sample = await getSample(input.sampleDocId);
   if (!sample) throw new Error("Sample not found.");
+  if (sample.status === "Disposed") throw new Error("Sample is already fully disposed.");
+  if (sample.availableQuantity <= 0) throw new Error("No available quantity left to dispose.");
   if (input.quantity > sample.availableQuantity) {
-    throw new Error("Cannot dispose more than available quantity.");
+    throw new Error(`Cannot dispose more than available quantity (${sample.availableQuantity}).`);
   }
+  if (!sample.studyDocId) throw new Error("Sample study reference is missing.");
 
   const disposalId = await nextSequentialId("DSP");
   const txId = await nextSequentialId("TRX");
@@ -766,8 +970,8 @@ export async function disposeSample(input: {
     quantity: input.quantity,
     disposalDate: input.disposalDate,
     reason: input.reason,
-    disposedBy: input.disposedBy,
-    remarks: input.remarks,
+    disposedBy: input.disposedBy.trim(),
+    remarks: input.remarks?.trim() || undefined,
     createdBy: input.user.uid,
     createdByName: input.user.displayName || input.user.email,
     createdAt: stamp,
@@ -786,12 +990,14 @@ export async function disposeSample(input: {
     updatedAt: stamp,
   });
 
-  const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
-  if (chamberSnap.exists()) {
-    batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
-      usedCapacity: Math.max(0, Number(chamberSnap.data().usedCapacity || 0) - input.quantity),
-      updatedAt: stamp,
-    });
+  if (sample.chamberId) {
+    const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
+    if (chamberSnap.exists()) {
+      batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
+        usedCapacity: Math.max(0, Number(chamberSnap.data().usedCapacity || 0) - input.quantity),
+        updatedAt: stamp,
+      });
+    }
   }
 
   batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), {
@@ -805,7 +1011,7 @@ export async function disposeSample(input: {
     quantity: input.quantity,
     fromLocation: sample.locationLabel,
     reason: input.reason,
-    remarks: input.remarks,
+    remarks: input.remarks?.trim() || undefined,
     performedBy: input.user.uid,
     performedByName: input.user.displayName || input.user.email,
     performedAt: stamp,
@@ -816,13 +1022,13 @@ export async function disposeSample(input: {
     action: "Sample Disposed",
     recordId: disposalId,
     recordType: "sampleDisposal",
-    newValue: { disposalId, quantity: input.quantity, reason: input.reason },
+    newValue: { disposalId, quantity: input.quantity, reason: input.reason, remaining: newAvailable },
     userId: input.user.uid,
     userName: input.user.displayName || input.user.email,
     userEmail: input.user.email,
   });
 
-  return { disposalId };
+  return { disposalId, remainingAvailable: newAvailable, status: newStatus };
 }
 
 export async function refreshAlerts() {
@@ -843,43 +1049,51 @@ export async function refreshAlerts() {
   ]);
 
   const existing = await listAlerts();
-  const batch = writeBatch(getDb());
-  existing.forEach((a) => batch.delete(doc(getDb(), COLLECTIONS.inventoryAlerts, a.id)));
+  const CHUNK = 400;
+  for (let i = 0; i < existing.length; i += CHUNK) {
+    const batch = writeBatch(getDb());
+    existing.slice(i, i + CHUNK).forEach((a) => {
+      batch.delete(doc(getDb(), COLLECTIONS.inventoryAlerts, a.id));
+    });
+    await batch.commit();
+  }
 
   const alerts: Omit<InventoryAlert, "id">[] = [];
   const stamp = nowISO();
 
   for (const p of pulls) {
-    const status = derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity);
-    if (status === "Due Soon") {
+    const remaining = Math.max(0, p.plannedQuantity - p.actualQuantity);
+    if (remaining <= 0) continue;
+
+    // Use date urgency even for Partially Withdrawn (remaining qty still due).
+    const urgency = pullDueUrgency(p.plannedDate);
+    if (urgency === "Due Soon") {
       alerts.push({
         alertType: "WITHDRAWAL_DUE_7_DAYS",
         title: "Withdrawal due within 7 days",
-        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint} due ${p.plannedDate}`,
+        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint} due ${p.plannedDate} (${remaining} remaining)`,
         severity: "warning",
         relatedId: p.id,
         relatedType: "studyPullPoint",
         acknowledged: false,
         createdAt: stamp,
       });
-    }
-    if (status === "Due Today") {
+    } else if (urgency === "Due Today") {
       alerts.push({
         alertType: "WITHDRAWAL_DUE_TODAY",
         title: "Withdrawal due today",
-        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint}`,
+        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint} (${remaining} remaining)`,
         severity: "warning",
         relatedId: p.id,
         relatedType: "studyPullPoint",
         acknowledged: false,
         createdAt: stamp,
       });
-    }
-    if (status === "Overdue") {
+    } else if (urgency === "Overdue") {
       alerts.push({
         alertType: "WITHDRAWAL_OVERDUE",
         title: "Overdue withdrawal",
-        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint} was due ${p.plannedDate}`,
+        message: `${p.productName} / ${p.batchNumber} — ${p.pullPoint} was due ${p.plannedDate} (${remaining} remaining)`,
         severity: "critical",
         relatedId: p.id,
         relatedType: "studyPullPoint",
@@ -890,7 +1104,8 @@ export async function refreshAlerts() {
   }
 
   for (const s of samples) {
-    if (s.availableQuantity <= 0 && s.status !== "Disposed") {
+    if (s.status === "Disposed") continue;
+    if (s.availableQuantity <= 0) {
       alerts.push({
         alertType: "SAMPLE_DEPLETED",
         title: "Sample depleted",
@@ -901,8 +1116,7 @@ export async function refreshAlerts() {
         acknowledged: false,
         createdAt: stamp,
       });
-    }
-    if (s.availableQuantity > 0 && s.availableQuantity < 5) {
+    } else if (s.availableQuantity < 5) {
       alerts.push({
         alertType: "INSUFFICIENT_QUANTITY",
         title: "Insufficient sample quantity",
@@ -923,7 +1137,7 @@ export async function refreshAlerts() {
       alerts.push({
         alertType: "CHAMBER_INACTIVE",
         title: "Chamber inactive",
-        message: `${c.chamberName || c.chamberId} is inactive`,
+        message: `${c.chamberName || c.chamberId || c.id} is inactive`,
         severity: "warning",
         relatedId: c.id,
         relatedType: "chamber",
@@ -935,7 +1149,7 @@ export async function refreshAlerts() {
       alerts.push({
         alertType: "CHAMBER_NEAR_FULL",
         title: "Chamber capacity near full",
-        message: `${c.chamberName} is ${Math.round((used / capacity) * 100)}% utilized`,
+        message: `${c.chamberName || c.id} is ${Math.round((used / capacity) * 100)}% utilized (${used}/${capacity})`,
         severity: "warning",
         relatedId: c.id,
         relatedType: "chamber",
@@ -945,23 +1159,39 @@ export async function refreshAlerts() {
     }
   }
 
-  for (const r of reconciliations.filter((x) => x.status === "Variance Found" || x.status === "Investigation Required")) {
+  // Only open variances on samples still under reconciliation (avoid stale history spam).
+  const openBySample = new Map<string, (typeof reconciliations)[number]>();
+  for (const r of reconciliations) {
+    if (r.status !== "Variance Found" && r.status !== "Investigation Required") continue;
+    if (!r.sampleDocId) continue;
+    const prev = openBySample.get(r.sampleDocId);
+    if (!prev || String(r.createdAt || "") > String(prev.createdAt || "")) {
+      openBySample.set(r.sampleDocId, r);
+    }
+  }
+  for (const s of samples.filter((x) => x.status === "Under Reconciliation")) {
+    const r = openBySample.get(s.id);
+    if (!r) continue;
     alerts.push({
       alertType: "RECONCILIATION_VARIANCE",
       title: "Reconciliation variance",
-      message: `${r.productName} / ${r.batchNumber} variance ${r.variance}`,
+      message: `${r.productName} / ${r.batchNumber} variance ${r.variance} (${r.status})`,
       severity: "critical",
-      relatedId: r.id,
+      relatedId: s.id,
       relatedType: "inventoryReconciliation",
       acknowledged: false,
       createdAt: stamp,
     });
   }
 
-  for (const a of alerts) {
-    batch.set(doc(collection(getDb(), COLLECTIONS.inventoryAlerts)), a);
+  for (let i = 0; i < alerts.length; i += CHUNK) {
+    const batch = writeBatch(getDb());
+    alerts.slice(i, i + CHUNK).forEach((a) => {
+      batch.set(doc(collection(getDb(), COLLECTIONS.inventoryAlerts)), a);
+    });
+    await batch.commit();
   }
-  await batch.commit();
+
   return alerts.length;
 }
 

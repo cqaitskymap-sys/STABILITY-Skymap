@@ -37,7 +37,9 @@ export default function StabilityDashboardPage() {
     const pulls = await listPullPoints();
     return pulls
       .map((p) => ({ ...p, status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity) }))
-      .filter((p) => ["Upcoming", "Due Soon", "Due Today", "Overdue"].includes(p.status))
+      .filter((p) =>
+        ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"].includes(p.status)
+      )
       .slice(0, 8);
   }, []);
 

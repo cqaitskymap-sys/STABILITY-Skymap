@@ -1,5 +1,18 @@
 export type UserRole = "Admin" | "QA Manager" | "QA User";
 
+export type Permission =
+  | "masters.manage"
+  | "users.manage"
+  | "studies.create"
+  | "studies.edit"
+  | "charging.perform"
+  | "withdrawal.perform"
+  | "movement.perform"
+  | "reconciliation.perform"
+  | "disposal.perform"
+  | "reports.view"
+  | "inventory.view";
+
 export type MasterStatus = "Active" | "Inactive";
 
 export type ChamberStatus = "Active" | "Under Maintenance" | "Inactive";
@@ -63,9 +76,14 @@ export type DisposalReason =
 
 export interface AppUser {
   uid: string;
+  /** Login ID (Employee ID). */
+  employeeId: string;
+  /** Firebase Auth email (derived from Employee ID) or legacy contact email. */
   email: string;
   displayName: string;
   role: UserRole;
+  /** When set, overrides default role permissions for module access. */
+  moduleAccess?: Permission[];
   active: boolean;
   createdAt: string;
   updatedAt: string;

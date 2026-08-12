@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Eye, MoreHorizontal, PackageMinus, PackagePlus, Plus } from "lucide-react";
+import {
+  Boxes,
+  CheckCircle2,
+  Eye,
+  MoreHorizontal,
+  PackageMinus,
+  PackagePlus,
+  Plus,
+  RefreshCw,
+  Warehouse,
+} from "lucide-react";
 import {
   Button,
   Card,
@@ -12,6 +22,7 @@ import {
   LoadingSkeleton,
   PageHeader,
   Select,
+  StatCard,
   StatusBadge,
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
@@ -23,6 +34,7 @@ import { listChambers, listStudyTypes } from "@/services/masters";
 export default function InventoryListPage() {
   const { hasPermission } = useAuth();
   const canCharge = hasPermission("charging.perform") || hasPermission("studies.create");
+  const canWithdraw = hasPermission("withdrawal.perform");
 
   const samples = useAsync(listSamples, []);
   const studyTypes = useAsync(listStudyTypes, []);
@@ -33,6 +45,27 @@ export default function InventoryListPage() {
   const [status, setStatus] = useState("all");
   const [chamberId, setChamberId] = useState("all");
   const [page, setPage] = useState(1);
+
+  const studyTypeOptions = useMemo(() => {
+    const fromMaster = (studyTypes.data || []).map((s) => s.name).filter(Boolean);
+    const fromSamples = (samples.data || []).map((s) => s.studyType).filter(Boolean);
+    return Array.from(new Set([...fromMaster, ...fromSamples])).sort((a, b) => a.localeCompare(b));
+  }, [studyTypes.data, samples.data]);
+
+  const chamberOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of chambers.data || []) {
+      map.set(c.id, c.chamberName);
+    }
+    for (const s of samples.data || []) {
+      if (s.chamberId && !map.has(s.chamberId)) {
+        map.set(s.chamberId, s.chamberName || s.chamberId);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [chambers.data, samples.data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -48,9 +81,29 @@ export default function InventoryListPage() {
     });
   }, [samples.data, search, studyType, status, chamberId]);
 
+  const stats = useMemo(() => {
+    const rows = samples.data || [];
+    return {
+      totalSamples: rows.length,
+      availableQty: rows.reduce((sum, s) => sum + (s.availableQuantity || 0), 0),
+      withdrawnQty: rows.reduce((sum, s) => sum + (s.withdrawnQuantity || 0), 0),
+      activeChambers: new Set(rows.filter((s) => (s.availableQuantity || 0) > 0).map((s) => s.chamberId)).size,
+    };
+  }, [samples.data]);
+
   const paged = paginate(filtered, page, 10);
-  const loading = samples.loading || studyTypes.loading || chambers.loading;
-  const error = samples.error || studyTypes.error || chambers.error;
+  const filtersActive = search.trim() !== "" || studyType !== "all" || status !== "all" || chamberId !== "all";
+  // Masters are optional for rendering the inventory table.
+  const loading = samples.loading;
+  const error = samples.error;
+
+  function clearFilters() {
+    setSearch("");
+    setStudyType("all");
+    setStatus("all");
+    setChamberId("all");
+    setPage(1);
+  }
 
   return (
     <div>
@@ -59,6 +112,17 @@ export default function InventoryListPage() {
         description="Track charged samples, availability, and next pull schedule across chambers."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                void samples.reload();
+                void studyTypes.reload();
+                void chambers.reload();
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
             {canCharge ? (
               <>
                 <Link href="/stability/studies/new">
@@ -79,6 +143,15 @@ export default function InventoryListPage() {
         }
       />
 
+      {!loading && !error ? (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="Total Samples" value={stats.totalSamples} icon={Boxes} tone="teal" />
+          <StatCard title="Available Quantity" value={stats.availableQty} icon={CheckCircle2} tone="emerald" />
+          <StatCard title="Withdrawn Quantity" value={stats.withdrawnQty} icon={PackageMinus} tone="indigo" />
+          <StatCard title="Chambers In Use" value={stats.activeChambers} icon={Warehouse} tone="blue" />
+        </div>
+      ) : null}
+
       <Card>
         <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-2 xl:grid-cols-5">
           <Input
@@ -98,9 +171,9 @@ export default function InventoryListPage() {
             }}
           >
             <option value="all">All Study Types</option>
-            {(studyTypes.data || []).map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
+            {studyTypeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </Select>
@@ -127,9 +200,9 @@ export default function InventoryListPage() {
             }}
           >
             <option value="all">All Chambers</option>
-            {(chambers.data || []).map((c) => (
+            {chamberOptions.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.chamberName}
+                {c.name}
               </option>
             ))}
           </Select>
@@ -147,15 +220,29 @@ export default function InventoryListPage() {
           />
         ) : null}
 
-        {!loading && !error && paged.items.length === 0 ? (
+        {!loading && !error && (samples.data || []).length === 0 ? (
           <EmptyState
-            title="No samples in inventory."
+            title="No samples in inventory"
             description="Charge a sample to create study inventory and pull schedules."
             action={
               canCharge ? (
                 <Link href="/stability/inventory/charging">
                   <Button>Charge Sample</Button>
                 </Link>
+              ) : undefined
+            }
+          />
+        ) : null}
+
+        {!loading && !error && (samples.data || []).length > 0 && paged.items.length === 0 ? (
+          <EmptyState
+            title="No samples match your filters"
+            description="Try clearing search or filter selections."
+            action={
+              filtersActive ? (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear filters
+                </Button>
               ) : undefined
             }
           />
@@ -187,8 +274,20 @@ export default function InventoryListPage() {
                 <tbody>
                   {paged.items.map((s) => (
                     <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50/60">
-                      <td className="px-4 py-3 font-medium text-teal-800">{s.sampleId}</td>
-                      <td className="px-4 py-3">{s.studyId}</td>
+                      <td className="px-4 py-3 font-medium text-teal-800">
+                        <Link href={`/stability/inventory/${s.id}`} className="hover:underline">
+                          {s.sampleId}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.studyDocId ? (
+                          <Link href={`/stability/studies/${s.studyDocId}`} className="hover:underline">
+                            {s.studyId}
+                          </Link>
+                        ) : (
+                          s.studyId
+                        )}
+                      </td>
                       <td className="px-4 py-3">{s.productName}</td>
                       <td className="px-4 py-3">{s.batchNumber}</td>
                       <td className="px-4 py-3">{s.studyType}</td>
@@ -213,12 +312,16 @@ export default function InventoryListPage() {
                               View
                             </Button>
                           </Link>
-                          <Link href={`/stability/withdrawals?sample=${s.id}`}>
-                            <Button size="sm" variant="ghost">
-                              <PackageMinus className="h-3.5 w-3.5" />
-                              Withdraw
-                            </Button>
-                          </Link>
+                          {canWithdraw &&
+                          s.availableQuantity > 0 &&
+                          !["Disposed", "Fully Withdrawn", "Depleted"].includes(s.status) ? (
+                            <Link href={`/stability/withdrawals?sample=${s.id}`}>
+                              <Button size="sm" variant="ghost">
+                                <PackageMinus className="h-3.5 w-3.5" />
+                                Withdraw
+                              </Button>
+                            </Link>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -260,11 +363,17 @@ export default function InventoryListPage() {
                         View
                       </Button>
                     </Link>
-                    <Link href={`/stability/withdrawals?sample=${s.id}`}>
-                      <Button className="w-full" variant="secondary" size="sm">
-                        Withdraw
-                      </Button>
-                    </Link>
+                    {canWithdraw &&
+                    s.availableQuantity > 0 &&
+                    !["Disposed", "Fully Withdrawn", "Depleted"].includes(s.status) ? (
+                      <Link href={`/stability/withdrawals?sample=${s.id}`}>
+                        <Button className="w-full" variant="secondary" size="sm">
+                          Withdraw
+                        </Button>
+                      </Link>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                 </div>
               ))}

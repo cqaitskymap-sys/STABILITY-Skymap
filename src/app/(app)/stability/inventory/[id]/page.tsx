@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { ArrowLeftRight, ClipboardCheck, PackageMinus, Printer } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ClipboardCheck,
+  PackageMinus,
+  Printer,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -15,26 +23,39 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { derivePullStatus, formatDate, formatDateTime } from "@/lib/utils";
-import { getSample, listPullPoints } from "@/services/inventory";
+import { getSample, listPullPoints, listTransactionsBySample } from "@/services/inventory";
 
 export default function SampleDetailPage() {
   const params = useParams<{ id: string }>();
   const sampleId = params?.id ?? "";
   const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || "SKYMAP Stability";
+  const { hasPermission } = useAuth();
+
+  const canWithdraw = hasPermission("withdrawal.perform");
+  const canMove = hasPermission("movement.perform");
+  const canReconcile = hasPermission("reconciliation.perform");
+  const canDispose = hasPermission("disposal.perform");
 
   const detail = useAsync(async () => {
     if (!sampleId) return null;
     const sample = await getSample(sampleId);
     if (!sample) return null;
-    const pulls = await listPullPoints({ sampleDocId: sample.id });
+    const [pulls, transactions] = await Promise.all([
+      listPullPoints({ sampleDocId: sample.id }),
+      listTransactionsBySample(sample.id),
+    ]);
     return {
       sample,
-      pulls: pulls.map((p) => ({
-        ...p,
-        status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
-      })),
+      pulls: pulls
+        .map((p) => ({
+          ...p,
+          status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
+        }))
+        .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
+      transactions: transactions.slice(0, 20),
     };
   }, [sampleId]);
 
@@ -47,14 +68,16 @@ export default function SampleDetailPage() {
         description="This inventory record may have been removed."
         action={
           <Link href="/stability/inventory">
-            <Button variant="outline">Back to Inventory</Button>
+            <Button variant="outline">Back to Sample Inventory</Button>
           </Link>
         }
       />
     );
   }
 
-  const { sample, pulls } = detail.data;
+  const { sample, pulls, transactions } = detail.data;
+  const canActOnStock =
+    sample.availableQuantity > 0 && !["Disposed", "Fully Withdrawn", "Depleted"].includes(sample.status);
 
   return (
     <div>
@@ -63,24 +86,48 @@ export default function SampleDetailPage() {
         description={`${sample.productName} · ${sample.batchNumber} · Study ${sample.studyId}`}
         actions={
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Link href={`/stability/withdrawals?sample=${sample.id}`}>
+            <Link href="/stability/inventory">
               <Button variant="outline">
-                <PackageMinus className="h-4 w-4" />
-                Withdraw
+                <ArrowLeft className="h-4 w-4" />
+                Back
               </Button>
             </Link>
-            <Link href={`/stability/inventory/movement?sample=${sample.id}`}>
-              <Button variant="outline">
-                <ArrowLeftRight className="h-4 w-4" />
-                Move
-              </Button>
-            </Link>
-            <Link href={`/stability/reconciliation?sample=${sample.id}`}>
-              <Button variant="outline">
-                <ClipboardCheck className="h-4 w-4" />
-                Reconcile
-              </Button>
-            </Link>
+            <Button variant="outline" onClick={() => void detail.reload()}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            {canWithdraw && canActOnStock ? (
+              <Link href={`/stability/withdrawals?sample=${sample.id}`}>
+                <Button variant="outline">
+                  <PackageMinus className="h-4 w-4" />
+                  Withdraw
+                </Button>
+              </Link>
+            ) : null}
+            {canMove && canActOnStock ? (
+              <Link href={`/stability/inventory/movement?sample=${sample.id}`}>
+                <Button variant="outline">
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Move
+                </Button>
+              </Link>
+            ) : null}
+            {canReconcile ? (
+              <Link href={`/stability/reconciliation?sample=${sample.id}`}>
+                <Button variant="outline">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Reconcile
+                </Button>
+              </Link>
+            ) : null}
+            {canDispose && canActOnStock ? (
+              <Link href={`/stability/disposal?sample=${sample.id}`}>
+                <Button variant="outline">
+                  <Trash2 className="h-4 w-4" />
+                  Dispose
+                </Button>
+              </Link>
+            ) : null}
             <Button variant="secondary" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
               Print
@@ -89,7 +136,7 @@ export default function SampleDetailPage() {
         }
       />
 
-      <div className="print-only mb-4 hidden print:block">
+      <div className="mb-4 hidden print:block">
         <p className="text-lg font-semibold text-slate-900">{companyName}</p>
         <p className="text-sm text-slate-500">Stability Sample Inventory Record</p>
       </div>
@@ -99,7 +146,18 @@ export default function SampleDetailPage() {
           <CardHeader title="Sample Summary" description="Charged inventory balance and study linkage." />
           <div className="grid gap-3 p-4 sm:grid-cols-2">
             <Info label="Sample ID" value={sample.sampleId} />
-            <Info label="Study ID" value={sample.studyId} />
+            <Info
+              label="Study ID"
+              value={
+                sample.studyDocId ? (
+                  <Link href={`/stability/studies/${sample.studyDocId}`} className="text-teal-700 hover:underline">
+                    {sample.studyId}
+                  </Link>
+                ) : (
+                  sample.studyId
+                )
+              }
+            />
             <Info label="Product" value={sample.productName} />
             <Info label="Batch" value={sample.batchNumber} />
             <Info label="Study Type" value={sample.studyType} />
@@ -133,11 +191,13 @@ export default function SampleDetailPage() {
               <p className="mt-2 text-slate-500">Location</p>
               <p className="font-medium text-slate-900">{sample.locationLabel}</p>
             </div>
-            <Link href={`/stability/studies/${sample.studyDocId}`} className="block print:hidden">
-              <Button variant="outline" className="w-full" size="sm">
-                Open Study
-              </Button>
-            </Link>
+            {sample.studyDocId ? (
+              <Link href={`/stability/studies/${sample.studyDocId}`} className="block print:hidden">
+                <Button variant="outline" className="w-full" size="sm">
+                  Open Study
+                </Button>
+              </Link>
+            ) : null}
           </div>
         </Card>
       </div>
@@ -177,7 +237,7 @@ export default function SampleDetailPage() {
                         <StatusBadge status={p.status} />
                       </td>
                       <td className="px-4 py-3 print:hidden">
-                        {p.status !== "Withdrawn" ? (
+                        {canWithdraw && p.status !== "Withdrawn" && canActOnStock ? (
                           <Link href={`/stability/withdrawals?pull=${p.id}`}>
                             <Button size="sm" variant="outline">
                               Withdraw
@@ -205,10 +265,49 @@ export default function SampleDetailPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     Planned {p.plannedQuantity} · Actual {p.actualQuantity}
                   </p>
+                  {canWithdraw && p.status !== "Withdrawn" && canActOnStock ? (
+                    <Link href={`/stability/withdrawals?pull=${p.id}`} className="mt-3 block">
+                      <Button size="sm" variant="outline" className="w-full">
+                        Withdraw
+                      </Button>
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>
           </>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader
+          title="Recent Transactions"
+          description="Inventory activity for this sample."
+          action={<Badge tone="slate">{transactions.length}</Badge>}
+        />
+        {!transactions.length ? (
+          <EmptyState title="No transactions recorded for this sample." />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {transactions.map((tx) => (
+              <div
+                key={tx.id}
+                className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div>
+                  <p className="font-medium text-slate-900">{tx.transactionType.replaceAll("_", " ")}</p>
+                  <p className="text-slate-500">
+                    Qty {tx.quantity}
+                    {tx.reason ? ` · ${tx.reason}` : ""}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {tx.performedByName} · {formatDateTime(tx.performedAt)}
+                  </p>
+                </div>
+                <Badge tone="slate">{tx.transactionId}</Badge>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
 

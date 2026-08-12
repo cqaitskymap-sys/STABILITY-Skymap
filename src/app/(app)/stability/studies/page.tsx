@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Eye, MoreHorizontal, Plus } from "lucide-react";
+import { Eye, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import {
   Button,
   Card,
@@ -14,16 +14,26 @@ import {
   Select,
   StatusBadge,
 } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, paginate } from "@/lib/utils";
 import { listStudies } from "@/services/inventory";
 
 export default function StudiesPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("studies.create") || hasPermission("charging.perform");
   const { data, loading, error, reload } = useAsync(listStudies, []);
   const [search, setSearch] = useState("");
   const [studyType, setStudyType] = useState("all");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
+
+  const studyTypeOptions = useMemo(() => {
+    const set = new Set((data || []).map((s) => s.studyType).filter(Boolean));
+    // Keep common defaults visible even before data exists.
+    ["Accelerated", "Intermediate", "Long Term / Real-Time"].forEach((name) => set.add(name));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -39,6 +49,14 @@ export default function StudiesPage() {
   }, [data, search, studyType, status]);
 
   const paged = paginate(filtered, page, 10);
+  const filtersActive = search.trim() !== "" || studyType !== "all" || status !== "all";
+
+  function clearFilters() {
+    setSearch("");
+    setStudyType("all");
+    setStatus("all");
+    setPage(1);
+  }
 
   return (
     <div>
@@ -46,12 +64,20 @@ export default function StudiesPage() {
         title="Stability Studies"
         description="Search, filter, and manage stability studies across all study types."
         actions={
-          <Link href="/stability/studies/new">
-            <Button>
-              <Plus className="h-4 w-4" />
-              Create Stability Study
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void reload()}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
             </Button>
-          </Link>
+            {canCreate ? (
+              <Link href="/stability/studies/new">
+                <Button>
+                  <Plus className="h-4 w-4" />
+                  Create Stability Study
+                </Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -65,35 +91,65 @@ export default function StudiesPage() {
             }}
             placeholder="Search study, product, batch..."
           />
-          <Select value={studyType} onChange={(e) => { setStudyType(e.target.value); setPage(1); }}>
+          <Select
+            value={studyType}
+            onChange={(e) => {
+              setStudyType(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="all">All Study Types</option>
-            <option value="Accelerated">Accelerated</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Long Term / Real-Time">Long Term / Real-Time</option>
+            {studyTypeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
           </Select>
-          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+          <Select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="all">All Statuses</option>
             <option value="Active">Active</option>
             <option value="Partially Withdrawn">Partially Withdrawn</option>
             <option value="Fully Withdrawn">Fully Withdrawn</option>
             <option value="Completed">Completed</option>
             <option value="Disposed">Disposed</option>
+            <option value="Draft">Draft</option>
           </Select>
-          <Button variant="outline" onClick={() => reload()}>
-            Refresh
+          <Button variant="outline" onClick={clearFilters} disabled={!filtersActive}>
+            Clear filters
           </Button>
         </div>
 
         {loading ? <LoadingSkeleton /> : null}
         {error ? <ErrorState message={error} onRetry={reload} /> : null}
-        {!loading && !error && paged.items.length === 0 ? (
+
+        {!loading && !error && (data || []).length === 0 ? (
           <EmptyState
-            title="No stability studies found."
-            description="Create a study and charge samples to begin inventory tracking."
+            title="No stability studies found"
+            description="Create a study and charge samples to begin inventory tracking. Masters (product, study type, chamber, location) must be configured first."
             action={
-              <Link href="/stability/studies/new">
-                <Button>Create Stability Study</Button>
-              </Link>
+              canCreate ? (
+                <Link href="/stability/studies/new">
+                  <Button>Create Stability Study</Button>
+                </Link>
+              ) : undefined
+            }
+          />
+        ) : null}
+
+        {!loading && !error && (data || []).length > 0 && paged.items.length === 0 ? (
+          <EmptyState
+            title="No studies match your filters"
+            description="Try clearing search or filter selections."
+            action={
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
             }
           />
         ) : null}

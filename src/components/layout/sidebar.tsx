@@ -14,6 +14,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   MapPin,
+  Package,
   PackageMinus,
   PackagePlus,
   Recycle,
@@ -21,6 +22,7 @@ import {
   Settings2,
   Thermometer,
   Trash2,
+  Users,
   Warehouse,
   X,
 } from "lucide-react";
@@ -28,9 +30,16 @@ import { useMemo, useState } from "react";
 import { SkymapLogo } from "@/components/brand/skymap-logo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
+import type { Permission } from "@/lib/permissions";
 
-type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> };
-type NavGroup = { label: string; items: NavItem[] };
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /** Any of these permissions unlocks the nav item. */
+  permission?: Permission | Permission[];
+};
+type NavGroup = { label: string; items: NavItem[]; adminOnly?: boolean };
 
 const NAV: NavGroup[] = [
   {
@@ -38,32 +47,73 @@ const NAV: NavGroup[] = [
     items: [{ label: "Dashboard", href: "/stability/dashboard", icon: LayoutDashboard }],
   },
   {
+    label: "Admin",
+    adminOnly: true,
+    items: [{ label: "User Management", href: "/stability/admin/users", icon: Users, permission: "users.manage" }],
+  },
+  {
     label: "Inventory Management",
     items: [
-      { label: "Inventory Dashboard", href: "/stability/inventory", icon: Boxes },
-      { label: "Stability Studies", href: "/stability/studies", icon: FlaskConical },
-      { label: "Sample Charging", href: "/stability/inventory/charging", icon: PackagePlus },
-      { label: "Sample Inventory", href: "/stability/inventory", icon: Warehouse },
-      { label: "Upcoming Withdrawals", href: "/stability/withdrawals/upcoming", icon: CalendarClock },
-      { label: "Sample Withdrawal", href: "/stability/withdrawals", icon: PackageMinus },
-      { label: "Movement", href: "/stability/inventory/movement", icon: ArrowLeftRight },
-      { label: "Reconciliation", href: "/stability/reconciliation", icon: ClipboardCheck },
-      { label: "Disposal", href: "/stability/disposal", icon: Trash2 },
-      { label: "Transactions", href: "/stability/transactions", icon: Recycle },
-      { label: "Alerts", href: "/stability/alerts", icon: AlertTriangle },
-      { label: "Reports", href: "/stability/reports", icon: FileBarChart2 },
-      { label: "Settings", href: "/stability/settings", icon: Settings2 },
+      { label: "Sample Inventory", href: "/stability/inventory", icon: Boxes, permission: "inventory.view" },
+      {
+        label: "Stability Studies",
+        href: "/stability/studies",
+        icon: FlaskConical,
+        permission: ["inventory.view", "studies.create", "studies.edit"],
+      },
+      {
+        label: "Sample Charging",
+        href: "/stability/inventory/charging",
+        icon: PackagePlus,
+        permission: ["charging.perform", "studies.create"],
+      },
+      {
+        label: "Upcoming Withdrawals",
+        href: "/stability/withdrawals/upcoming",
+        icon: CalendarClock,
+        permission: "withdrawal.perform",
+      },
+      {
+        label: "Sample Withdrawal",
+        href: "/stability/withdrawals",
+        icon: PackageMinus,
+        permission: "withdrawal.perform",
+      },
+      {
+        label: "Movement",
+        href: "/stability/inventory/movement",
+        icon: ArrowLeftRight,
+        permission: "movement.perform",
+      },
+      {
+        label: "Reconciliation",
+        href: "/stability/reconciliation",
+        icon: ClipboardCheck,
+        permission: "reconciliation.perform",
+      },
+      { label: "Disposal", href: "/stability/disposal", icon: Trash2, permission: "disposal.perform" },
+      { label: "Transactions", href: "/stability/transactions", icon: Recycle, permission: "reports.view" },
+      { label: "Alerts", href: "/stability/alerts", icon: AlertTriangle, permission: "reports.view" },
+      { label: "Reports", href: "/stability/reports", icon: FileBarChart2, permission: "reports.view" },
+      { label: "Settings", href: "/stability/settings", icon: Settings2, permission: "users.manage" },
     ],
   },
   {
     label: "Masters",
     items: [
-      { label: "Study Types", href: "/masters/study-types", icon: Beaker },
-      { label: "Storage Conditions", href: "/masters/storage-conditions", icon: Thermometer },
-      { label: "Pull Points", href: "/masters/pull-points", icon: CalendarClock },
-      { label: "Chambers", href: "/masters/chambers", icon: Warehouse },
-      { label: "Locations", href: "/masters/locations", icon: MapPin },
-      { label: "Units", href: "/masters/units", icon: Ruler },
+      { label: "Products", href: "/masters/products", icon: Package, permission: "masters.manage" },
+      { label: "Batches", href: "/masters/batches", icon: Boxes, permission: "masters.manage" },
+      { label: "Study Types", href: "/masters/study-types", icon: Beaker, permission: "masters.manage" },
+      {
+        label: "Storage Conditions",
+        href: "/masters/storage-conditions",
+        icon: Thermometer,
+        permission: "masters.manage",
+      },
+      { label: "Pull Points", href: "/masters/pull-points", icon: CalendarClock, permission: "masters.manage" },
+      { label: "Chambers", href: "/masters/chambers", icon: Warehouse, permission: "masters.manage" },
+      { label: "Locations", href: "/masters/locations", icon: MapPin, permission: "masters.manage" },
+      { label: "Units", href: "/masters/units", icon: Ruler, permission: "masters.manage" },
     ],
   },
 ];
@@ -81,6 +131,7 @@ export function Sidebar({
   const { hasPermission } = useAuth();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     STABILITY: true,
+    Admin: true,
     "Inventory Management": true,
     Masters: true,
   });
@@ -88,10 +139,11 @@ export function Sidebar({
   const groups = useMemo(() => {
     return NAV.map((g) => ({
       ...g,
-      items:
-        g.label === "Masters" && !hasPermission("masters.manage")
-          ? []
-          : g.items.filter((item, idx, arr) => arr.findIndex((x) => x.href === item.href) === idx),
+      items: g.items.filter((item) => {
+        if (!item.permission) return true;
+        const needed = Array.isArray(item.permission) ? item.permission : [item.permission];
+        return needed.some((p) => hasPermission(p));
+      }),
     })).filter((g) => g.items.length > 0);
   }, [hasPermission]);
 

@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, PackagePlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, PackagePlus, RefreshCw } from "lucide-react";
 import {
   Button,
   Card,
   CardHeader,
   ConfirmDialog,
+  EmptyState,
   ErrorState,
   Input,
   LoadingSkeleton,
@@ -20,6 +21,7 @@ import {
 import {
   activePullPointsForStudy,
   emptyChargeForm,
+  getMissingChargeMasters,
   resolveChargePayload,
   sumAllocations,
   validateChargeForm,
@@ -104,12 +106,19 @@ export default function SampleChargingPage() {
     () => activePullPointsForStudy(masters.data?.pullPoints || [], form.studyTypeId),
     [masters.data, form.studyTypeId]
   );
+  const mastersReady = useMemo(
+    () => (masters.data ? getMissingChargeMasters(masters.data) : null),
+    [masters.data]
+  );
 
   const totalQuantity = Number(form.totalQuantity) || 0;
   const reservedQuantity = Number(form.reservedQuantity) || 0;
   const totalRequired = sumAllocations(form.pullAllocations);
   const totalChargedNeeded = totalRequired + reservedQuantity;
   const remaining = totalQuantity - totalChargedNeeded;
+  const chamberAvailable = selectedChamber
+    ? Math.max(0, Number(selectedChamber.capacity || 0) - Number(selectedChamber.usedCapacity || 0))
+    : null;
 
   function updateField<K extends keyof ChargeFormState>(key: K, value: ChargeFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -197,11 +206,11 @@ export default function SampleChargingPage() {
     try {
       const payload = resolveChargePayload(form, masters.data, profile);
       const result = await createStudyAndCharge(payload);
-      toast.success(`Sample ${result.sampleId} charged successfully.`);
+      toast.success(`Sample ${result.sampleId} charged · Study ${result.studyId} created.`);
       setConfirmOpen(false);
-      router.push("/stability/inventory");
+      router.push(`/stability/inventory/${result.sampleDocId}`);
     } catch (err) {
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, err instanceof Error ? err.message : "Unable to charge sample."));
     } finally {
       setSubmitting(false);
     }
@@ -213,12 +222,18 @@ export default function SampleChargingPage() {
         title="Sample Charging"
         description="Digitize the charging register — create a study and load samples into chamber inventory."
         actions={
-          <Link href="/stability/inventory">
-            <Button variant="outline">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Inventory
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void masters.reload()} disabled={masters.loading}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
             </Button>
-          </Link>
+            <Link href="/stability/inventory">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Inventory
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -231,10 +246,31 @@ export default function SampleChargingPage() {
       {masters.loading ? <LoadingSkeleton rows={8} /> : null}
       {masters.error ? <ErrorState message={masters.error} onRetry={masters.reload} /> : null}
 
-      {!masters.loading && !masters.error && masters.data ? (
+      {!masters.loading && !masters.error && masters.data && mastersReady && mastersReady.length > 0 ? (
+        <Card className="mb-4">
+          <EmptyState
+            title="Complete master setup before charging"
+            description="These masters are missing or inactive. Configure them first, then return here to charge samples."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {mastersReady.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <Button variant="outline">{item.label}</Button>
+                  </Link>
+                ))}
+              </div>
+            }
+          />
+        </Card>
+      ) : null}
+
+      {!masters.loading && !masters.error && masters.data && (!mastersReady || mastersReady.length === 0) ? (
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Product & Batch" description="Select product and batch. Manufacturing and expiry auto-fill from batch master." />
+            <CardHeader
+              title="Product & Batch"
+              description="Select product and batch. Manufacturing and expiry auto-fill from batch master."
+            />
             <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
               <Select
                 label="Product"
@@ -282,6 +318,15 @@ export default function SampleChargingPage() {
                 onChange={(e) => updateField("expiryDate", e.target.value)}
               />
             </div>
+            {form.productId && productBatches.length === 0 ? (
+              <p className="px-4 pb-4 text-sm text-amber-700">
+                No active batches for this product.{" "}
+                <Link href="/masters/batches" className="font-medium underline">
+                  Add a batch
+                </Link>
+                .
+              </p>
+            ) : null}
           </Card>
 
           <Card>
@@ -341,7 +386,10 @@ export default function SampleChargingPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Chamber & Location" description="Inactive chambers are blocked. Maintenance chambers show a warning." />
+            <CardHeader
+              title="Chamber & Location"
+              description="Inactive chambers are blocked. Maintenance chambers show a warning."
+            />
             <div className="grid gap-4 p-4 sm:grid-cols-2">
               <Select
                 label="Chamber"
@@ -373,6 +421,29 @@ export default function SampleChargingPage() {
                 ))}
               </Select>
             </div>
+            {selectedChamber ? (
+              <div className="mx-4 mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Chamber capacity</p>
+                <p className="font-medium text-slate-900">
+                  Used {selectedChamber.usedCapacity} / {selectedChamber.capacity} · Available{" "}
+                  {chamberAvailable}
+                </p>
+                {totalQuantity > 0 && chamberAvailable !== null && totalQuantity > chamberAvailable ? (
+                  <p className="mt-1 text-xs text-rose-600">
+                    Requested quantity exceeds available chamber capacity.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {form.chamberId && chamberLocations.length === 0 ? (
+              <p className="px-4 pb-4 text-sm text-amber-700">
+                No active locations for this chamber.{" "}
+                <Link href="/masters/locations" className="font-medium underline">
+                  Add a location
+                </Link>
+                .
+              </p>
+            ) : null}
             {selectedChamber?.status === "Under Maintenance" ? (
               <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -445,7 +516,13 @@ export default function SampleChargingPage() {
                 <p className="px-4 pt-2 text-xs text-rose-600">{errors.allocations}</p>
               ) : null}
               {!pullPoints.length ? (
-                <p className="p-4 text-sm text-slate-500">No active pull points configured for this study type.</p>
+                <p className="p-4 text-sm text-amber-700">
+                  No active pull points for this study type.{" "}
+                  <Link href="/masters/pull-points" className="font-medium underline">
+                    Configure pull points
+                  </Link>{" "}
+                  and link them to the study type.
+                </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
@@ -495,7 +572,7 @@ export default function SampleChargingPage() {
                 Cancel
               </Button>
             </Link>
-            <Button className="w-full sm:w-auto" onClick={onSubmitClick} disabled={!canCharge}>
+            <Button className="w-full sm:w-auto" onClick={onSubmitClick} disabled={!canCharge || submitting}>
               <PackagePlus className="h-4 w-4" />
               Charge Sample
             </Button>
@@ -506,7 +583,7 @@ export default function SampleChargingPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Confirm sample charging"
-        description={`Charge ${totalQuantity} ${form.unit || "units"} for the selected study? Allocations: ${totalRequired}, Reserve: ${reservedQuantity}.`}
+        description={`Charge ${totalQuantity} ${form.unit || "units"} into ${selectedChamber?.chamberName || "chamber"}? Allocations: ${totalRequired}, Reserve: ${reservedQuantity}. This also creates the linked stability study.`}
         confirmLabel="Confirm & Charge"
         loading={submitting}
         onCancel={() => setConfirmOpen(false)}

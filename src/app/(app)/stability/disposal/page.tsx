@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RefreshCw, Trash2 } from "lucide-react";
 import {
@@ -31,12 +33,16 @@ const DISPOSAL_REASONS: DisposalReason[] = [
   "Other",
 ];
 
-export default function DisposalPage() {
-  const { profile } = useAuth();
+function DisposalPageInner() {
+  const searchParams = useSearchParams();
+  const sampleFromUrl = searchParams.get("sample") || "";
+  const { profile, hasPermission } = useAuth();
+  const canDispose = hasPermission("disposal.perform");
+
   const samples = useAsync(listSamples, []);
   const history = useAsync(listDisposals, []);
 
-  const [sampleDocId, setSampleDocId] = useState("");
+  const [sampleDocId, setSampleDocId] = useState(sampleFromUrl);
   const [quantity, setQuantity] = useState("");
   const [disposalDate, setDisposalDate] = useState(todayISO());
   const [reason, setReason] = useState<DisposalReason | "">("");
@@ -46,32 +52,85 @@ export default function DisposalPage() {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
 
+  useEffect(() => {
+    if (sampleFromUrl) setSampleDocId(sampleFromUrl);
+  }, [sampleFromUrl]);
+
+  useEffect(() => {
+    if (profile?.displayName && !disposedBy) {
+      setDisposedBy(profile.displayName);
+    }
+  }, [profile?.displayName, disposedBy]);
+
+  useEffect(() => {
+    if (!sampleFromUrl || !samples.data?.length) return;
+    const match = samples.data.find((s) => s.id === sampleFromUrl);
+    if (!match) {
+      toast.error("Linked sample was not found. Select a sample to dispose.");
+      setSampleDocId("");
+      return;
+    }
+    if (match.availableQuantity <= 0 || match.status === "Disposed") {
+      toast.error("This sample has no available quantity to dispose.");
+      setSampleDocId("");
+    }
+  }, [sampleFromUrl, samples.data]);
+
   const disposedByValue = disposedBy || profile?.displayName || "";
 
-  const selectedSample = useMemo(
-    () => (samples.data || []).find((s) => s.id === sampleDocId) || null,
-    [samples.data, sampleDocId]
+  const disposableSamples = useMemo(
+    () =>
+      (samples.data || []).filter((s) => s.availableQuantity > 0 && s.status !== "Disposed"),
+    [samples.data]
   );
 
-  const qty = Number(quantity);
-  const available = selectedSample?.availableQuantity ?? 0;
+  const selectedSample = useMemo(
+    () => disposableSamples.find((s) => s.id === sampleDocId) || null,
+    [disposableSamples, sampleDocId]
+  );
 
-  const validationError = !selectedSample
-    ? "Select a sample to dispose."
-    : !Number.isFinite(qty) || qty <= 0
-      ? "Enter a valid disposal quantity greater than zero."
-      : qty > available
-        ? `Cannot dispose more than available quantity (${available}).`
-        : !disposalDate
-          ? "Disposal date is required."
-          : !reason
-            ? "Select a disposal reason."
-            : !disposedByValue.trim()
-              ? "Disposed by is required."
-              : null;
+  useEffect(() => {
+    if (!selectedSample) return;
+    if (quantity.trim() !== "") return;
+    setQuantity(String(selectedSample.availableQuantity));
+  }, [selectedSample, quantity]);
+
+  const qtyParsed = quantity.trim() === "" ? NaN : Number(quantity);
+  const hasQty = Number.isFinite(qtyParsed) && qtyParsed > 0;
+  const qty = hasQty ? qtyParsed : NaN;
+  const available = selectedSample?.availableQuantity ?? 0;
+  const remainingAfter = hasQty ? Math.max(0, available - qty) : available;
+
+  const validationError = !canDispose
+    ? "You do not have permission to dispose samples."
+    : !selectedSample
+      ? "Select a sample to dispose."
+      : selectedSample.availableQuantity <= 0
+        ? "No available quantity left to dispose."
+        : !hasQty
+          ? "Enter a valid disposal quantity greater than zero."
+          : qty > available
+            ? `Cannot dispose more than available quantity (${available}).`
+            : !disposalDate
+              ? "Disposal date is required."
+              : !reason
+                ? "Select a disposal reason."
+                : reason === "Other" && !remarks.trim()
+                  ? "Remarks are required when reason is Other."
+                  : !disposedByValue.trim()
+                    ? "Disposed by is required."
+                    : null;
+
+  function resetForm(keepSample = true) {
+    if (!keepSample) setSampleDocId("");
+    setQuantity("");
+    setReason("");
+    setRemarks("");
+    setDisposalDate(todayISO());
+  }
 
   async function onConfirm() {
-    if (!profile || !selectedSample || !reason || validationError) return;
+    if (!profile || !selectedSample || !reason || validationError || !hasQty) return;
     setSaving(true);
     try {
       const result = await disposeSample({
@@ -83,11 +142,16 @@ export default function DisposalPage() {
         remarks: remarks.trim() || undefined,
         user: profile,
       });
-      toast.success(`Disposal ${result.disposalId} recorded successfully.`);
+      toast.success(
+        `Disposal ${result.disposalId} recorded. Remaining available: ${result.remainingAvailable}.`
+      );
       setConfirmOpen(false);
-      setQuantity("");
-      setRemarks("");
-      setReason("");
+      if (result.remainingAvailable <= 0) {
+        resetForm(false);
+      } else {
+        resetForm(true);
+        setQuantity(String(result.remainingAvailable));
+      }
       await Promise.all([samples.reload(), history.reload()]);
     } catch (err) {
       toast.error(friendlyError(err, err instanceof Error ? err.message : "Unable to dispose sample."));
@@ -117,115 +181,183 @@ export default function DisposalPage() {
         }
       />
 
-      <Card className="mb-6">
-        <CardHeader title="Dispose Sample" description="Validate quantity against available inventory before confirming." />
-        <div className="space-y-5 p-4 sm:p-5">
-          {samples.loading ? <LoadingSkeleton rows={2} /> : null}
-          {samples.error ? <ErrorState message={samples.error} onRetry={samples.reload} /> : null}
+      {!canDispose ? (
+        <Card className="mb-6">
+          <EmptyState
+            title="Disposal permission required"
+            description="Ask an Admin to grant the Disposal module on your account."
+          />
+        </Card>
+      ) : null}
 
-          <Select
-            label="Sample"
-            required
-            value={sampleDocId}
-            onChange={(e) => {
-              setSampleDocId(e.target.value);
-              setQuantity("");
-            }}
-          >
-            <option value="">Select sample…</option>
-            {(samples.data || [])
-              .filter((s) => s.availableQuantity > 0 && s.status !== "Disposed")
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.sampleId} — {s.productName} / {s.batchNumber} (avail {s.availableQuantity} {s.unit})
-                </option>
-              ))}
-          </Select>
+      {canDispose ? (
+        <Card className="mb-6">
+          <CardHeader
+            title="Dispose Sample"
+            description="Validate quantity against available inventory before confirming."
+          />
+          <div className="space-y-5 p-4 sm:p-5">
+            {samples.loading && !selectedSample ? <LoadingSkeleton rows={2} /> : null}
+            {samples.error ? <ErrorState message={samples.error} onRetry={samples.reload} /> : null}
 
-          {selectedSample ? (
-            <>
-              <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <Info label="Product" value={selectedSample.productName} />
-                <Info label="Batch" value={selectedSample.batchNumber} />
-                <Info label="Available" value={`${selectedSample.availableQuantity} ${selectedSample.unit}`} />
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
-                  <div className="mt-1">
-                    <StatusBadge status={selectedSample.status} />
-                  </div>
-                </div>
-              </div>
+            {!samples.loading && !samples.error && disposableSamples.length === 0 ? (
+              <EmptyState
+                title="No samples available to dispose"
+                description="Charge samples into inventory first, or all stock may already be withdrawn/disposed."
+                action={
+                  <Link href="/stability/inventory">
+                    <Button variant="outline">Sample Inventory</Button>
+                  </Link>
+                }
+              />
+            ) : null}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Quantity"
-                  type="number"
-                  min={0}
-                  step="any"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  error={
-                    Number.isFinite(qty) && qty > available
-                      ? `Cannot exceed available (${available})`
-                      : undefined
-                  }
-                />
-                <Input
-                  label="Disposal Date"
-                  type="date"
-                  required
-                  value={disposalDate}
-                  onChange={(e) => setDisposalDate(e.target.value)}
-                />
+            {disposableSamples.length > 0 ? (
+              <>
                 <Select
-                  label="Reason"
+                  label="Sample"
                   required
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value as DisposalReason | "")}
+                  value={sampleDocId}
+                  onChange={(e) => {
+                    setSampleDocId(e.target.value);
+                    setQuantity("");
+                  }}
                 >
-                  <option value="">Select reason…</option>
-                  {DISPOSAL_REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
+                  <option value="">Select sample…</option>
+                  {disposableSamples.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.sampleId} — {s.productName} / {s.batchNumber} (avail {s.availableQuantity}{" "}
+                      {s.unit})
                     </option>
                   ))}
                 </Select>
-                <Input
-                  label="Disposed By"
-                  required
-                  value={disposedByValue}
-                  onChange={(e) => setDisposedBy(e.target.value)}
-                />
-                <div className="md:col-span-2">
-                  <Textarea
-                    label="Remarks"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="Optional remarks"
-                  />
-                </div>
-              </div>
 
-              <div className="flex justify-end">
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    if (validationError) {
-                      toast.error(validationError);
-                      return;
-                    }
-                    setConfirmOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Dispose Sample
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </Card>
+                {selectedSample ? (
+                  <>
+                    <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <Info label="Product" value={selectedSample.productName} />
+                      <Info label="Batch" value={selectedSample.batchNumber} />
+                      <Info
+                        label="Available"
+                        value={`${selectedSample.availableQuantity} ${selectedSample.unit}`}
+                      />
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
+                        <div className="mt-1">
+                          <StatusBadge status={selectedSample.status} />
+                        </div>
+                      </div>
+                      <Info label="Chamber" value={selectedSample.chamberName || "—"} />
+                      <Info label="Location" value={selectedSample.locationLabel || "—"} />
+                      <Info
+                        label="Already disposed"
+                        value={`${selectedSample.disposedQuantity} ${selectedSample.unit}`}
+                      />
+                      <div className="flex items-end">
+                        <Link
+                          href={`/stability/inventory/${selectedSample.id}`}
+                          className="text-sm font-medium text-teal-800 hover:underline"
+                        >
+                          View sample detail
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        min={0}
+                        step="any"
+                        required
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        hint={`Max ${available} ${selectedSample.unit}. Remaining after: ${
+                          hasQty ? remainingAfter : "—"
+                        }`}
+                        error={
+                          hasQty && qty > available
+                            ? `Cannot exceed available (${available})`
+                            : undefined
+                        }
+                      />
+                      <Input
+                        label="Disposal Date"
+                        type="date"
+                        required
+                        value={disposalDate}
+                        onChange={(e) => setDisposalDate(e.target.value)}
+                      />
+                      <Select
+                        label="Reason"
+                        required
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value as DisposalReason | "")}
+                      >
+                        <option value="">Select reason…</option>
+                        {DISPOSAL_REASONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        label="Disposed By"
+                        required
+                        value={disposedByValue}
+                        onChange={(e) => setDisposedBy(e.target.value)}
+                      />
+                      <div className="md:col-span-2">
+                        <Textarea
+                          label="Remarks"
+                          required={reason === "Other"}
+                          value={remarks}
+                          onChange={(e) => setRemarks(e.target.value)}
+                          placeholder={
+                            reason === "Other"
+                              ? "Describe the disposal reason…"
+                              : "Optional remarks"
+                          }
+                          hint={reason === "Other" ? "Required when reason is Other" : undefined}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {selectedSample || reason || quantity ? (
+                        <Button variant="outline" type="button" onClick={() => resetForm(false)}>
+                          Clear
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        type="button"
+                        disabled={!selectedSample}
+                        onClick={() => setQuantity(String(available))}
+                      >
+                        Dispose all available
+                      </Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => {
+                          if (validationError) {
+                            toast.error(validationError);
+                            return;
+                          }
+                          setConfirmOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Dispose Sample
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title="Disposal History" description="Previously disposed sample quantities." />
@@ -253,13 +385,29 @@ export default function DisposalPage() {
                   {paged.items.map((d) => (
                     <tr key={d.id} className="border-t border-slate-100 hover:bg-slate-50/60">
                       <td className="px-4 py-3 font-medium text-teal-800">{d.disposalId}</td>
-                      <td className="px-4 py-3">{d.sampleId}</td>
+                      <td className="px-4 py-3">
+                        {d.sampleDocId ? (
+                          <Link
+                            href={`/stability/inventory/${d.sampleDocId}`}
+                            className="font-medium text-teal-800 hover:underline"
+                          >
+                            {d.sampleId}
+                          </Link>
+                        ) : (
+                          d.sampleId
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {d.productName}
                         <div className="text-xs text-slate-500">{d.batchNumber}</div>
                       </td>
                       <td className="px-4 py-3">{d.quantity}</td>
-                      <td className="px-4 py-3">{d.reason}</td>
+                      <td className="px-4 py-3">
+                        {d.reason}
+                        {d.remarks ? (
+                          <div className="text-xs text-slate-500">{d.remarks}</div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3">{formatDate(d.disposalDate)}</td>
                       <td className="px-4 py-3">{d.disposedBy}</td>
                     </tr>
@@ -272,7 +420,17 @@ export default function DisposalPage() {
                 <div key={d.id} className="rounded-xl border border-slate-200 p-4 text-sm">
                   <p className="font-semibold text-slate-900">{d.disposalId}</p>
                   <p className="text-slate-500">
-                    {d.sampleId} · {d.productName} / {d.batchNumber}
+                    {d.sampleDocId ? (
+                      <Link
+                        href={`/stability/inventory/${d.sampleDocId}`}
+                        className="text-teal-800 hover:underline"
+                      >
+                        {d.sampleId}
+                      </Link>
+                    ) : (
+                      d.sampleId
+                    )}{" "}
+                    · {d.productName} / {d.batchNumber}
                   </p>
                   <p className="mt-2">
                     Qty {d.quantity} · {d.reason}
@@ -289,7 +447,12 @@ export default function DisposalPage() {
                 Showing {paged.items.length} of {paged.total}
               </p>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={paged.page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={paged.page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
                   Previous
                 </Button>
                 <Button
@@ -309,7 +472,7 @@ export default function DisposalPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Confirm sample disposal?"
-        description={`Dispose ${qty} unit(s) of ${selectedSample?.sampleId || "sample"} (${reason}). This permanently reduces available inventory.`}
+        description={`Dispose ${hasQty ? qty : "—"} ${selectedSample?.unit || "unit(s)"} of ${selectedSample?.sampleId || "sample"} (${reason}). Remaining available after: ${hasQty ? remainingAfter : "—"}. This permanently reduces inventory and chamber capacity.`}
         confirmLabel="Confirm Disposal"
         tone="danger"
         loading={saving}
@@ -326,5 +489,13 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-0.5 font-medium text-slate-900">{value}</p>
     </div>
+  );
+}
+
+export default function DisposalPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton rows={6} />}>
+      <DisposalPageInner />
+    </Suspense>
   );
 }

@@ -3,13 +3,15 @@ import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import { derivePullStatus, roundPct } from "@/lib/utils";
 import type { Chamber, DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
 import { listPullPoints, listSamples, listStudies, listTransactions } from "@/services/inventory";
+import { listStudyTypes } from "@/services/masters";
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [studies, samples, pulls, chamberSnap] = await Promise.all([
+  const [studies, samples, pulls, chamberSnap, studyTypeMasters] = await Promise.all([
     listStudies(),
     listSamples(),
     listPullPoints(),
     getDocs(collection(getDb(), COLLECTIONS.chambers)),
+    listStudyTypes(),
   ]);
 
   const chambers = chamberSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Chamber));
@@ -24,14 +26,24 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
   }));
 
-  const studyTypes = ["Accelerated", "Intermediate", "Long Term / Real-Time"];
+  const fromMaster = studyTypeMasters
+    .filter((t) => t.status === "Active")
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map((t) => t.name);
+  const fromData = [...new Set(activeStudies.map((s) => s.studyType).filter(Boolean))];
+  const studyTypes = fromMaster.length
+    ? [...fromMaster, ...fromData.filter((n) => !fromMaster.includes(n))]
+    : fromData.length
+      ? fromData
+      : ["Accelerated", "Intermediate", "Long Term / Real-Time"];
+
   const studyTypeOverview = studyTypes.map((studyType) => {
     const typeStudies = activeStudies.filter((s) => s.studyType === studyType);
     const typeSamples = samples.filter((s) => s.studyType === studyType);
     const typePulls = enrichedPulls.filter(
       (p) =>
         p.studyType === studyType &&
-        ["Upcoming", "Due Soon", "Due Today", "Overdue"].includes(p.status)
+        ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"].includes(p.status)
     );
     return {
       studyType,

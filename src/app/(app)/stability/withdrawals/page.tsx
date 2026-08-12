@@ -28,13 +28,38 @@ import {
   listWithdrawals,
   withdrawSample,
 } from "@/services/inventory";
-import type { StabilitySample } from "@/types";
+import type { PullPointStatus, StabilitySample } from "@/types";
+
+const OPEN_STATUSES: PullPointStatus[] = [
+  "Upcoming",
+  "Due Soon",
+  "Due Today",
+  "Overdue",
+  "Partially Withdrawn",
+];
+
+function statusPriority(status: PullPointStatus) {
+  switch (status) {
+    case "Overdue":
+      return 0;
+    case "Due Today":
+      return 1;
+    case "Due Soon":
+      return 2;
+    case "Partially Withdrawn":
+      return 3;
+    default:
+      return 4;
+  }
+}
 
 function WithdrawalsPageInner() {
   const searchParams = useSearchParams();
   const pullId = searchParams.get("pull") || "";
+  const sampleFromUrl = searchParams.get("sample") || "";
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasPermission } = useAuth();
+  const canWithdraw = hasPermission("withdrawal.perform");
 
   const pulls = useAsync(listPullPoints, []);
   const history = useAsync(listWithdrawals, []);
@@ -53,12 +78,37 @@ function WithdrawalsPageInner() {
   const [page, setPage] = useState(1);
   const [duePick, setDuePick] = useState("");
 
+  useEffect(() => {
+    if (profile?.displayName && !withdrawnBy) {
+      setWithdrawnBy(profile.displayName);
+    }
+  }, [profile?.displayName, withdrawnBy]);
+
   const withdrawnByValue = withdrawnBy || profile?.displayName || "";
 
   const selectedPull = useMemo(
     () => (pulls.data || []).find((p) => p.id === selectedPullId) || null,
     [pulls.data, selectedPullId]
   );
+
+  // Inventory / Upcoming links with ?sample= — auto-select the earliest open pull for that sample.
+  useEffect(() => {
+    if (pullId || !sampleFromUrl || !pulls.data?.length) return;
+    const open = pulls.data
+      .filter((p) => p.sampleDocId === sampleFromUrl && OPEN_STATUSES.includes(p.status))
+      .sort((a, b) => {
+        const byStatus = statusPriority(a.status) - statusPriority(b.status);
+        if (byStatus !== 0) return byStatus;
+        return a.plannedDate.localeCompare(b.plannedDate);
+      })[0];
+    if (open) {
+      setManualPullId(open.id);
+      setDuePick(open.id);
+      router.replace(`/stability/withdrawals?pull=${open.id}`);
+    } else {
+      toast.error("No open pull points found for this sample.");
+    }
+  }, [pullId, sampleFromUrl, pulls.data, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +124,8 @@ function WithdrawalsPageInner() {
           setSample(s);
           if (s && selectedPull) {
             const remaining = Math.max(0, selectedPull.plannedQuantity - selectedPull.actualQuantity);
-            const suggested = Math.min(remaining || selectedPull.plannedQuantity, s.availableQuantity);
-            setActualQuantity(String(suggested || ""));
+            const suggested = Math.min(remaining, s.availableQuantity);
+            setActualQuantity(suggested > 0 ? String(suggested) : "");
           }
         }
       } catch (err) {
@@ -95,35 +145,64 @@ function WithdrawalsPageInner() {
 
   const duePulls = useMemo(() => {
     return (pulls.data || [])
-      .filter((p) =>
-        ["Due Soon", "Due Today", "Overdue", "Partially Withdrawn", "Upcoming"].includes(p.status)
-      )
-      .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
+      .filter((p) => OPEN_STATUSES.includes(p.status))
+      .sort((a, b) => {
+        const byStatus = statusPriority(a.status) - statusPriority(b.status);
+        if (byStatus !== 0) return byStatus;
+        return a.plannedDate.localeCompare(b.plannedDate);
+      });
   }, [pulls.data]);
 
   const pagedHistory = paginate(history.data || [], page, 10);
 
-  const qty = Number(actualQuantity);
+  const qtyParsed = actualQuantity.trim() === "" ? NaN : Number(actualQuantity);
+  const hasQty = Number.isFinite(qtyParsed) && qtyParsed > 0;
+  const qty = hasQty ? qtyParsed : NaN;
   const available = sample?.availableQuantity ?? 0;
-  const validationError =
-    !selectedPull
+  const remainingPlanned = selectedPull
+    ? Math.max(0, selectedPull.plannedQuantity - selectedPull.actualQuantity)
+    : 0;
+  const maxWithdrawable = Math.min(available, remainingPlanned);
+
+  const validationError = !canWithdraw
+    ? "You do not have permission to withdraw samples."
+    : !selectedPull
       ? "Select a pull point to withdraw."
-      : !sample
-        ? "Sample inventory could not be loaded."
-        : !Number.isFinite(qty) || qty <= 0
-          ? "Enter a valid actual quantity greater than zero."
-          : qty > available
-            ? `Actual quantity cannot exceed available quantity (${available}).`
-            : !withdrawalDate
-              ? "Withdrawal date is required."
-              : !withdrawnByValue.trim()
-                ? "Withdrawn by is required."
-                : !receivedBy.trim()
-                  ? "Received by is required."
-                  : null;
+      : selectedPull.status === "Withdrawn"
+        ? "This pull point is already fully withdrawn."
+        : !sample
+          ? "Sample inventory could not be loaded."
+          : sample.availableQuantity <= 0
+            ? "No available quantity left for this sample."
+            : remainingPlanned <= 0
+              ? "No remaining planned quantity for this pull point."
+              : !hasQty
+                ? "Enter a valid actual quantity greater than zero."
+                : qty > available
+                  ? `Actual quantity cannot exceed available quantity (${available}).`
+                  : qty > remainingPlanned
+                    ? `Cannot exceed remaining planned quantity (${remainingPlanned}).`
+                    : !withdrawalDate
+                      ? "Withdrawal date is required."
+                      : !withdrawnByValue.trim()
+                        ? "Withdrawn by is required."
+                        : !receivedBy.trim()
+                          ? "Received by is required."
+                          : null;
+
+  function clearSelection() {
+    setManualPullId("");
+    setDuePick("");
+    setSample(null);
+    setActualQuantity("");
+    setReceivedBy("");
+    setRemarks("");
+    setWithdrawalDate(todayISO());
+    router.push("/stability/withdrawals");
+  }
 
   async function onConfirmWithdraw() {
-    if (!profile || !selectedPull || validationError) return;
+    if (!profile || !selectedPull || validationError || !hasQty) return;
     setSaving(true);
     try {
       const result = await withdrawSample({
@@ -139,6 +218,7 @@ function WithdrawalsPageInner() {
       setConfirmOpen(false);
       setRemarks("");
       setReceivedBy("");
+      setActualQuantity("");
       await Promise.all([pulls.reload(), history.reload()]);
       router.push(`/stability/withdrawals/${result.withdrawalDocId}`);
     } catch (err) {
@@ -180,20 +260,19 @@ function WithdrawalsPageInner() {
         }
       />
 
+      {!canWithdraw ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Your role can view withdrawal history but cannot submit withdrawals.
+        </Card>
+      ) : null}
+
       {showForm ? (
         <Card className="mb-6">
           <CardHeader
             title="Withdrawal Form"
             description="Confirm pull-point details and record the actual quantity withdrawn."
             action={
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setManualPullId("");
-                  router.push("/stability/withdrawals");
-                }}
-              >
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
                 Clear selection
               </Button>
             }
@@ -219,10 +298,12 @@ function WithdrawalsPageInner() {
                   <Info label="Due Date" value={formatDate(selectedPull.plannedDate)} />
                   <Info label="Planned Qty" value={String(selectedPull.plannedQuantity)} />
                   <Info label="Already Withdrawn" value={String(selectedPull.actualQuantity)} />
+                  <Info label="Remaining Planned" value={String(remainingPlanned)} />
                   <Info
                     label="Available Qty"
                     value={sample ? `${sample.availableQuantity} ${sample.unit}` : "—"}
                   />
+                  <Info label="Max This Withdrawal" value={String(maxWithdrawable)} />
                   <div className="sm:col-span-2 lg:col-span-3">
                     <StatusBadge status={selectedPull.status} />
                   </div>
@@ -233,13 +314,15 @@ function WithdrawalsPageInner() {
                     label="Actual Quantity"
                     type="number"
                     min={0}
+                    max={maxWithdrawable || undefined}
                     step="any"
                     required
                     value={actualQuantity}
                     onChange={(e) => setActualQuantity(e.target.value)}
+                    hint={`Max ${maxWithdrawable} (min of available and remaining planned)`}
                     error={
-                      Number.isFinite(qty) && qty > available
-                        ? `Cannot exceed available (${available})`
+                      hasQty && qty > maxWithdrawable
+                        ? `Cannot exceed ${maxWithdrawable}`
                         : undefined
                     }
                   />
@@ -273,7 +356,13 @@ function WithdrawalsPageInner() {
                 </div>
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {sample?.id ? (
+                    <Link href={`/stability/inventory/${sample.id}`}>
+                      <Button variant="outline">View Sample</Button>
+                    </Link>
+                  ) : null}
                   <Button
+                    disabled={!canWithdraw || saving}
                     onClick={() => {
                       if (validationError) {
                         toast.error(validationError);
@@ -301,11 +390,13 @@ function WithdrawalsPageInner() {
               label="Due / Open Pull Points"
               value={duePick}
               onChange={(e) => selectDuePull(e.target.value)}
+              disabled={!canWithdraw}
             >
               <option value="">Select pull point…</option>
               {duePulls.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.productName} / {p.batchNumber} — {p.pullPoint} ({p.status}, due {formatDate(p.plannedDate)})
+                  {p.productName} / {p.batchNumber} — {p.pullPoint} ({p.status}, due{" "}
+                  {formatDate(p.plannedDate)})
                 </option>
               ))}
             </Select>
@@ -317,7 +408,15 @@ function WithdrawalsPageInner() {
           </div>
           {pulls.loading ? <LoadingSkeleton rows={2} /> : null}
           {!pulls.loading && duePulls.length === 0 ? (
-            <EmptyState title="No open pull points" description="All scheduled withdrawals are complete, or no studies have been charged yet." />
+            <EmptyState
+              title="No open pull points"
+              description="All scheduled withdrawals are complete, or no studies have been charged yet."
+              action={
+                <Link href="/stability/inventory/charging">
+                  <Button variant="outline">Charge Sample</Button>
+                </Link>
+              }
+            />
           ) : null}
         </Card>
       )}
@@ -392,7 +491,12 @@ function WithdrawalsPageInner() {
                 Showing {pagedHistory.items.length} of {pagedHistory.total}
               </p>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={pagedHistory.page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pagedHistory.page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
                   Previous
                 </Button>
                 <Button
@@ -412,7 +516,7 @@ function WithdrawalsPageInner() {
       <ConfirmDialog
         open={confirmOpen}
         title="Confirm sample withdrawal?"
-        description={`Withdraw ${qty} unit(s) for ${selectedPull?.productName || "sample"} / ${selectedPull?.pullPoint || ""} on ${formatDate(withdrawalDate)}. This will update inventory balances.`}
+        description={`Withdraw ${qty} unit(s) for ${selectedPull?.productName || "sample"} / ${selectedPull?.pullPoint || ""} on ${formatDate(withdrawalDate)}. Remaining planned after this: ${Math.max(0, remainingPlanned - (hasQty ? qty : 0))}. Inventory and chamber capacity will update.`}
         confirmLabel="Confirm Withdrawal"
         loading={saving}
         onCancel={() => setConfirmOpen(false)}

@@ -10,6 +10,7 @@ import {
   Card,
   CardHeader,
   ConfirmDialog,
+  EmptyState,
   ErrorState,
   Input,
   LoadingSkeleton,
@@ -20,6 +21,7 @@ import {
 import {
   activePullPointsForStudy,
   emptyChargeForm,
+  getMissingChargeMasters,
   resolveChargePayload,
   sumAllocations,
   validateChargeForm,
@@ -122,11 +124,18 @@ export default function NewStabilityStudyPage() {
   const totalRequired = sumAllocations(form.pullAllocations);
   const totalChargedNeeded = totalRequired + reservedQuantity;
 
-  const selectedProduct = activeProducts.find((p) => p.id === form.productId);
-  const selectedBatch = productBatches.find((b) => b.id === form.batchId);
+  const selectedProduct =
+    (masters.data?.products || []).find((p) => p.id === form.productId) || null;
+  const selectedBatch =
+    (masters.data?.batches || []).find((b) => b.id === form.batchId) || null;
   const selectedStudyType = activeStudyTypes.find((s) => s.id === form.studyTypeId);
   const selectedCondition = activeConditions.find((c) => c.id === form.storageConditionId);
   const selectedLocation = chamberLocations.find((l) => l.id === form.locationId);
+
+  const mastersReady = useMemo(
+    () => (masters.data ? getMissingChargeMasters(masters.data) : null),
+    [masters.data]
+  );
 
   function updateField<K extends keyof ChargeFormState>(key: K, value: ChargeFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -203,7 +212,7 @@ export default function NewStabilityStudyPage() {
       setConfirmOpen(false);
       router.push(`/stability/studies/${result.studyDocId}`);
     } catch (err) {
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, err instanceof Error ? err.message : "Unable to create study."));
     } finally {
       setSubmitting(false);
     }
@@ -233,7 +242,25 @@ export default function NewStabilityStudyPage() {
       {masters.loading ? <LoadingSkeleton rows={8} /> : null}
       {masters.error ? <ErrorState message={masters.error} onRetry={masters.reload} /> : null}
 
-      {!masters.loading && !masters.error && masters.data ? (
+      {!masters.loading && !masters.error && masters.data && mastersReady && mastersReady.length > 0 ? (
+        <Card className="mb-4">
+          <EmptyState
+            title="Complete master setup before creating a study"
+            description="These masters are missing or inactive. Configure them first, then return here."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {mastersReady.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <Button variant="outline">{item.label}</Button>
+                  </Link>
+                ))}
+              </div>
+            }
+          />
+        </Card>
+      ) : null}
+
+      {!masters.loading && !masters.error && masters.data && (!mastersReady || mastersReady.length === 0) ? (
         <div className="space-y-4">
           <Card className="p-4">
             <ol className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">

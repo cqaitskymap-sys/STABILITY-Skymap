@@ -7,11 +7,30 @@ service cloud.firestore {
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
     function hasRole(roles) {
-      return isSignedIn() && userDoc().role in roles;
+      return isSignedIn() && userDocExists() && userDoc().role in roles;
     }
     function isAdmin() {
       return hasRole(['Admin']);
+    }
+    function usesCustomModules() {
+      return userDocExists()
+        && ('moduleAccess' in userDoc())
+        && userDoc().moduleAccess is list
+        && userDoc().moduleAccess.size() > 0;
+    }
+    function hasModuleAccess(permission) {
+      return usesCustomModules() && permission in userDoc().moduleAccess;
+    }
+    // Matches app effectivePermissions: custom moduleAccess OR Admin role defaults.
+    function canManageUsers() {
+      return isSignedIn() && userDocExists() && (
+        hasModuleAccess('users.manage')
+        || (!usesCustomModules() && userDoc().role == 'Admin')
+      );
     }
     function isQAManagerOrAdmin() {
       return hasRole(['Admin', 'QA Manager']);
@@ -19,12 +38,40 @@ service cloud.firestore {
     function isQAStaff() {
       return hasRole(['Admin', 'QA Manager', 'QA User']);
     }
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function bootstrapOpen() {
+      return !exists(/databases/$(database)/documents/settings/bootstrap);
+    }
+
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      // First signed-in bootstrap admin may close public profile creation.
+      allow create: if isSignedIn()
+        && docId == 'bootstrap'
+        && bootstrapOpen();
+      allow update, delete: if canManageUsers();
+    }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
-      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
-      allow delete: if isAdmin();
+      allow read: if isSelf(userId) || canManageUsers();
+      // User managers provision accounts. One-time bootstrap: first Admin may self-create while open.
+      allow create: if canManageUsers()
+        || (
+          bootstrapOpen()
+          && isSelf(userId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.role == 'Admin'
+          && request.resource.data.email == request.auth.token.email
+        );
+      allow update: if canManageUsers()
+        || (
+          isSelf(userId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'moduleAccess'])
+        );
+      allow delete: if canManageUsers();
     }
 
     match /counters/{docId} {
@@ -32,41 +79,52 @@ service cloud.firestore {
     }
 
     match /products/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isQAManagerOrAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      allow write: if isQAManagerOrAdmin() || hasModuleAccess('masters.manage');
     }
     match /batches/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isQAManagerOrAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      allow write: if isQAManagerOrAdmin() || hasModuleAccess('masters.manage');
     }
     match /studyTypes/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      // App permission: masters.manage (Admin role default, or custom moduleAccess).
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
     }
     match /storageConditions/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      // App permission: masters.manage (Admin role default, or custom moduleAccess).
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
     }
     match /pullPoints/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      // App permission: masters.manage (Admin role default, or custom moduleAccess).
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
     }
     match /chambers/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create') || hasModuleAccess('movement.perform');
+      // Master create/delete: Admin or masters.manage. Inventory workflows (QA staff) update usedCapacity.
+      allow create, delete: if isAdmin() || hasModuleAccess('masters.manage');
+      allow update: if isQAStaff() || hasModuleAccess('masters.manage');
     }
     match /storageLocations/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create') || hasModuleAccess('movement.perform');
+      // App permission: masters.manage (Admin role default, or custom moduleAccess).
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
     }
     match /units/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isAdmin();
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
+      // App permission: masters.manage (Admin role default, or custom moduleAccess).
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
     }
 
     match /stabilityStudies/{docId} {
       allow read: if isQAStaff();
-      allow create, update: if isQAManagerOrAdmin();
+      allow create: if isQAManagerOrAdmin()
+        || hasModuleAccess('studies.create')
+        || hasModuleAccess('charging.perform');
+      // Withdrawals / adjustments update study quantity balances.
+      allow update: if isQAStaff();
       allow delete: if false;
     }
     match /stabilitySamples/{docId} {
@@ -86,12 +144,14 @@ service cloud.firestore {
     }
     match /sampleMovements/{docId} {
       allow read: if isQAStaff();
-      allow create: if isQAManagerOrAdmin();
+      // App permission: movement.perform (role default for QA Manager/Admin, or custom moduleAccess).
+      allow create: if isQAManagerOrAdmin() || hasModuleAccess('movement.perform');
       allow update, delete: if false;
     }
     match /sampleDisposals/{docId} {
       allow read: if isQAStaff();
-      allow create: if isQAManagerOrAdmin();
+      // App permission: disposal.perform (role default for QA Manager/Admin, or custom moduleAccess).
+      allow create: if isQAManagerOrAdmin() || hasModuleAccess('disposal.perform');
       allow update, delete: if false;
     }
     match /inventoryReconciliations/{docId} {
@@ -105,8 +165,8 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /inventoryAlerts/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isQAStaff();
+      allow read: if isQAStaff() || hasModuleAccess('reports.view');
+      allow write: if isQAStaff() || hasModuleAccess('reports.view');
     }
     match /auditLogs/{docId} {
       allow read: if isQAManagerOrAdmin();

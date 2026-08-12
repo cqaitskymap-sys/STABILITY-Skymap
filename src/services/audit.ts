@@ -13,10 +13,18 @@ export async function writeAuditLog(input: {
   userName: string;
   userEmail: string;
 }) {
-  const payload = {
-    ...input,
+  const payload: Record<string, unknown> = {
+    action: input.action,
+    userId: input.userId,
+    userName: input.userName,
+    userEmail: input.userEmail,
     createdAt: nowISO(),
   };
+  if (input.recordId !== undefined) payload.recordId = input.recordId;
+  if (input.recordType !== undefined) payload.recordType = input.recordType;
+  if (input.previousValue !== undefined) payload.previousValue = input.previousValue;
+  if (input.newValue !== undefined) payload.newValue = input.newValue;
+
   const ref = await addDoc(collection(getDb(), COLLECTIONS.auditLogs), payload);
   return { id: ref.id, ...payload } as AuditLog;
 }

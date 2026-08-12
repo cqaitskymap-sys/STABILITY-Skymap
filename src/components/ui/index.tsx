@@ -113,8 +113,9 @@ export function Textarea({
   className,
   label,
   error,
+  hint,
   ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string }) {
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string; hint?: string }) {
   return (
     <label className="block space-y-1.5">
       {label ? (
@@ -126,10 +127,12 @@ export function Textarea({
       <textarea
         className={cn(
           "min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20",
+          error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200",
           className
         )}
         {...props}
       />
+      {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
       {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
     </label>
   );
@@ -202,6 +205,13 @@ export function StatusBadge({ status }: { status: string }) {
     "Under Maintenance": "yellow",
     Inactive: "slate",
     Draft: "slate",
+    "SAMPLE CHARGED": "green",
+    "SAMPLE ALLOCATED": "teal",
+    "SAMPLE WITHDRAWN": "blue",
+    "SAMPLE TRANSFERRED": "teal",
+    "SAMPLE RETURNED": "green",
+    "SAMPLE ADJUSTED": "purple",
+    "SAMPLE DISPOSED": "slate",
   };
   return <Badge tone={map[status] || "slate"}>{status}</Badge>;
 }

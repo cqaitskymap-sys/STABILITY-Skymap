@@ -24,9 +24,23 @@ import type {
 } from "@/types";
 
 async function listCollection<T>(name: string, orderField = "createdAt") {
-  const q = query(collection(getDb(), name), orderBy(orderField, "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
+  try {
+    const q = query(collection(getDb(), name), orderBy(orderField, "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
+  } catch {
+    // Fallback when order field is missing on older docs (avoids breaking inventory/filters).
+    const snap = await getDocs(collection(getDb(), name));
+    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T & { id: string }));
+    return rows.sort((a, b) => {
+      const rawA = (a as Record<string, unknown>)[orderField];
+      const rawB = (b as Record<string, unknown>)[orderField];
+      if (orderField === "sortOrder") {
+        return Number(rawA ?? 0) - Number(rawB ?? 0);
+      }
+      return String(rawB ?? "").localeCompare(String(rawA ?? ""));
+    });
+  }
 }
 
 export async function listStudyTypes() {
@@ -34,7 +48,8 @@ export async function listStudyTypes() {
 }
 
 export async function listStorageConditions() {
-  return listCollection<StorageCondition>(COLLECTIONS.storageConditions);
+  const rows = await listCollection<StorageCondition>(COLLECTIONS.storageConditions);
+  return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
 export async function listPullPoints() {
@@ -42,15 +57,22 @@ export async function listPullPoints() {
 }
 
 export async function listChambers() {
-  return listCollection<Chamber>(COLLECTIONS.chambers);
+  const rows = await listCollection<Chamber>(COLLECTIONS.chambers);
+  return rows.sort((a, b) =>
+    String(a.chamberId || a.chamberName || "").localeCompare(String(b.chamberId || b.chamberName || ""))
+  );
 }
 
 export async function listLocations() {
-  return listCollection<StorageLocation>(COLLECTIONS.storageLocations);
+  const rows = await listCollection<StorageLocation>(COLLECTIONS.storageLocations);
+  return rows.sort((a, b) =>
+    `${a.chamberName || ""}|${a.label || ""}`.localeCompare(`${b.chamberName || ""}|${b.label || ""}`)
+  );
 }
 
 export async function listUnits() {
-  return listCollection<Unit>(COLLECTIONS.units);
+  const rows = await listCollection<Unit>(COLLECTIONS.units);
+  return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
 export async function listProducts() {

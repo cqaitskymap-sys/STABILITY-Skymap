@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ClipboardCheck, RefreshCw } from "lucide-react";
 import {
@@ -19,29 +20,22 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, friendlyError, paginate } from "@/lib/utils";
+import { formatDate, friendlyError, paginate, resolveReconciliationStatus } from "@/lib/utils";
 import {
   listPullPoints,
   listReconciliations,
   listSamples,
   reconcileSample,
 } from "@/services/inventory";
-import type { ReconciliationStatus } from "@/types";
 
-function previewStatus(variance: number, adjust: boolean): ReconciliationStatus {
-  if (variance === 0) return "Matched";
-  if (adjust) return "Adjusted";
-  // Unresolved gaps: small differences surface as Variance Found;
-  // larger gaps indicate investigation is required before close-out.
-  return Math.abs(variance) >= 5 ? "Investigation Required" : "Variance Found";
-}
-
-export default function ReconciliationPage() {
+function ReconciliationPageInner() {
+  const searchParams = useSearchParams();
+  const sampleFromUrl = searchParams.get("sample") || "";
   const { profile } = useAuth();
   const samples = useAsync(listSamples, []);
   const history = useAsync(listReconciliations, []);
 
-  const [sampleDocId, setSampleDocId] = useState("");
+  const [sampleDocId, setSampleDocId] = useState(sampleFromUrl);
   const [physicalQty, setPhysicalQty] = useState("");
   const [adjust, setAdjust] = useState(false);
   const [reason, setReason] = useState("");
@@ -49,6 +43,19 @@ export default function ReconciliationPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (sampleFromUrl) setSampleDocId(sampleFromUrl);
+  }, [sampleFromUrl]);
+
+  useEffect(() => {
+    if (!sampleFromUrl || !samples.data?.length) return;
+    const exists = samples.data.some((s) => s.id === sampleFromUrl);
+    if (!exists) {
+      toast.error("Linked sample was not found. Select a sample to reconcile.");
+      setSampleDocId("");
+    }
+  }, [sampleFromUrl, samples.data]);
 
   const selectedSample = useMemo(
     () => (samples.data || []).find((s) => s.id === sampleDocId) || null,
@@ -61,20 +68,22 @@ export default function ReconciliationPage() {
   );
 
   const systemQty = selectedSample?.availableQuantity ?? 0;
-  const physical = Number(physicalQty);
-  const variance = Number.isFinite(physical) ? physical - systemQty : 0;
-  const liveStatus = Number.isFinite(physical) ? previewStatus(variance, adjust) : "Matched";
+  const physicalParsed = physicalQty.trim() === "" ? NaN : Number(physicalQty);
+  const hasPhysical = Number.isFinite(physicalParsed) && physicalParsed >= 0;
+  const physical = hasPhysical ? physicalParsed : NaN;
+  const variance = hasPhysical ? physical - systemQty : 0;
+  const liveStatus = hasPhysical ? resolveReconciliationStatus(variance, adjust) : "Matched";
 
   const validationError = !selectedSample
     ? "Select a sample to reconcile."
-    : !Number.isFinite(physical) || physical < 0
+    : !hasPhysical
       ? "Enter a valid physical quantity (zero or greater)."
       : adjust && variance !== 0 && !reason.trim()
         ? "Adjustment reason is required when adjusting inventory."
         : null;
 
   async function onConfirm() {
-    if (!profile || !selectedSample || validationError) return;
+    if (!profile || !selectedSample || validationError || !hasPhysical) return;
     setSaving(true);
     try {
       const result = await reconcileSample({
@@ -129,24 +138,34 @@ export default function ReconciliationPage() {
           {samples.loading ? <LoadingSkeleton rows={2} /> : null}
           {samples.error ? <ErrorState message={samples.error} onRetry={samples.reload} /> : null}
 
-          <Select
-            label="Sample"
-            required
-            value={sampleDocId}
-            onChange={(e) => {
-              setSampleDocId(e.target.value);
-              setPhysicalQty("");
-              setAdjust(false);
-              setReason("");
-            }}
-          >
-            <option value="">Select sample…</option>
-            {(samples.data || []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.sampleId} — {s.productName} / {s.batchNumber}
-              </option>
-            ))}
-          </Select>
+          {!samples.loading && !samples.error && (samples.data || []).length === 0 ? (
+            <EmptyState
+              title="No samples to reconcile"
+              description="Charge a stability sample first, then return here to compare physical count with system quantity."
+            />
+          ) : null}
+
+          {!samples.loading && !samples.error && (samples.data || []).length > 0 ? (
+            <Select
+              label="Sample"
+              required
+              value={sampleDocId}
+              onChange={(e) => {
+                setSampleDocId(e.target.value);
+                setPhysicalQty("");
+                setAdjust(false);
+                setReason("");
+              }}
+            >
+              <option value="">Select sample…</option>
+              {(samples.data || []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.sampleId} — {s.productName} / {s.batchNumber}
+                  {s.status === "Under Reconciliation" ? " (Under Reconciliation)" : ""}
+                </option>
+              ))}
+            </Select>
+          ) : null}
 
           {selectedSample ? (
             <>
@@ -176,7 +195,7 @@ export default function ReconciliationPage() {
                   <p className="text-xs uppercase tracking-wide text-slate-500">Live Variance</p>
                   <p
                     className={`mt-1 text-2xl font-semibold ${
-                      !Number.isFinite(physical)
+                      !hasPhysical
                         ? "text-slate-400"
                         : variance === 0
                           ? "text-emerald-700"
@@ -185,10 +204,10 @@ export default function ReconciliationPage() {
                             : "text-rose-700"
                     }`}
                   >
-                    {Number.isFinite(physical) ? (variance > 0 ? `+${variance}` : variance) : "—"}
+                    {hasPhysical ? (variance > 0 ? `+${variance}` : variance) : "—"}
                   </p>
                   <div className="mt-2">
-                    <StatusBadge status={liveStatus} />
+                    {hasPhysical ? <StatusBadge status={liveStatus} /> : null}
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
                     Matched (zero variance), Variance Found (non-zero), or Investigation Required
@@ -207,7 +226,7 @@ export default function ReconciliationPage() {
                 <span>
                   <span className="font-medium text-slate-900">Adjust system quantity to physical count</span>
                   <span className="mt-0.5 block text-slate-500">
-                    Requires a reason when variance is not zero. Inventory totals will be updated.
+                    Requires a reason when variance is not zero. Inventory totals and chamber capacity will be updated.
                   </span>
                 </span>
               </label>
@@ -398,5 +417,13 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-0.5 font-medium text-slate-900">{value}</p>
     </div>
+  );
+}
+
+export default function ReconciliationPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton rows={6} />}>
+      <ReconciliationPageInner />
+    </Suspense>
   );
 }

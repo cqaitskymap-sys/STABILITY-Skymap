@@ -6,6 +6,7 @@ import { Printer } from "lucide-react";
 import {
   Button,
   Card,
+  EmptyState,
   ErrorState,
   LoadingSkeleton,
   PageHeader,
@@ -18,7 +19,11 @@ import { getWithdrawal } from "@/services/inventory";
 export default function WithdrawalDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id || "";
-  const { data, loading, error, reload } = useAsync(() => getWithdrawal(id), [id]);
+  const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || "SKYMAP Stability";
+  const { data, loading, error, reload } = useAsync(async () => {
+    if (!id) return null;
+    return getWithdrawal(id);
+  }, [id]);
 
   function handlePrint() {
     window.print();
@@ -35,6 +40,11 @@ export default function WithdrawalDetailPage() {
               <Link href="/stability/withdrawals">
                 <Button variant="outline">Back</Button>
               </Link>
+              {data?.sampleDocId ? (
+                <Link href={`/stability/inventory/${data.sampleDocId}`}>
+                  <Button variant="outline">View Sample</Button>
+                </Link>
+              ) : null}
               <Button onClick={handlePrint} disabled={!data}>
                 <Printer className="h-4 w-4" />
                 Print
@@ -47,7 +57,15 @@ export default function WithdrawalDetailPage() {
       {loading ? <LoadingSkeleton rows={6} /> : null}
       {error ? <ErrorState message={error} onRetry={reload} /> : null}
       {!loading && !error && !data ? (
-        <ErrorState message="Withdrawal record not found." />
+        <EmptyState
+          title="Withdrawal record not found"
+          description="This withdrawal may have been removed or the link is invalid."
+          action={
+            <Link href="/stability/withdrawals">
+              <Button variant="outline">Back to Withdrawals</Button>
+            </Link>
+          }
+        />
       ) : null}
 
       {data ? (
@@ -56,7 +74,7 @@ export default function WithdrawalDetailPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-800">
-                  SKYMAP Stability
+                  {companyName}
                 </p>
                 <h2 className="mt-1 text-xl font-semibold text-slate-900">
                   Sample Withdrawal Record
@@ -146,7 +164,11 @@ function SignatureBlock({ title, name }: { title: string; name: string }) {
   return (
     <div className="min-h-[120px] rounded-lg border border-dashed border-slate-300 p-3 print:border-slate-400">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      {name ? <p className="mt-2 text-sm font-medium text-slate-800">{name}</p> : <p className="mt-2 text-sm text-slate-400">Name</p>}
+      {name ? (
+        <p className="mt-2 text-sm font-medium text-slate-800">{name}</p>
+      ) : (
+        <p className="mt-2 text-sm text-slate-400">Name</p>
+      )}
       <div className="mt-8 border-b border-slate-400" />
       <p className="mt-2 text-xs text-slate-500">Signature / Date</p>
     </div>

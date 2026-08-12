@@ -17,6 +17,13 @@ const sourceSans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "SKYMAP Stability Inventory",
   description: "Stability Sample Inventory Management for Pharmaceutical QA",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    apple: "/brand/skymap-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

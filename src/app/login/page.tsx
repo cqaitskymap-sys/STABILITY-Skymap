@@ -8,15 +8,13 @@ import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { SkymapLogo } from "@/components/brand/skymap-logo";
 import { Button, Card, Input } from "@/components/ui";
 import { friendlyError } from "@/lib/utils";
-import { seedDemoData } from "@/services/seed";
 
 function LoginForm() {
-  const { login, registerDemoAdmin, user, loading } = useAuth();
+  const { login, user, loading } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("admin@stability.local");
-  const [password, setPassword] = useState("Admin@123");
+  const [employeeId, setEmployeeId] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     if (!loading && user) router.replace("/stability/dashboard");
@@ -26,35 +24,13 @@ function LoginForm() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(employeeId, password);
       toast.success("Signed in successfully.");
       router.replace("/stability/dashboard");
     } catch (error) {
       toast.error(friendlyError(error, "Unable to sign in. Please try again."));
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function initializeDemo() {
-    setSeeding(true);
-    try {
-      await registerDemoAdmin();
-      const result = await seedDemoData({
-        uid: "pending",
-        email: "admin@stability.local",
-        displayName: "System Admin",
-        role: "Admin",
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      toast.success(result.message);
-      router.replace("/stability/dashboard");
-    } catch (error) {
-      toast.error(friendlyError(error, "Unable to initialize demo environment."));
-    } finally {
-      setSeeding(false);
     }
   }
 
@@ -75,20 +51,23 @@ function LoginForm() {
               <ShieldCheck className="h-4 w-4" />
               QA secure access
             </div>
-            Sign in to manage stability studies, charging, withdrawals, and reconciliation.
+            Sign in with your Employee ID and password. Accounts are created by an Admin.
           </div>
+
           <Input
-            label="Email"
-            type="email"
+            label="Employee ID"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
             autoComplete="username"
+            hint="Your Employee ID is your login ID."
           />
           <Input
             label="Password"
             type="password"
             required
+            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
@@ -96,13 +75,8 @@ function LoginForm() {
           <Button type="submit" className="w-full" loading={submitting}>
             Sign in
           </Button>
-          <Button type="button" variant="outline" className="w-full" loading={seeding} onClick={initializeDemo}>
-            Initialize / Repair Demo Access
-          </Button>
           <p className="text-center text-xs text-slate-500">
-            Admin: admin@stability.local / Admin@123
-            <br />
-            If signup shows a console 400, just use Sign in — the admin account already exists.
+            Contact your system administrator if you need an account.
           </p>
         </form>
       </Card>

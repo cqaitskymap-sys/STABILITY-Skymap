@@ -9,7 +9,7 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
-import type { PullPointStatus } from "@/types";
+import type { PullPointStatus, ReconciliationStatus } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -65,29 +65,78 @@ export function derivePullStatus(plannedDate: string, actualQuantity: number, pl
   if (actualQuantity > 0 && actualQuantity >= plannedQuantity) return "Withdrawn";
   if (actualQuantity > 0 && actualQuantity < plannedQuantity) return "Partially Withdrawn";
 
-  const today = startOfDay(new Date());
-  const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
-  const days = differenceInCalendarDays(due, today);
-
-  if (days < 0) return "Overdue";
-  if (isToday(due)) return "Due Today";
-  if (days <= 7) return "Due Soon";
+  const urgency = pullDueUrgency(plannedDate);
+  if (urgency) return urgency;
   return "Upcoming";
 }
 
-export function friendlyError(error: unknown, fallback = "Unable to complete action. Please try again.") {
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    if (msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password")) {
-      return "Invalid email or password.";
-    }
-    if (msg.includes("auth/user-not-found")) return "User account not found.";
-    if (msg.includes("auth/email-already-in-use")) return "An account with this email already exists.";
-    if (msg.includes("permission-denied")) return "You do not have permission to perform this action.";
-    if (msg.includes("offline") || msg.includes("network")) {
-      return "Network issue. Please check your connection and try again.";
-    }
+/** Date-only urgency for open pulls (including partially withdrawn remaining qty). */
+export function pullDueUrgency(plannedDate: string): "Overdue" | "Due Today" | "Due Soon" | null {
+  if (!plannedDate) return null;
+  try {
+    const today = startOfDay(new Date());
+    const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
+    const days = differenceInCalendarDays(due, today);
+    if (Number.isNaN(days)) return null;
+    if (days < 0) return "Overdue";
+    if (isToday(due)) return "Due Today";
+    if (days <= 7) return "Due Soon";
+    return null;
+  } catch {
+    return null;
   }
+}
+
+/** Shared UI + backend reconciliation status (threshold ≥ 5 → Investigation Required). */
+export function resolveReconciliationStatus(
+  variance: number,
+  adjust: boolean
+): ReconciliationStatus {
+  if (variance === 0) return "Matched";
+  if (adjust) return "Adjusted";
+  return Math.abs(variance) >= 5 ? "Investigation Required" : "Variance Found";
+}
+
+export function friendlyError(error: unknown, fallback = "Unable to complete action. Please try again.") {
+  if (!error) return fallback;
+
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: string }).code || "").toLowerCase()
+      : "";
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const msg = message.toLowerCase();
+
+  if (code.includes("permission-denied") || msg.includes("permission-denied")) {
+    return "You do not have permission to perform this action.";
+  }
+  if (msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password")) {
+    return "Invalid Employee ID or password.";
+  }
+  if (msg.includes("auth/user-not-found")) return "User account not found.";
+  if (msg.includes("auth/email-already-in-use")) {
+    return "An account with this Employee ID already exists.";
+  }
+  if (msg.includes("invalid employee id")) {
+    return "Invalid Employee ID. Use 2–32 letters, numbers, hyphen, or underscore.";
+  }
+  if (msg.includes("offline") || msg.includes("network") || code.includes("unavailable")) {
+    return "Network issue. Please check your connection and try again.";
+  }
+  if (msg.includes("unsupported field value: undefined")) {
+    return "Some required fields are missing. Please review the form and try again.";
+  }
+
+  // Prefer clear application / validation messages over the generic fallback.
+  if (message && !msg.startsWith("firebaseerror:") && message.length <= 240) {
+    // Strip Firebase SDK prefixes when present but keep the useful part.
+    const cleaned = message.replace(/^Firebase:\s*/i, "").replace(/\s*\([^)]*\)\.?\s*$/, "").trim();
+    if (cleaned && !cleaned.toLowerCase().includes("permission-denied")) {
+      return cleaned.length >= 8 ? cleaned : message;
+    }
+    return message;
+  }
+
   return fallback;
 }
 

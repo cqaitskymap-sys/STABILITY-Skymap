@@ -20,8 +20,8 @@ import { derivePullStatus, formatDate, formatDateTime } from "@/lib/utils";
 import {
   getStudy,
   listPullPoints,
-  listSamples,
-  listTransactions,
+  listSamplesByStudy,
+  listTransactionsByStudy,
 } from "@/services/inventory";
 
 export default function StudyDetailPage() {
@@ -35,19 +35,19 @@ export default function StudyDetailPage() {
     if (!study) return null;
     const [pulls, samples, transactions] = await Promise.all([
       listPullPoints({ studyDocId: study.id }),
-      listSamples(),
-      listTransactions(),
+      listSamplesByStudy(study.id),
+      listTransactionsByStudy(study.studyId),
     ]);
-    const studySamples = samples.filter((s) => s.studyDocId === study.id);
-    const studyTx = transactions.filter((t) => t.studyId === study.studyId);
     return {
       study,
-      pulls: pulls.map((p) => ({
-        ...p,
-        status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
-      })),
-      samples: studySamples,
-      transactions: studyTx,
+      pulls: pulls
+        .map((p) => ({
+          ...p,
+          status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
+        }))
+        .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
+      samples,
+      transactions,
     };
   }, [studyDocId]);
 
@@ -176,6 +176,7 @@ export default function StudyDetailPage() {
                   <th className="px-4 py-3">Planned</th>
                   <th className="px-4 py-3">Actual</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 print:hidden">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,6 +189,17 @@ export default function StudyDetailPage() {
                     <td className="px-4 py-3">{p.actualQuantity}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={p.status} />
+                    </td>
+                    <td className="px-4 py-3 print:hidden">
+                      {p.status !== "Withdrawn" ? (
+                        <Link href={`/stability/withdrawals?pull=${p.id}`}>
+                          <Button size="sm" variant="outline">
+                            Withdraw
+                          </Button>
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

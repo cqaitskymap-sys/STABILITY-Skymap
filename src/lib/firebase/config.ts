@@ -14,8 +14,19 @@ const firebaseConfig = {
 };
 
 function assertConfig() {
-  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-    throw new Error("Firebase configuration is missing. Check your environment variables.");
+  const required = [
+    "apiKey",
+    "authDomain",
+    "projectId",
+    "storageBucket",
+    "messagingSenderId",
+    "appId",
+  ] as const;
+  const missing = required.filter((key) => !firebaseConfig[key]);
+  if (missing.length) {
+    throw new Error(
+      `Firebase configuration is incomplete (missing: ${missing.join(", ")}). Check .env.local.`
+    );
   }
 }
 
@@ -53,6 +64,7 @@ export function getFirebaseStorage() {
 
 export const COLLECTIONS = {
   users: "users",
+  settings: "settings",
   products: "products",
   batches: "batches",
   studyTypes: "studyTypes",

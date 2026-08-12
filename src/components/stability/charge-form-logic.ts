@@ -85,6 +85,44 @@ export function buildPullAllocations(
 
 export type ChargeFormErrors = Partial<Record<keyof ChargeFormState | "allocations" | "chamber", string>>;
 
+export function getMissingChargeMasters(masters: {
+  products: Product[];
+  batches: Batch[];
+  studyTypes: StudyType[];
+  conditions: StorageCondition[];
+  chambers: Chamber[];
+  locations: StorageLocation[];
+  units: Unit[];
+  pullPoints: PullPointMaster[];
+}): { label: string; href: string }[] {
+  const missing: { label: string; href: string }[] = [];
+  if (!masters.products.some((p) => p.status === "Active")) {
+    missing.push({ label: "Products", href: "/masters/products" });
+  }
+  if (!masters.batches.some((b) => b.status === "Active")) {
+    missing.push({ label: "Batches", href: "/masters/batches" });
+  }
+  if (!masters.studyTypes.some((s) => s.status === "Active")) {
+    missing.push({ label: "Study Types", href: "/masters/study-types" });
+  }
+  if (!masters.conditions.some((c) => c.status === "Active")) {
+    missing.push({ label: "Storage Conditions", href: "/masters/storage-conditions" });
+  }
+  if (!masters.chambers.some((c) => c.status !== "Inactive")) {
+    missing.push({ label: "Chambers", href: "/masters/chambers" });
+  }
+  if (!masters.locations.some((l) => l.status === "Active")) {
+    missing.push({ label: "Locations", href: "/masters/locations" });
+  }
+  if (!masters.units.some((u) => u.status === "Active")) {
+    missing.push({ label: "Units", href: "/masters/units" });
+  }
+  if (!masters.pullPoints.some((p) => p.status === "Active")) {
+    missing.push({ label: "Pull Points", href: "/masters/pull-points" });
+  }
+  return missing;
+}
+
 export function validateChargeForm(
   form: ChargeFormState,
   opts: {
@@ -125,6 +163,13 @@ export function validateChargeForm(
   if (opts.chamber?.status === "Inactive") {
     errors.chamber = "Cannot allocate samples to an inactive chamber.";
   }
+  if (opts.chamber && Number.isFinite(total) && total > 0) {
+    const used = Number(opts.chamber.usedCapacity || 0);
+    const capacity = Number(opts.chamber.capacity || 0);
+    if (capacity > 0 && used + total > capacity) {
+      errors.totalQuantity = `Chamber capacity insufficient (available ${Math.max(0, capacity - used)}, requested ${total}).`;
+    }
+  }
   return errors;
 }
 
@@ -154,8 +199,15 @@ export function resolveChargePayload(
   const relevantPulls = activePullPointsForStudy(masters.pullPoints, form.studyTypeId);
   const pullAllocations = buildPullAllocations(form.pullAllocations, relevantPulls);
 
-  if (!product || !batch || !studyType || !condition || !chamber || !location) {
-    throw new Error("Please complete all required fields before submitting.");
+  if (!product) throw new Error("Product is required. Select a product in Study Information.");
+  if (!batch) throw new Error("Batch is required. Select a batch in Study Information.");
+  if (!studyType) throw new Error("Study type is required.");
+  if (!condition) throw new Error("Storage condition is required.");
+  if (!chamber) throw new Error("Chamber is required.");
+  if (!location) throw new Error("Storage location is required.");
+  if (!form.unit?.trim()) throw new Error("Unit is required.");
+  if (!product.productName?.trim()) {
+    throw new Error("Selected product has no name. Fix it in Product Master, then try again.");
   }
 
   const unitLabel = unit?.abbreviation || unit?.name || form.unit;

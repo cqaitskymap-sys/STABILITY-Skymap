@@ -25,6 +25,8 @@ const TITLE_MAP: Record<string, string> = {
   "/stability/alerts": "Alerts",
   "/stability/reports": "Reports",
   "/stability/settings": "Settings",
+  "/masters/products": "Product Master",
+  "/masters/batches": "Batch Master",
   "/masters/study-types": "Study Type Master",
   "/masters/storage-conditions": "Storage Condition Master",
   "/masters/pull-points": "Pull Point Master",
@@ -36,7 +38,7 @@ const TITLE_MAP: Record<string, string> = {
 function resolveTitle(pathname: string) {
   if (TITLE_MAP[pathname]) return TITLE_MAP[pathname];
   if (pathname.startsWith("/stability/studies/")) return "Study Details";
-  if (pathname.startsWith("/stability/inventory/")) return "Inventory Details";
+  if (pathname.startsWith("/stability/inventory/")) return "Sample Details";
   if (pathname.startsWith("/stability/withdrawals/")) return "Withdrawal Details";
   return "Stability Inventory";
 }
