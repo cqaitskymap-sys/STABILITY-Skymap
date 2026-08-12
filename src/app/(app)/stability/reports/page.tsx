@@ -23,7 +23,6 @@ import {
   downloadBlob,
   formatDate,
   formatDateTime,
-  friendlyError,
   pullDueUrgency,
   toCsv,
 } from "@/lib/utils";
@@ -504,7 +503,7 @@ export default function ReportsPage() {
               variant="outline"
               className="no-print"
               onClick={() => {
-                void bundle.reload().catch((err) => toast.error(friendlyError(err)));
+                void bundle.reload();
               }}
             >
               <RefreshCw className="h-4 w-4" />
