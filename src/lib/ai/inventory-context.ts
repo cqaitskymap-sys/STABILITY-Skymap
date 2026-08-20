@@ -86,6 +86,10 @@ const CACHE_MS = 45_000;
 
 let cache: { at: number; data: InventoryAiContext } | null = null;
 
+export function invalidateInventoryContext() {
+  cache = null;
+}
+
 export async function getInventoryContext(force = false): Promise<InventoryAiContext> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.data;
 

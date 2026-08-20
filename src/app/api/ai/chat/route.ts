@@ -8,6 +8,7 @@ import {
   snapshotText,
 } from "@/lib/ai/openrouter";
 import { QA_ASSISTANT_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
+import { skymapTools } from "@/lib/ai/tools";
 import { requireSignedInUser } from "@/lib/ai/verify-user";
 
 export const maxDuration = 60;
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       model: openrouter(getOpenRouterModelId()),
       system: `${QA_ASSISTANT_SYSTEM_PROMPT}\n\nLive inventory snapshot:\n${snapshotText(body.context)}`,
       messages: await convertToModelMessages(messages),
+      tools: skymapTools,
       maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
     });
 
