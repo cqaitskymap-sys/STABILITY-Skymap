@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { AssistantPanel } from "@/components/ai/assistant-panel";
 import { LoadingSkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { listAlerts } from "@/services/inventory";
@@ -64,8 +65,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <LoadingSkeleton rows={8} />
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/80 p-5 shadow-sm backdrop-blur">
+          <div className="mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r from-teal-400 to-teal-600" />
+          <LoadingSkeleton rows={5} />
+        </div>
       </div>
     );
   }
@@ -77,9 +81,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} />
-      <div className={cn("transition-all", collapsed ? "lg:pl-[72px]" : "lg:pl-72")}>
+      <div className={cn("transition-all", collapsed ? "lg:pl-[76px]" : "lg:pl-72")}>
         <Header
           title={title}
           breadcrumbs={crumbs}
@@ -88,9 +92,16 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           onToggleCollapse={() => setCollapsed((v) => !v)}
           alertCount={alertCount}
         />
-        <main className="px-4 py-5 sm:px-6 lg:px-8">{children}</main>
+        <main className="animate-fade-up px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
-      <Toaster richColors position="top-right" />
+      <AssistantPanel />
+      <Toaster
+        richColors
+        position="top-right"
+        toastOptions={{
+          className: "rounded-xl border-slate-200 shadow-lg",
+        }}
+      />
     </div>
   );
 }

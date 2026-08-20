@@ -155,7 +155,7 @@ export default function AlertsPage() {
       ) : null}
 
       <Card>
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:flex-row sm:items-end sm:justify-between">
           <Select
             label="Severity"
             value={severity}
@@ -235,10 +235,10 @@ export default function AlertsPage() {
                   <div
                     className={
                       alert.severity === "critical"
-                        ? "rounded-lg bg-rose-50 p-2 text-rose-700"
+                        ? "rounded-xl bg-rose-50 p-2 text-rose-700"
                         : alert.severity === "warning"
-                          ? "rounded-lg bg-amber-50 p-2 text-amber-700"
-                          : "rounded-lg bg-sky-50 p-2 text-sky-700"
+                          ? "rounded-xl bg-amber-50 p-2 text-amber-700"
+                          : "rounded-xl bg-sky-50 p-2 text-sky-700"
                     }
                   >
                     <Icon className="h-5 w-5" />

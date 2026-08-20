@@ -11,7 +11,10 @@ import {
 } from "react";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
   onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
@@ -37,7 +40,7 @@ interface AuthContextValue {
   profile: AppUser | null;
   loading: boolean;
   /** Sign in with Employee ID + password. */
-  login: (employeeId: string, password: string) => Promise<void>;
+  login: (employeeId: string, password: string, options?: { remember?: boolean }) => Promise<void>;
   createUser: (input: {
     employeeId: string;
     password: string;
@@ -172,13 +175,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  const login = useCallback(async (employeeIdOrEmail: string, password: string) => {
+  const login = useCallback(async (
+    employeeIdOrEmail: string,
+    password: string,
+    options?: { remember?: boolean }
+  ) => {
     const raw = employeeIdOrEmail.trim();
     const authEmail = raw.includes("@")
       ? raw.toLowerCase()
       : employeeIdToAuthEmail(raw);
+    const auth = getFirebaseAuth();
+    await setPersistence(
+      auth,
+      options?.remember ? browserLocalPersistence : browserSessionPersistence
+    );
 
-    const cred = await signInWithEmailAndPassword(getFirebaseAuth(), authEmail, password);
+    const cred = await signInWithEmailAndPassword(auth, authEmail, password);
     const p = await ensureProfile(cred.user, cred.user.displayName || "");
     if (!p) {
       await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);

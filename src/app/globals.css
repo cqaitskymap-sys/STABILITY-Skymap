@@ -1,19 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #f3f6fb;
   --foreground: #0f172a;
-  --brand: #0f766e;
+  --brand: #0d9488;
+  --brand-strong: #0f766e;
   --brand-soft: #ccfbf1;
   --card: #ffffff;
   --border: #e2e8f0;
+  --sidebar: #08111f;
+  --sidebar-muted: #94a3b8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
   --font-sans: var(--font-source-sans);
-  --font-display: var(--font-dm-sans);
+  --font-display: var(--font-plus-jakarta);
 }
 
 * {
@@ -26,25 +35,120 @@ body {
   overflow-x: hidden;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background:
-    radial-gradient(circle at top right, rgba(13, 148, 136, 0.08), transparent 28%),
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.05), transparent 24%),
+    radial-gradient(1200px 480px at 110% -10%, rgba(13, 148, 136, 0.12), transparent 42%),
+    radial-gradient(900px 420px at -8% -12%, rgba(56, 189, 248, 0.1), transparent 38%),
+    radial-gradient(700px 280px at 40% 120%, rgba(99, 102, 241, 0.06), transparent 46%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-source-sans), "Segoe UI", sans-serif;
 }
 
+::selection {
+  background: rgba(13, 148, 136, 0.18);
+  color: #0f172a;
+}
+
 h1,
 h2,
 h3 {
-  font-family: var(--font-dm-sans), "Segoe UI", sans-serif;
+  font-family: var(--font-plus-jakarta), "Segoe UI", sans-serif;
+  letter-spacing: -0.03em;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @layer utilities {
   .print-only {
     display: none;
   }
+
+  .animate-fade-up {
+    animation: fade-up 0.45s ease-out both;
+  }
+
+  .surface-card {
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow:
+      0 1px 1px rgba(15, 23, 42, 0.03),
+      0 10px 32px -16px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(12px);
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 45%, #e2e8f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+thead {
+  letter-spacing: 0.06em;
+}
+
+th {
+  font-weight: 600;
+}
+
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+tbody tr:hover {
+  background-color: rgba(15, 23, 42, 0.025);
 }
 
 @media print {

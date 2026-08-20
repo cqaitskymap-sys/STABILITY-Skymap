@@ -25,6 +25,7 @@ import {
 } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime, roundPct } from "@/lib/utils";
+import { DashboardBriefing } from "@/components/ai/dashboard-briefing";
 import { getChamberUtilization, getDashboardStats, getRecentActivity } from "@/services/dashboard";
 import { listPullPoints } from "@/services/inventory";
 import { derivePullStatus } from "@/lib/utils";
@@ -66,6 +67,8 @@ export default function StabilityDashboardPage() {
         }
       />
 
+      <DashboardBriefing />
+
       {loading ? <LoadingSkeleton rows={6} /> : null}
       {error ? (
         <ErrorState
@@ -102,21 +105,21 @@ export default function StabilityDashboardPage() {
               <CardHeader title="Study Type Overview" description="Accelerated, Intermediate, and Long Term inventory posture." />
               <div className="space-y-3 p-4">
                 {stats.data.studyTypeOverview.map((row) => (
-                  <div key={row.studyType} className="rounded-xl border border-slate-200 p-4">
+                  <div key={row.studyType} className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/70 p-4">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="font-semibold text-slate-900">{row.studyType}</p>
                       <Badge tone="teal">{row.activeStudies} active</Badge>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="rounded-lg bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-2">
                         <p className="text-slate-500">Total</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{row.totalSamples}</p>
                       </div>
-                      <div className="rounded-lg bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-2">
                         <p className="text-slate-500">Available</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{row.availableSamples}</p>
                       </div>
-                      <div className="rounded-lg bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-2">
                         <p className="text-slate-500">Upcoming</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{row.upcomingWithdrawals}</p>
                       </div>
@@ -144,7 +147,7 @@ export default function StabilityDashboardPage() {
                 <>
                   <div className="hidden overflow-x-auto md:block">
                     <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <thead className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Due Date</th>
                           <th className="px-4 py-3">Product</th>
@@ -216,7 +219,7 @@ export default function StabilityDashboardPage() {
               ) : (
                 <div className="space-y-3 p-4">
                   {chambers.data.map((c) => (
-                    <div key={c.id} className="rounded-xl border border-slate-200 p-4">
+                    <div key={c.id} className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/80 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">{c.chamberName}</p>
@@ -246,7 +249,7 @@ export default function StabilityDashboardPage() {
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                         <div
-                          className="h-full rounded-full bg-teal-600"
+                          className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-600"
                           style={{ width: `${roundPct(c.usedCapacity, c.capacity)}%` }}
                         />
                       </div>

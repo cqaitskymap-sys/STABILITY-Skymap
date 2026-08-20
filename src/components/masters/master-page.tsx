@@ -252,7 +252,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
       ) : null}
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:grid-cols-[1fr_auto_auto]">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -401,8 +401,8 @@ export function MasterPage<T extends { id: string; status?: string }>({
       </Card>
 
       {openForm ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
-          <Card className="w-full max-w-lg p-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-lg p-6">
             <h3 className="text-lg font-semibold text-slate-900">
               {editing ? "Edit Record" : "Add Record"}
             </h3>
@@ -416,7 +416,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                         {f.required ? <span className="text-rose-500"> *</span> : null}
                       </span>
                       <select
-                        className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10"
                         value={values[f.key] || ""}
                         onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
                       >
@@ -444,7 +444,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                           No options available. Configure related masters first.
                         </p>
                       ) : (
-                        <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+                        <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-slate-200 p-3">
                           {(f.options || []).map((o) => {
                             const checked = selected.includes(o.value);
                             return (

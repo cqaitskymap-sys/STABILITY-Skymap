@@ -82,7 +82,7 @@ export default function StudiesPage() {
       />
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-4">
+        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 md:grid-cols-4">
           <Input
             value={search}
             onChange={(e) => {

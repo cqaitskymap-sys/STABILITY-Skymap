@@ -270,9 +270,9 @@ export default function NewStabilityStudyPage() {
                 return (
                   <li
                     key={label}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm ${
+                    className={`rounded-xl border px-3 py-2 text-xs sm:text-sm ${
                       active
-                        ? "border-teal-600 bg-teal-50 text-teal-800"
+                        ? "border-teal-500 bg-teal-50 text-teal-800 shadow-sm"
                         : done
                           ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                           : "border-slate-200 bg-white text-slate-500"

@@ -204,6 +204,17 @@ export default function StabilitySettingsPage() {
 
         <Card>
           <CardHeader
+            title="About this software"
+            description="SKYMAP Stability Inventory for pharmaceutical QA operations."
+          />
+          <div className="space-y-2 p-4 text-sm text-slate-700">
+            <Row label="Developed by" value="Satyajit Patri" />
+            <Row label="From" value="Odisha" />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
             title="Alerts maintenance"
             description="Recalculate operational alerts from inventory, pull points, chambers, and reconciliations."
           />
@@ -319,7 +330,7 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2.5 text-sm text-slate-700 transition hover:border-teal-200 hover:bg-teal-50/50"
     >
       <Icon className="h-4 w-4 text-teal-700" />
       {label}

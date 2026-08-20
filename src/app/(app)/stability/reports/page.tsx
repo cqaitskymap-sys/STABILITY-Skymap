@@ -537,8 +537,8 @@ export default function ReportsPage() {
                 onClick={() => setReport(r.key)}
                 className={
                   report === r.key
-                    ? "w-full rounded-lg bg-teal-50 px-3 py-2 text-left text-sm font-medium text-teal-800"
-                    : "w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                    ? "w-full rounded-xl bg-teal-50 px-3 py-2.5 text-left text-sm font-semibold text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.18)]"
+                    : "w-full rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 }
               >
                 {r.title}
@@ -552,7 +552,7 @@ export default function ReportsPage() {
             title={selected.title}
             description={`${selected.description} · ${rows.length} row${rows.length === 1 ? "" : "s"}`}
           />
-          <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-4 no-print">
+          <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 md:grid-cols-4 no-print">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}

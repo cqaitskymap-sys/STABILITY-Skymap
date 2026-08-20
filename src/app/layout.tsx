@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { DM_Sans, Source_Sans_3 } from "next/font/google";
+import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["500", "600", "700", "800"],
 });
 
 const sourceSans = Source_Sans_3({
@@ -16,7 +16,9 @@ const sourceSans = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: "SKYMAP Stability Inventory",
-  description: "Stability Sample Inventory Management for Pharmaceutical QA",
+  description: "Stability Sample Inventory Management for Pharmaceutical QA. Developed by Satyajit Patri from Odisha.",
+  authors: [{ name: "Satyajit Patri" }],
+  creator: "Satyajit Patri",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -28,7 +30,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${sourceSans.variable} h-full`}>
+    <html lang="en" className={`${plusJakarta.variable} ${sourceSans.variable} h-full`}>
       <body className="min-h-full antialiased">{children}</body>
     </html>
   );

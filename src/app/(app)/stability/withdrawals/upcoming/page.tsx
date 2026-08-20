@@ -195,7 +195,7 @@ export default function UpcomingWithdrawalsPage() {
       ) : null}
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 md:grid-cols-2 xl:grid-cols-5">
           <Input
             value={search}
             onChange={(e) => {

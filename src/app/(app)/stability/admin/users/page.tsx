@@ -77,8 +77,8 @@ function ModuleAccessPicker({
           <label
             key={mod.permission}
             className={cn(
-              "flex cursor-pointer gap-3 rounded-lg border p-3 transition",
-              checked ? "border-teal-300 bg-teal-50/60" : "border-slate-200 bg-white hover:border-slate-300"
+              "flex cursor-pointer gap-3 rounded-xl border p-3 transition",
+              checked ? "border-teal-300 bg-teal-50/80 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
             )}
           >
             <input
@@ -315,10 +315,10 @@ export default function AdminUsersPage() {
               type="button"
               onClick={() => setTab(item.id)}
               className={cn(
-                "rounded-xl border p-4 text-left transition",
+                "rounded-2xl border p-4 text-left transition",
                 active
-                  ? "border-teal-300 bg-teal-50 shadow-sm"
-                  : "border-slate-200 bg-white hover:border-slate-300"
+                  ? "border-teal-300 bg-teal-50/90 shadow-[0_8px_24px_-16px_rgba(13,148,136,0.7)]"
+                  : "border-slate-200 bg-white/80 hover:border-slate-300"
               )}
             >
               <div className="mb-2 flex items-center gap-2">
@@ -533,7 +533,7 @@ export default function AdminUsersPage() {
                       type="button"
                       onClick={() => setSelectedUid(u.uid)}
                       className={cn(
-                        "w-full rounded-lg border px-3 py-2 text-left transition",
+                        "w-full rounded-xl border px-3 py-2.5 text-left transition",
                         active ? "border-teal-300 bg-teal-50" : "border-slate-200 hover:border-slate-300"
                       )}
                     >
@@ -557,7 +557,7 @@ export default function AdminUsersPage() {
               <p className="p-4 text-sm text-slate-500">Select a user from the list.</p>
             ) : (
               <form onSubmit={onSaveAccess} className="space-y-4 p-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   Editing access for <span className="font-medium">{selectedUser.displayName}</span>
                 </div>
                 <ModuleAccessPicker selected={editAccess} onChange={setEditAccess} />
