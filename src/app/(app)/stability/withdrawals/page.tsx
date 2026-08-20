@@ -15,6 +15,7 @@ import {
   Input,
   LoadingSkeleton,
   PageHeader,
+  Pager,
   Select,
   StatusBadge,
   Textarea,
@@ -486,29 +487,14 @@ function WithdrawalsPageInner() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-              <p className="text-slate-500">
-                Showing {pagedHistory.items.length} of {pagedHistory.total}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pagedHistory.page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pagedHistory.page >= pagedHistory.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pager
+              showing={pagedHistory.items.length}
+              total={pagedHistory.total}
+              page={pagedHistory.page}
+              totalPages={pagedHistory.totalPages}
+              onPrev={() => setPage((p) => p - 1)}
+              onNext={() => setPage((p) => p + 1)}
+            />
           </>
         ) : null}
       </Card>

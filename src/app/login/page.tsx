@@ -96,9 +96,9 @@ function LoginForm() {
           <DeveloperCredit className="mt-8" tone="light" />
         </section>
 
-        <section className="flex w-full items-center justify-center px-4 py-10 lg:w-[min(100%,34rem)] lg:justify-end lg:pr-10 xl:pr-16">
+        <section className="flex w-full items-center justify-center px-4 py-[max(2.5rem,env(safe-area-inset-top))] lg:w-[min(100%,34rem)] lg:justify-end lg:pr-10 xl:pr-16">
           <Card className="relative w-full max-w-md overflow-hidden border-white/20 bg-white/92 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-6 py-8 text-white">
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-4 py-6 text-white sm:px-6 sm:py-8">
               <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
               <div className="relative flex flex-col items-center text-center">
                 <SkymapLogo priority className="h-16 w-auto max-w-[220px]" />
@@ -106,7 +106,7 @@ function LoginForm() {
                 <p className="mt-1 text-xs text-slate-400">Pharmaceutical Quality Assurance</p>
               </div>
             </div>
-            <form onSubmit={onSubmit} className="space-y-4 px-6 py-6">
+            <form onSubmit={onSubmit} className="space-y-4 px-4 py-5 sm:px-6 sm:py-6">
               <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-3.5 text-sm text-teal-900">
                 <div className="mb-1 flex items-center gap-2 font-semibold">
                   <ShieldCheck className="h-4 w-4" />
@@ -154,7 +154,14 @@ function LoginForm() {
           </Card>
         </section>
       </div>
-      <Toaster richColors position="top-right" />
+      <Toaster
+        richColors
+        position="top-center"
+        offset={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+        toastOptions={{
+          className: "rounded-xl border-slate-200 shadow-lg !w-[calc(100vw-1.5rem)] sm:!w-auto",
+        }}
+      />
     </div>
   );
 }

@@ -524,7 +524,8 @@ export default function SampleChargingPage() {
                   and link them to the study type.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
@@ -562,6 +563,28 @@ export default function SampleChargingPage() {
                     </tbody>
                   </table>
                 </div>
+                <div className="space-y-3 p-4 md:hidden">
+                  {pullPoints.map((p) => (
+                    <div key={p.id} className="rounded-xl border border-slate-200 p-4">
+                      <p className="font-semibold text-slate-900">{p.code}</p>
+                      <p className="text-sm text-slate-500">
+                        {p.label} · {p.months}M
+                        {form.chargingDate ? ` · ${formatDate(addMonthsToDate(form.chargingDate, p.months))}` : ""}
+                      </p>
+                      <div className="mt-3">
+                        <Input
+                          type="number"
+                          min={0}
+                          label="Quantity"
+                          value={form.pullAllocations[p.id] ?? ""}
+                          onChange={(e) => setAllocation(p.id, e.target.value)}
+                          aria-label={`Quantity for ${p.code}`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
             </Card>
           ) : null}

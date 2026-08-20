@@ -14,6 +14,7 @@ import {
   Input,
   LoadingSkeleton,
   PageHeader,
+  Pager,
   Select,
   StatusBadge,
   Textarea,
@@ -278,7 +279,8 @@ function ReconciliationPageInner() {
             <EmptyState title="No pull points" description="This sample has no scheduled pull points." />
           ) : null}
           {!pullPoints.loading && (pullPoints.data || []).length > 0 ? (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
@@ -306,6 +308,23 @@ function ReconciliationPageInner() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 p-4 md:hidden">
+              {(pullPoints.data || []).map((p) => (
+                <div key={p.id} className="rounded-xl border border-slate-200 p-4 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{p.pullPoint}</p>
+                      <p className="text-slate-500">{p.months}M · {formatDate(p.plannedDate)}</p>
+                    </div>
+                    <StatusBadge status={p.status} />
+                  </div>
+                  <p className="mt-2 text-slate-600">
+                    Planned {p.plannedQuantity} · Actual {p.actualQuantity}
+                  </p>
+                </div>
+              ))}
+            </div>
+            </>
           ) : null}
         </Card>
       ) : null}
@@ -376,24 +395,14 @@ function ReconciliationPageInner() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-              <p className="text-slate-500">
-                Showing {paged.items.length} of {paged.total}
-              </p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={paged.page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={paged.page >= paged.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pager
+              showing={paged.items.length}
+              total={paged.total}
+              page={paged.page}
+              totalPages={paged.totalPages}
+              onPrev={() => setPage((p) => p - 1)}
+              onNext={() => setPage((p) => p + 1)}
+            />
           </>
         ) : null}
       </Card>

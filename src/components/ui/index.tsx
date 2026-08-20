@@ -1,6 +1,7 @@
 "use client";
 
-import { forwardRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Eye, EyeOff, Inbox, Loader2, type LucideIcon } from "lucide-react";
 
@@ -26,9 +27,9 @@ export function Button({
     outline: "border border-slate-200 bg-white/80 text-slate-700 shadow-sm hover:border-slate-300 hover:bg-white",
   };
   const sizes = {
-    sm: "h-8 px-3 text-xs",
-    md: "h-10 px-4 text-sm",
-    lg: "h-11 px-5 text-sm",
+    sm: "min-h-9 h-9 px-3 text-xs sm:min-h-8 sm:h-8",
+    md: "min-h-11 h-11 px-4 text-sm sm:min-h-10 sm:h-10",
+    lg: "min-h-12 h-12 px-5 text-sm sm:min-h-11 sm:h-11",
   };
   return (
     <button
@@ -48,7 +49,7 @@ export function Button({
 }
 
 const fieldClass =
-  "h-10 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10";
+  "h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string; hint?: string }>(
   function Input({ className, label, error, hint, id, type, ...props }, ref) {
@@ -150,7 +151,7 @@ export function Textarea({
       ) : null}
       <textarea
         className={cn(
-          "min-h-24 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10",
+          "min-h-24 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:text-sm",
           error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200/70",
           className
         )}
@@ -164,7 +165,7 @@ export function Textarea({
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("surface-card rounded-2xl", className)}>
+    <div className={cn("surface-card min-w-0 rounded-2xl", className)}>
       {children}
     </div>
   );
@@ -172,12 +173,12 @@ export function Card({ className, children }: { className?: string; children: Re
 
 export function CardHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-slate-100/90 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-      <div>
+    <div className="flex flex-col gap-3 border-b border-slate-100/90 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+      <div className="min-w-0">
         <h2 className="text-base font-semibold text-slate-900">{title}</h2>
         {description ? <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p> : null}
       </div>
-      {action}
+      {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
     </div>
   );
 }
@@ -185,9 +186,11 @@ export function CardHeader({ title, description, action }: { title: string; desc
 export function Badge({
   children,
   tone = "slate",
+  className,
 }: {
   children: ReactNode;
   tone?: "slate" | "green" | "yellow" | "orange" | "red" | "blue" | "teal" | "purple";
+  className?: string;
 }) {
   const tones = {
     slate: "bg-slate-100/90 text-slate-700 ring-slate-200/80",
@@ -200,7 +203,7 @@ export function Badge({
     purple: "bg-indigo-50 text-indigo-700 ring-indigo-100",
   };
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1", tones[tone])}>
+    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1", tones[tone], className)}>
       {children}
     </span>
   );
@@ -262,12 +265,12 @@ export function StatCard({
     emerald: "from-emerald-500/15 to-emerald-500/5 text-emerald-700",
   };
   return (
-    <Card className="relative overflow-hidden p-5">
+    <Card className="relative overflow-hidden p-4 sm:p-5">
       <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br from-slate-200/50 to-transparent" />
       <div className="relative flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[13px] font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-[1.7rem] font-semibold leading-none tracking-tight text-slate-900">{value}</p>
+          <p className="mt-2 text-2xl font-semibold leading-none tracking-tight text-slate-900 sm:text-[1.7rem]">{value}</p>
           {hint ? <p className="mt-2 text-xs text-slate-500">{hint}</p> : null}
         </div>
         <div className={cn("rounded-2xl bg-gradient-to-br p-2.5 shadow-inner", tones[tone])}>
@@ -326,6 +329,86 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
+export function Modal({
+  open,
+  title,
+  description,
+  children,
+  footer,
+  onClose,
+  size = "md",
+}: {
+  open: boolean;
+  title: string;
+  description?: string;
+  children?: ReactNode;
+  footer?: ReactNode;
+  onClose: () => void;
+  size?: "sm" | "md" | "lg";
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCloseRef.current();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  const widths = {
+    sm: "sm:max-w-md",
+    md: "sm:max-w-lg",
+    lg: "sm:max-w-2xl",
+  };
+
+  const dialog = (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm max-sm:items-end max-sm:p-0"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        className={cn(
+          "flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-white/40 bg-white shadow-2xl max-sm:max-h-[90dvh] max-sm:rounded-b-none max-sm:rounded-t-2xl",
+          widths[size]
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-slate-100 px-4 py-4 sm:px-6">
+          <h3 id="modal-title" className="text-lg font-semibold tracking-tight text-slate-900">
+            {title}
+          </h3>
+          {description ? <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p> : null}
+        </div>
+        {children ? (
+          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">{children}</div>
+        ) : null}
+        {footer ? (
+          <div className="shrink-0 border-t border-slate-100 px-4 py-3 sm:px-6">
+            {footer}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(dialog, document.body);
+}
+
 export function ConfirmDialog({
   open,
   title,
@@ -347,20 +430,68 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-white/40 bg-white p-6 shadow-2xl">
-        <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={onCancel} disabled={loading}>
+    <Modal
+      open={open}
+      title={title}
+      description={description}
+      onClose={onCancel}
+      size="sm"
+      footer={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === "danger" ? "danger" : "primary"} loading={loading} onClick={onConfirm}>
+          <Button
+            variant={tone === "danger" ? "danger" : "primary"}
+            className="w-full sm:w-auto"
+            loading={loading}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>
+      }
+    />
+  );
+}
+
+export function Pager({
+  showing,
+  total,
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+  suffix,
+}: {
+  showing: number;
+  total: number;
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-slate-500">
+        Showing {showing} of {total}
+        {suffix}
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:flex">
+        <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={page <= 1} onClick={onPrev}>
+          Previous
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full sm:w-auto"
+          disabled={page >= totalPages}
+          onClick={onNext}
+        >
+          Next
+        </Button>
       </div>
     </div>
   );
@@ -376,9 +507,9 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-[1.7rem] font-semibold tracking-tight text-slate-900">{title}</h1>
+    <div className="mb-5 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-[1.7rem]">{title}</h1>
         {description ? <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}

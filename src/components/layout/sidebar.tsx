@@ -254,7 +254,7 @@ export function Sidebar({
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 overflow-hidden transition-transform lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[min(18rem,calc(100vw-2.5rem))] overflow-hidden pt-[env(safe-area-inset-top)] transition-transform lg:hidden",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >

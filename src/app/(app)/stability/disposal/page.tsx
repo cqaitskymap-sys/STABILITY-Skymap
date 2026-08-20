@@ -15,6 +15,7 @@ import {
   Input,
   LoadingSkeleton,
   PageHeader,
+  Pager,
   Select,
   StatusBadge,
   Textarea,
@@ -442,29 +443,14 @@ function DisposalPageInner() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-              <p className="text-slate-500">
-                Showing {paged.items.length} of {paged.total}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={paged.page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={paged.page >= paged.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pager
+              showing={paged.items.length}
+              total={paged.total}
+              page={paged.page}
+              totalPages={paged.totalPages}
+              onPrev={() => setPage((p) => p - 1)}
+              onNext={() => setPage((p) => p + 1)}
+            />
           </>
         ) : null}
       </Card>

@@ -552,7 +552,7 @@ export default function ReportsPage() {
             title={selected.title}
             description={`${selected.description} · ${rows.length} row${rows.length === 1 ? "" : "s"}`}
           />
-          <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 md:grid-cols-4 no-print">
+          <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:grid-cols-2 xl:grid-cols-4 no-print">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -620,7 +620,8 @@ export default function ReportsPage() {
           ) : null}
 
           {!bundle.loading && !bundle.error && exportable.length > 0 ? (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block print:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
@@ -657,6 +658,34 @@ export default function ReportsPage() {
                 </p>
               )}
             </div>
+            <div className="space-y-3 p-4 md:hidden print:hidden">
+              {exportable.slice(0, PREVIEW_LIMIT).map((row, idx) => (
+                <div key={idx} className="rounded-xl border border-slate-200 p-4">
+                  {headers.map((h) => (
+                    <div key={h} className="mb-2 flex items-start justify-between gap-3 text-sm last:mb-0">
+                      <span className="shrink-0 text-slate-500">{humanizeHeader(h)}</span>
+                      <span className="min-w-0 text-right font-medium text-slate-800 break-words">
+                        {h.toLowerCase() === "status" ? (
+                          <StatusBadge status={String(row[h]).replace(/\s*\(.*\)$/, "")} />
+                        ) : (
+                          row[h]
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {exportable.length > PREVIEW_LIMIT ? (
+                <p className="text-xs text-slate-500">
+                  Showing first {PREVIEW_LIMIT} of {exportable.length} rows. Export for the full dataset.
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Showing {exportable.length} row{exportable.length === 1 ? "" : "s"}.
+                </p>
+              )}
+            </div>
+            </>
           ) : null}
         </Card>
       </div>

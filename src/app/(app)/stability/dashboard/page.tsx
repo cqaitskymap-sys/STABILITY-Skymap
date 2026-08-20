@@ -229,7 +229,7 @@ export default function StabilityDashboardPage() {
                         </div>
                         <StatusBadge status={c.status} />
                       </div>
-                      <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
                         <div>
                           <p className="text-slate-500">Capacity</p>
                           <p className="font-semibold">{c.capacity}</p>
@@ -266,17 +266,19 @@ export default function StabilityDashboardPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {activity.data.map((tx) => (
-                    <div key={tx.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
-                      <div>
+                    <div key={tx.id} className="flex flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                      <div className="min-w-0">
                         <p className="font-medium text-slate-900">{tx.transactionType.replaceAll("_", " ")}</p>
-                        <p className="text-slate-500">
+                        <p className="break-words text-slate-500">
                           {tx.productName} · {tx.batchNumber} · Qty {tx.quantity}
                         </p>
                         <p className="text-xs text-slate-400">
                           {tx.performedByName} · {formatDateTime(tx.performedAt)}
                         </p>
                       </div>
-                      <Badge tone="slate">{tx.transactionId}</Badge>
+                      <Badge tone="slate" className="self-start">
+                        {tx.transactionId}
+                      </Badge>
                     </div>
                   ))}
                 </div>

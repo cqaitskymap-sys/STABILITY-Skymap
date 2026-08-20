@@ -32,14 +32,15 @@
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
+  min-width: 0;
   background:
     radial-gradient(1200px 480px at 110% -10%, rgba(13, 148, 136, 0.12), transparent 42%),
     radial-gradient(900px 420px at -8% -12%, rgba(56, 189, 248, 0.1), transparent 38%),
@@ -90,14 +91,20 @@ button {
   font: inherit;
 }
 
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -132,6 +139,17 @@ button {
     background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 45%, #e2e8f0 100%);
     background-size: 200% 100%;
     animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 

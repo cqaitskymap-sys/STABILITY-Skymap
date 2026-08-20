@@ -212,7 +212,7 @@ export default function SampleDetailPage() {
           <EmptyState title="No pull points allocated for this sample." />
         ) : (
           <>
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto md:block print:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>

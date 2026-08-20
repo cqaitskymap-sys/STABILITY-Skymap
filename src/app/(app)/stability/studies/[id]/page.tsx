@@ -166,7 +166,8 @@ export default function StudyDetailPage() {
         {!pulls.length ? (
           <EmptyState title="No pull points for this study." />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block print:block">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
@@ -206,6 +207,30 @@ export default function StudyDetailPage() {
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-4 md:hidden print:hidden">
+            {pulls.map((p) => (
+              <div key={p.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{p.pullPoint}</p>
+                    <p className="text-sm text-slate-500">{p.sampleId} · Due {formatDate(p.plannedDate)}</p>
+                  </div>
+                  <StatusBadge status={p.status} />
+                </div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Planned {p.plannedQuantity} · Actual {p.actualQuantity}
+                </p>
+                {p.status !== "Withdrawn" ? (
+                  <Link href={`/stability/withdrawals?pull=${p.id}`} className="mt-3 block">
+                    <Button size="sm" variant="outline" className="w-full">
+                      Withdraw
+                    </Button>
+                  </Link>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          </>
         )}
       </Card>
 

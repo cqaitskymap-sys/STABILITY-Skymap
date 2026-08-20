@@ -177,6 +177,15 @@ export function AssistantPanel() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, status]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   async function submitPrompt() {
     const text = input.trim();
     if (!text || busy) return;
@@ -191,27 +200,37 @@ export function AssistantPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(13,148,136,0.8)] transition hover:from-teal-600 hover:to-teal-800"
-        aria-label="Open SkyMap AI assistant"
-      >
-        <Sparkles className="h-4 w-4" />
-        Ask SkyMap
-      </button>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(13,148,136,0.8)] transition hover:from-teal-600 hover:to-teal-800 sm:hidden"
+          aria-label="Open SkyMap AI assistant"
+        >
+          <Sparkles className="h-4 w-4" />
+          Ask AI
+        </button>
+      ) : null}
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-[2px]">
-          <div className="flex h-full w-full max-w-md flex-col border-l border-white/20 bg-white shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-[2px]"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="flex h-full w-full max-w-md flex-col border-l border-white/20 bg-white shadow-2xl pt-[env(safe-area-inset-top)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between gap-3 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-4 py-4 text-white">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-400/20 ring-1 ring-white/10">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-400/20 ring-1 ring-white/10">
                   <Bot className="h-5 w-5 text-teal-200" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">SkyMap QA Assistant</p>
-                  <p className="text-[11px] text-slate-300">Can add products, charge, withdraw, and answer from live data</p>
+                  <p className="mt-3 hidden text-[11px] text-slate-300 sm:block">
+                    Can add products, charge, withdraw, and answer from live data
+                  </p>
                 </div>
               </div>
               <button
@@ -290,7 +309,7 @@ export function AssistantPanel() {
               ) : null}
             </div>
 
-            <form onSubmit={onSubmit} className="border-t border-slate-200 p-3">
+            <form onSubmit={onSubmit} className="border-t border-slate-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="flex items-end gap-2">
                 <textarea
                   value={input}

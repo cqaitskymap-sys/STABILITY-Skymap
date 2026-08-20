@@ -70,7 +70,7 @@ export default function WithdrawalDetailPage() {
 
       {data ? (
         <Card className="overflow-hidden print:border-0 print:shadow-none">
-          <div className="border-b border-slate-200 bg-slate-50 px-6 py-5 print:bg-white">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-5 sm:px-6 print:bg-white">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-800">

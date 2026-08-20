@@ -495,7 +495,8 @@ export default function NewStabilityStudyPage() {
               {!pullPoints.length ? (
                 <p className="p-4 text-sm text-slate-500">No active pull points for this study type.</p>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
@@ -539,6 +540,34 @@ export default function NewStabilityStudyPage() {
                     </tbody>
                   </table>
                 </div>
+                <div className="space-y-3 p-4 md:hidden">
+                  {pullPoints.map((p) => (
+                    <div key={p.id} className="rounded-xl border border-slate-200 p-4">
+                      <p className="font-semibold text-slate-900">{p.code}</p>
+                      <p className="text-sm text-slate-500">
+                        {p.label} · {p.months}M
+                        {form.chargingDate ? ` · ${formatDate(addMonthsToDate(form.chargingDate, p.months))}` : ""}
+                      </p>
+                      <div className="mt-3">
+                        <Input
+                          type="number"
+                          min={0}
+                          label="Quantity"
+                          value={form.pullAllocations[p.id] ?? ""}
+                          onChange={(e) => {
+                            const qty = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value) || 0);
+                            setForm((prev) => ({
+                              ...prev,
+                              pullAllocations: { ...prev.pullAllocations, [p.id]: qty },
+                            }));
+                            setErrors((prev) => ({ ...prev, allocations: undefined }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
             </Card>
           ) : null}
@@ -609,17 +638,18 @@ export default function NewStabilityStudyPage() {
           ) : null}
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={prevStep} disabled={step === 0}>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={prevStep} disabled={step === 0}>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button onClick={nextStep} disabled={!canCreate}>
+              <Button className="w-full sm:w-auto" onClick={nextStep} disabled={!canCreate}>
                 Next
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button
+                className="w-full sm:w-auto"
                 disabled={!canCreate}
                 onClick={() => {
                   if (!canCreate) {

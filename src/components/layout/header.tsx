@@ -35,9 +35,9 @@ export function Header({
   const { profile, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden"
             onClick={onMenuClick}
@@ -54,26 +54,26 @@ export function Header({
           </button>
           <div className="min-w-0">
             {breadcrumbs?.length ? (
-              <div className="mb-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
+              <div className="mb-0.5 hidden items-center gap-1 text-xs text-slate-500 sm:flex">
                 {breadcrumbs.map((b, i) => (
-                  <span key={b.label} className="flex items-center gap-1">
-                    {i > 0 ? <ChevronRight className="h-3 w-3 text-slate-300" /> : null}
+                  <span key={b.label} className="flex min-w-0 items-center gap-1">
+                    {i > 0 ? <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" /> : null}
                     {b.href ? (
-                      <Link href={b.href} className="transition hover:text-teal-700">
+                      <Link href={b.href} className="truncate transition hover:text-teal-700">
                         {b.label}
                       </Link>
                     ) : (
-                      <span className="text-slate-400">{b.label}</span>
+                      <span className="truncate text-slate-400">{b.label}</span>
                     )}
                   </span>
                 ))}
               </div>
             ) : null}
-            <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{title}</h1>
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 sm:text-xl">{title}</h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <button
             type="button"
             onClick={() => openAiAssistant()}
@@ -81,7 +81,7 @@ export function Header({
             aria-label="Ask SkyMap AI"
           >
             <Sparkles className="h-4 w-4" />
-            Ask AI
+            <span className="hidden md:inline">Ask AI</span>
           </button>
           <Link
             href="/stability/alerts"
@@ -95,15 +95,21 @@ export function Header({
               </span>
             ) : null}
           </Link>
-          <div className="hidden items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white/70 px-2 py-1.5 pr-3 shadow-sm sm:flex">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/70 p-1 shadow-sm sm:gap-2.5 sm:px-2 sm:py-1.5 sm:pr-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-[11px] font-bold text-white">
               {initials(profile?.displayName)}
             </div>
-            <div className="text-right">
-              <p className="text-sm font-medium leading-tight text-slate-800">{profile?.displayName}</p>
-              <p className="text-[11px] text-slate-500">{profile?.employeeId || profile?.email}</p>
+            <div className="hidden min-w-0 text-right sm:block">
+              <p className="max-w-[10rem] truncate text-sm font-medium leading-tight text-slate-800 lg:max-w-[14rem]">
+                {profile?.displayName}
+              </p>
+              <p className="max-w-[10rem] truncate text-[11px] text-slate-500 lg:max-w-[14rem]">
+                {profile?.employeeId || profile?.email}
+              </p>
             </div>
-            <Badge tone="teal">{profile?.role || "User"}</Badge>
+            <Badge tone="teal" className="hidden md:inline-flex">
+              {profile?.role || "User"}
+            </Badge>
           </div>
           <Button variant="outline" size="sm" onClick={() => logout()} aria-label="Logout">
             <LogOut className="h-4 w-4" />

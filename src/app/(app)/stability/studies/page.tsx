@@ -11,6 +11,7 @@ import {
   Input,
   LoadingSkeleton,
   PageHeader,
+  Pager,
   Select,
   StatusBadge,
 } from "@/components/ui";
@@ -82,7 +83,7 @@ export default function StudiesPage() {
       />
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 md:grid-cols-4">
+        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <Input
             value={search}
             onChange={(e) => {
@@ -236,24 +237,14 @@ export default function StudiesPage() {
               ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-              <p className="text-slate-500">
-                Showing {paged.items.length} of {paged.total}
-              </p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={paged.page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={paged.page >= paged.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pager
+              showing={paged.items.length}
+              total={paged.total}
+              page={paged.page}
+              totalPages={paged.totalPages}
+              onPrev={() => setPage((p) => p - 1)}
+              onNext={() => setPage((p) => p + 1)}
+            />
           </>
         ) : null}
       </Card>

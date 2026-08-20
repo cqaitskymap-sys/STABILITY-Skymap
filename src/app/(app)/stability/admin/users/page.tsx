@@ -403,44 +403,69 @@ export default function AdminUsersPage() {
         <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
           <Card>
             <CardHeader title="Users" description="Select a user to edit role and status." />
-            <div className="overflow-x-auto p-4">
+            <div className="p-4">
               {loadingUsers ? (
                 <LoadingSkeleton rows={4} />
               ) : users.length === 0 ? (
                 <EmptyState title="No users found" description="Create a user to get started." />
               ) : (
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-slate-200 text-slate-500">
-                    <tr>
-                      <th className="px-2 py-2 font-medium">Name</th>
-                      <th className="px-2 py-2 font-medium">Employee ID</th>
-                      <th className="px-2 py-2 font-medium">Role</th>
-                      <th className="px-2 py-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <>
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="px-2 py-2 font-medium">Name</th>
+                          <th className="px-2 py-2 font-medium">Employee ID</th>
+                          <th className="px-2 py-2 font-medium">Role</th>
+                          <th className="px-2 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((u) => {
+                          const active = u.uid === selectedUid;
+                          return (
+                            <tr
+                              key={u.uid}
+                              className={cn(
+                                "cursor-pointer border-b border-slate-100 text-slate-700",
+                                active ? "bg-teal-50" : "hover:bg-slate-50"
+                              )}
+                              onClick={() => setSelectedUid(u.uid)}
+                            >
+                              <td className="px-2 py-2">
+                                <div className="font-medium">{u.displayName}</div>
+                              </td>
+                              <td className="px-2 py-2 font-mono text-xs">{u.employeeId || "—"}</td>
+                              <td className="px-2 py-2">{u.role}</td>
+                              <td className="px-2 py-2">{u.active ? "Active" : "Inactive"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="space-y-2 md:hidden">
                     {users.map((u) => {
                       const active = u.uid === selectedUid;
                       return (
-                        <tr
+                        <button
                           key={u.uid}
-                          className={cn(
-                            "cursor-pointer border-b border-slate-100 text-slate-700",
-                            active ? "bg-teal-50" : "hover:bg-slate-50"
-                          )}
+                          type="button"
                           onClick={() => setSelectedUid(u.uid)}
+                          className={cn(
+                            "w-full rounded-xl border px-3 py-3 text-left transition",
+                            active ? "border-teal-300 bg-teal-50" : "border-slate-200 hover:border-slate-300"
+                          )}
                         >
-                          <td className="px-2 py-2">
-                            <div className="font-medium">{u.displayName}</div>
-                          </td>
-                          <td className="px-2 py-2 font-mono text-xs">{u.employeeId || "—"}</td>
-                          <td className="px-2 py-2">{u.role}</td>
-                          <td className="px-2 py-2">{u.active ? "Active" : "Inactive"}</td>
-                        </tr>
+                          <div className="text-sm font-medium text-slate-800">{u.displayName}</div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            {u.employeeId || "—"} · {u.role} · {u.active ? "Active" : "Inactive"}
+                          </div>
+                        </button>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+                </>
               )}
             </div>
           </Card>

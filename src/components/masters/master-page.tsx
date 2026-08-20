@@ -11,6 +11,7 @@ import {
   ErrorState,
   Input,
   LoadingSkeleton,
+  Modal,
   PageHeader,
   Select,
   StatusBadge,
@@ -236,7 +237,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
               Refresh
             </Button>
             {canManage ? (
-              <Button onClick={openCreate}>
+              <Button onClick={openCreate} className="flex-1 sm:flex-none">
                 <Plus className="h-4 w-4" />
                 Add New
               </Button>
@@ -252,7 +253,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
       ) : null}
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-3 border-b border-slate-100/90 bg-slate-50/40 p-4 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto]">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -323,7 +324,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
 
         {!loading && !error && filtered.length > 0 ? (
           <>
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto lg:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
@@ -365,7 +366,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
               </table>
             </div>
 
-            <div className="space-y-3 p-4 md:hidden">
+            <div className="space-y-3 p-4 lg:hidden">
               {filtered.map((item) => {
                 const row = mapRow(item);
                 return (
@@ -400,13 +401,29 @@ export function MasterPage<T extends { id: string; status?: string }>({
         ) : null}
       </Card>
 
-      {openForm ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-lg p-6">
-            <h3 className="text-lg font-semibold text-slate-900">
-              {editing ? "Edit Record" : "Add Record"}
-            </h3>
-            <div className="mt-4 grid gap-3">
+      <Modal
+        open={openForm}
+        title={editing ? "Edit Record" : "Add Record"}
+        onClose={() => {
+          if (!saving) setOpenForm(false);
+        }}
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setOpenForm(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button className="w-full sm:w-auto" onClick={() => void save()} loading={saving}>
+              Save
+            </Button>
+          </div>
+        }
+      >
+            <div className="grid gap-3">
               {fields.map((f) => {
                 if (f.type === "select") {
                   return (
@@ -416,7 +433,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                         {f.required ? <span className="text-rose-500"> *</span> : null}
                       </span>
                       <select
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm"
                         value={values[f.key] || ""}
                         onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
                       >
@@ -480,17 +497,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                 );
               })}
             </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setOpenForm(false)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button onClick={() => void save()} loading={saving}>
-                Save
-              </Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
+      </Modal>
 
       <ConfirmDialog
         open={!!deleteId}
