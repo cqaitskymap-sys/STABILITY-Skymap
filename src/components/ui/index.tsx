@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
+import { cn, shouldUppercaseInput } from "@/lib/utils";
 import { AlertTriangle, Eye, EyeOff, Inbox, Loader2, type LucideIcon } from "lucide-react";
 
 export function Button({
@@ -52,11 +52,12 @@ const fieldClass =
   "h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string; hint?: string }>(
-  function Input({ className, label, error, hint, id, type, ...props }, ref) {
+  function Input({ className, label, error, hint, id, type, onChange, ...props }, ref) {
     const inputId = id || props.name;
     const [passwordVisible, setPasswordVisible] = useState(false);
     const isPassword = type === "password";
     const inputType = isPassword ? (passwordVisible ? "text" : "password") : type;
+    const uppercase = shouldUppercaseInput(type);
 
     return (
       <label className="block space-y-1.5">
@@ -71,12 +72,17 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
             ref={ref}
             id={inputId}
             type={inputType}
+            autoCapitalize={uppercase ? "characters" : undefined}
             className={cn(
               fieldClass,
               isPassword && "pr-10",
               error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200/70",
               className
             )}
+            onChange={(e) => {
+              if (uppercase) e.target.value = e.target.value.toUpperCase();
+              onChange?.(e);
+            }}
             {...props}
           />
           {isPassword ? (
@@ -139,6 +145,7 @@ export function Textarea({
   label,
   error,
   hint,
+  onChange,
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string; hint?: string }) {
   return (
@@ -150,11 +157,16 @@ export function Textarea({
         </span>
       ) : null}
       <textarea
+        autoCapitalize="characters"
         className={cn(
           "min-h-24 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:text-sm",
           error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200/70",
           className
         )}
+        onChange={(e) => {
+          e.target.value = e.target.value.toUpperCase();
+          onChange?.(e);
+        }}
         {...props}
       />
       {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}

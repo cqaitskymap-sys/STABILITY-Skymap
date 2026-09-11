@@ -9,6 +9,19 @@ import { COLLECTIONS } from "@/lib/firebase/config";
 import { listPullPoints, listStudyTypes } from "@/services/masters";
 import type { PullPointMaster, StudyType } from "@/types";
 
+const PULL_POINT_PRESETS = [
+  { code: "1M", months: 1, label: "1 Month" },
+  { code: "3M", months: 3, label: "3 Months" },
+  { code: "6M", months: 6, label: "6 Months" },
+  { code: "9M", months: 9, label: "9 Months" },
+  { code: "12M", months: 12, label: "12 Months" },
+  { code: "18M", months: 18, label: "18 Months" },
+  { code: "24M", months: 24, label: "24 Months" },
+  { code: "36M", months: 36, label: "36 Months" },
+] as const;
+
+const STUDY_TYPE_CODES = ["ACC", "LT", "INT"] as const;
+
 function parseIds(raw: string) {
   return raw
     .split(",")
@@ -16,10 +29,36 @@ function parseIds(raw: string) {
     .filter(Boolean);
 }
 
+function presetForCode(code: string) {
+  return PULL_POINT_PRESETS.find((p) => p.code === code.toUpperCase());
+}
+
+function matchesStudyTypeCode(studyType: StudyType, code: string) {
+  const sc = (studyType.code || "").trim().toUpperCase();
+  const name = (studyType.name || "").trim().toUpperCase();
+  if (sc === code) return true;
+  if (code === "ACC") return sc === "ACC" || name.includes("ACCELERATED");
+  if (code === "LT") return sc === "LT" || name.includes("LONG TERM");
+  if (code === "INT") return sc === "INT" || name.includes("INTERMEDIATE");
+  return false;
+}
+
+function resolveStudyType(code: string, studyTypes: StudyType[]) {
+  const active = studyTypes.filter((s) => s.status === "Active");
+  return active.find((s) => matchesStudyTypeCode(s, code)) || studyTypes.find((s) => matchesStudyTypeCode(s, code));
+}
+
+function displayCodeForStudyType(studyType: StudyType) {
+  return STUDY_TYPE_CODES.find((code) => matchesStudyTypeCode(studyType, code)) || studyType.code || studyType.name;
+}
+
 function studyTypeLabel(ids: string[] | undefined, studyTypes: StudyType[]) {
   if (!ids?.length) return "All study types";
   const names = ids
-    .map((id) => studyTypes.find((s) => s.id === id)?.name || id)
+    .map((id) => {
+      const st = studyTypes.find((s) => s.id === id);
+      return st ? displayCodeForStudyType(st) : id;
+    })
     .filter(Boolean);
   return names.length ? names.join(", ") : "All study types";
 }
@@ -27,16 +66,16 @@ function studyTypeLabel(ids: string[] | undefined, studyTypes: StudyType[]) {
 export default function PullPointsPage() {
   const studyTypes = useAsync(listStudyTypes, []);
 
-  const activeStudyTypeOptions = useMemo(
-    () =>
-      (studyTypes.data || [])
-        .filter((s) => s.status === "Active")
-        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name))
-        .map((s) => ({ label: `${s.name} (${s.code})`, value: s.id })),
-    [studyTypes.data]
-  );
-
   const allStudyTypes = studyTypes.data || [];
+
+  const studyTypeOptions = useMemo(
+    () =>
+      STUDY_TYPE_CODES.flatMap((code) => {
+        const match = resolveStudyType(code, allStudyTypes);
+        return match ? [{ label: code, value: match.id }] : [];
+      }),
+    [allStudyTypes]
+  );
 
   if (studyTypes.loading) {
     return (
@@ -66,9 +105,9 @@ export default function PullPointsPage() {
 
   return (
     <div>
-      {activeStudyTypeOptions.length === 0 ? (
+      {studyTypeOptions.length === 0 ? (
         <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          No active study types found. Pull points will apply to all types until you configure{" "}
+          No ACC, LT, or INT study types found. Pull points will apply to all types until you configure{" "}
           <Link href="/masters/study-types" className="font-medium underline">
             Study Type Master
           </Link>
@@ -93,36 +132,20 @@ export default function PullPointsPage() {
           {
             key: "code",
             label: "Code",
+            type: "select",
             required: true,
-            placeholder: "e.g. 3M",
-            hint: "Short unique code shown in charging allocations.",
-          },
-          {
-            key: "label",
-            label: "Label",
-            required: true,
-            placeholder: "e.g. 3 Months",
-          },
-          {
-            key: "months",
-            label: "Months",
-            type: "number",
-            required: true,
-            hint: "Months after charging date for this pull.",
-          },
-          {
-            key: "sortOrder",
-            label: "Sort Order",
-            type: "number",
-            required: true,
-            hint: "Lower numbers appear first.",
+            options: [
+              { label: "Select code", value: "" },
+              ...PULL_POINT_PRESETS.map((p) => ({ label: p.code, value: p.code })),
+            ],
+            hint: "Interval shown in charging allocations.",
           },
           {
             key: "studyTypeIds",
             label: "Study Types",
             type: "multiselect",
-            options: activeStudyTypeOptions,
-            hint: "Leave all unchecked to allow this pull point for every study type.",
+            options: studyTypeOptions,
+            hint: "ACC, LT, or INT. Leave all unchecked to allow this pull point for every study type.",
           },
           {
             key: "status",
@@ -140,48 +163,37 @@ export default function PullPointsPage() {
           Label: item.label,
           Months: item.months,
           "Study Types": studyTypeLabel(item.studyTypeIds, allStudyTypes),
-          "Sort Order": item.sortOrder,
           Status: item.status,
         })}
-        getCreateDefaults={(items) => {
-          const maxSort = items.reduce((m, i) => Math.max(m, Number(i.sortOrder) || 0), 0);
-          return {
-            sortOrder: String(maxSort + 1),
-            status: "Active",
-            months: "1",
-            studyTypeIds: "",
-          };
-        }}
+        getCreateDefaults={() => ({
+          status: "Active",
+          studyTypeIds: "",
+        })}
         validate={({ values, items, editing }) => {
           const code = values.code.trim().toUpperCase();
-          const label = values.label.trim();
-          const months = Number(values.months);
-          const sortOrder = Number(values.sortOrder);
+          const preset = presetForCode(code);
+          const legacyMatch = !!editing && editing.code.trim().toUpperCase() === code;
 
-          if (!/^[A-Z0-9][A-Z0-9_-]{0,15}$/i.test(code)) {
-            return "Code must be 1–16 characters: letters, numbers, hyphen, or underscore.";
-          }
-          if (label.length < 1) return "Label is required.";
-          if (!Number.isFinite(months) || months <= 0) {
-            return "Months must be greater than zero.";
-          }
-          if (!Number.isFinite(sortOrder) || sortOrder < 0) {
-            return "Sort order must be zero or a positive number.";
-          }
+          if (!preset && !legacyMatch) return "Select a pull point code.";
+
           const duplicateCode = items.some(
             (i) => i.id !== editing?.id && i.code.trim().toUpperCase() === code
           );
           if (duplicateCode) return "A pull point with this code already exists.";
           return null;
         }}
-        buildPayload={(values) => ({
-          code: values.code.trim().toUpperCase(),
-          label: values.label.trim(),
-          months: Number(values.months) || 0,
-          sortOrder: Number(values.sortOrder) || 0,
-          status: values.status,
-          studyTypeIds: parseIds(values.studyTypeIds || ""),
-        })}
+        buildPayload={(values) => {
+          const code = values.code.trim().toUpperCase();
+          const preset = presetForCode(code);
+          return {
+            code: preset?.code || code,
+            label: preset?.label || `${code}`,
+            months: preset?.months || Number(code.replace(/\D/g, "")) || 0,
+            sortOrder: preset?.months || 0,
+            status: values.status,
+            studyTypeIds: parseIds(values.studyTypeIds || ""),
+          };
+        }}
       />
     </div>
   );

@@ -28,8 +28,13 @@ export type FieldDef = {
   type?: "text" | "number" | "select" | "date" | "multiselect";
   required?: boolean;
   options?: { label: string; value: string }[];
+  optionsFor?: (values: Record<string, string>) => { label: string; value: string }[];
   placeholder?: string;
   hint?: string;
+  readOnly?: boolean;
+  disabled?: boolean;
+  /** Extra field updates applied when this field changes. */
+  syncOnChange?: (value: string) => Record<string, string>;
 };
 
 export function MasterPage<T extends { id: string; status?: string }>({
@@ -43,6 +48,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
   recordType,
   validate,
   getCreateDefaults,
+  getEditValues,
 }: {
   title: string;
   description: string;
@@ -59,6 +65,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
     editing: T | null;
   }) => string | null;
   getCreateDefaults?: (items: T[]) => Record<string, string>;
+  getEditValues?: (item: T) => Record<string, string>;
 }) {
   const { profile, hasPermission } = useAuth();
   const { data, loading, error, reload } = useAsync(loader, []);
@@ -90,6 +97,22 @@ export function MasterPage<T extends { id: string; status?: string }>({
 
   const filtersActive = Boolean(search.trim() || statusFilter !== "all");
 
+  function applyFieldChange(field: FieldDef, value: string) {
+    const next =
+      field.type === "number" || field.type === "select" || field.type === "multiselect" || field.type === "date"
+        ? value
+        : value.toUpperCase();
+    const extra = field.syncOnChange?.(next) || {};
+    setValues((s) => ({ ...s, [field.key]: next, ...extra }));
+  }
+
+  function selectOptions(field: FieldDef) {
+    const options = field.optionsFor?.(values) || field.options || [];
+    const current = values[field.key] || "";
+    if (!current || options.some((o) => o.value === current)) return options;
+    return [{ label: current, value: current }, ...options];
+  }
+
   function openCreate() {
     if (!canManage) return;
     setEditing(null);
@@ -98,7 +121,11 @@ export function MasterPage<T extends { id: string; status?: string }>({
       initial[f.key] = f.type === "number" ? "0" : f.options?.[0]?.value || "";
     });
     const extras = getCreateDefaults?.(items) || {};
-    setValues({ ...initial, ...extras });
+    const merged = { ...initial, ...extras };
+    fields.forEach((f) => {
+      Object.assign(merged, f.syncOnChange?.(merged[f.key] || "") || {});
+    });
+    setValues(merged);
     setOpenForm(true);
   }
 
@@ -115,7 +142,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
         initial[f.key] = String(raw ?? "");
       }
     });
-    setValues(initial);
+    setValues({ ...initial, ...(getEditValues?.(item) || {}) });
     setOpenForm(true);
   }
 
@@ -433,12 +460,13 @@ export function MasterPage<T extends { id: string; status?: string }>({
                         {f.required ? <span className="text-rose-500"> *</span> : null}
                       </span>
                       <select
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 sm:h-10 sm:text-sm"
                         value={values[f.key] || ""}
-                        onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
+                        disabled={f.disabled || f.readOnly}
+                        onChange={(e) => applyFieldChange(f, e.target.value)}
                       >
-                        {(f.options || []).map((o) => (
-                          <option key={o.value} value={o.value}>
+                        {selectOptions(f).map((o) => (
+                          <option key={o.value || o.label} value={o.value}>
                             {o.label}
                           </option>
                         ))}
@@ -492,7 +520,9 @@ export function MasterPage<T extends { id: string; status?: string }>({
                     placeholder={f.placeholder}
                     hint={f.hint}
                     value={values[f.key] || ""}
-                    onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
+                    readOnly={f.readOnly}
+                    disabled={f.disabled}
+                    onChange={(e) => applyFieldChange(f, e.target.value)}
                   />
                 );
               })}

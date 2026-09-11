@@ -6,6 +6,37 @@ import { roundPct } from "@/lib/utils";
 import { listChambers } from "@/services/masters";
 import type { Chamber } from "@/types";
 
+const CHAMBER_PRESETS = [
+  { chamberId: "SMH/QA/SC/001", temperature: "30°C", relativeHumidity: "35% RH", studyType: "LT" },
+  { chamberId: "SMH/QA/SC/002", temperature: "40°C", relativeHumidity: "NMT 25% RH", studyType: "ACC" },
+  { chamberId: "SMH/QA/SC/003", temperature: "25°C", relativeHumidity: "40%", studyType: "LT" },
+  { chamberId: "SMH/QA/SC/004", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
+  { chamberId: "SMH/QA/SC/005", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
+  { chamberId: "SMH/QA/SC/006", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
+  { chamberId: "SMH/QC/SC/025", temperature: "25°C", relativeHumidity: "60% RH", studyType: "LT" },
+  { chamberId: "SMH/QC/SC/026", temperature: "30°C", relativeHumidity: "65% RH", studyType: "LT" },
+  { chamberId: "SMH/QC/SC/027", temperature: "40°C", relativeHumidity: "75% RH", studyType: "ACC" },
+  { chamberId: "SMM/QA/PSC/007", temperature: "25°C", relativeHumidity: "", studyType: "LT" },
+] as const;
+
+function presetForId(chamberId: string) {
+  return CHAMBER_PRESETS.find((p) => p.chamberId.toUpperCase() === chamberId.trim().toUpperCase());
+}
+
+function chamberOptionLabel(preset: (typeof CHAMBER_PRESETS)[number]) {
+  const condition = preset.relativeHumidity
+    ? `${preset.temperature} / ${preset.relativeHumidity}`
+    : preset.temperature;
+  return `${preset.chamberId} — ${condition} — ${preset.studyType}`;
+}
+
+function conditionFromPreset(preset: (typeof CHAMBER_PRESETS)[number]) {
+  return {
+    temperature: preset.temperature,
+    relativeHumidity: preset.relativeHumidity,
+  };
+}
+
 export default function ChambersPage() {
   return (
     <MasterPage<Chamber>
@@ -18,33 +49,28 @@ export default function ChambersPage() {
         {
           key: "chamberId",
           label: "Chamber ID",
+          type: "select",
           required: true,
-          placeholder: "CH-001",
+          options: [
+            { label: "Select chamber", value: "" },
+            ...CHAMBER_PRESETS.map((p) => ({ label: chamberOptionLabel(p), value: p.chamberId })),
+          ],
           hint: "Unique business ID used in reports and labels.",
-        },
-        {
-          key: "chamberName",
-          label: "Chamber Name",
-          required: true,
-          placeholder: "e.g. Chamber A – 25/60",
-        },
-        {
-          key: "chamberType",
-          label: "Chamber Type",
-          required: true,
-          placeholder: "Walk-in / Reach-in / Photostability",
+          syncOnChange: (chamberId) => {
+            const preset = presetForId(chamberId);
+            return preset ? conditionFromPreset(preset) : { temperature: "", relativeHumidity: "" };
+          },
         },
         {
           key: "temperature",
           label: "Temperature",
           required: true,
-          placeholder: "25°C ± 2°C",
+          readOnly: true,
         },
         {
           key: "relativeHumidity",
           label: "Relative Humidity",
-          required: true,
-          placeholder: "60% ± 5% RH",
+          readOnly: true,
         },
         {
           key: "capacity",
@@ -53,23 +79,6 @@ export default function ChambersPage() {
           required: true,
           hint: "Total sample units the chamber can hold. Used capacity is updated by charging/withdrawals.",
         },
-        {
-          key: "location",
-          label: "Physical Location",
-          required: true,
-          placeholder: "e.g. Stability Area / Block B",
-        },
-        {
-          key: "status",
-          label: "Status",
-          type: "select",
-          required: true,
-          options: [
-            { label: "Active", value: "Active" },
-            { label: "Under Maintenance", value: "Under Maintenance" },
-            { label: "Inactive", value: "Inactive" },
-          ],
-        },
       ]}
       mapRow={(item) => {
         const used = Number(item.usedCapacity) || 0;
@@ -77,32 +86,24 @@ export default function ChambersPage() {
         const free = Math.max(0, capacity - used);
         return {
           "Chamber ID": item.chamberId,
-          Name: item.chamberName,
-          Type: item.chamberType,
-          Condition: `${item.temperature} / ${item.relativeHumidity}`,
-          Location: item.location,
+          Condition: `${item.temperature}${item.relativeHumidity ? ` / ${item.relativeHumidity}` : ""}`,
           Capacity: capacity,
           Used: used,
           Free: free,
           "Utilization %": roundPct(used, capacity),
-          Status: item.status,
         };
       }}
       getCreateDefaults={() => ({
-        status: "Active",
         capacity: "100",
-        chamberType: "Walk-in",
       })}
       validate={({ values, items, editing }) => {
-        const chamberId = values.chamberId.trim().toUpperCase();
-        const chamberName = values.chamberName.trim();
+        const chamberId = values.chamberId.trim();
+        const preset = presetForId(chamberId);
         const capacity = Number(values.capacity);
         const used = Number(editing?.usedCapacity) || 0;
+        const legacyMatch = !!editing && editing.chamberId.trim().toUpperCase() === chamberId.toUpperCase();
 
-        if (!/^[A-Z0-9][A-Z0-9_-]{1,23}$/i.test(chamberId)) {
-          return "Chamber ID must be 2–24 characters: letters, numbers, hyphen, or underscore.";
-        }
-        if (chamberName.length < 2) return "Chamber name must be at least 2 characters.";
+        if (!preset && !legacyMatch) return "Select a chamber ID.";
         if (!Number.isFinite(capacity) || capacity <= 0) {
           return "Capacity must be greater than zero.";
         }
@@ -111,30 +112,35 @@ export default function ChambersPage() {
         }
 
         const duplicateId = items.some(
-          (i) => i.id !== editing?.id && i.chamberId.trim().toUpperCase() === chamberId
+          (i) => i.id !== editing?.id && i.chamberId.trim().toUpperCase() === chamberId.toUpperCase()
         );
         if (duplicateId) return "A chamber with this Chamber ID already exists.";
 
-        const duplicateName = items.some(
-          (i) =>
-            i.id !== editing?.id &&
-            i.chamberName.trim().toLowerCase() === chamberName.toLowerCase()
-        );
-        if (duplicateName) return "A chamber with this name already exists.";
-
         return null;
       }}
-      buildPayload={(values, isCreate) => ({
-        chamberId: values.chamberId.trim().toUpperCase(),
-        chamberName: values.chamberName.trim(),
-        chamberType: values.chamberType.trim(),
-        temperature: values.temperature.trim(),
-        relativeHumidity: values.relativeHumidity.trim(),
-        capacity: Number(values.capacity) || 0,
-        location: values.location.trim(),
-        status: values.status,
-        ...(isCreate ? { usedCapacity: 0 } : {}),
-      })}
+      buildPayload={(values, isCreate) => {
+        const chamberId = values.chamberId.trim();
+        const preset = presetForId(chamberId);
+        const temperature = preset?.temperature || values.temperature.trim();
+        const relativeHumidity = preset ? preset.relativeHumidity : values.relativeHumidity.trim();
+        return {
+          chamberId: preset?.chamberId || chamberId,
+          chamberName: preset?.chamberId || chamberId,
+          temperature,
+          relativeHumidity,
+          capacity: Number(values.capacity) || 0,
+          ...(isCreate
+            ? {
+                chamberType: preset?.studyType || "",
+                location: "",
+                status: "Active",
+                usedCapacity: 0,
+              }
+            : preset
+              ? { chamberType: preset.studyType }
+              : {}),
+        };
+      }}
     />
   );
 }

@@ -91,6 +91,12 @@ button {
   font: inherit;
 }
 
+input:not([type="password"]):not([type="email"]):not([type="number"]):not([type="date"]):not([type="datetime-local"]):not([type="time"]):not([type="month"]):not([type="week"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="url"]):not([data-no-uppercase]),
+textarea:not([data-no-uppercase]),
+select {
+  text-transform: uppercase;
+}
+
 @media (max-width: 640px) {
   input,
   select,

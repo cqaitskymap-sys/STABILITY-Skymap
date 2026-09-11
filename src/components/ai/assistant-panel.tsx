@@ -313,6 +313,7 @@ export function AssistantPanel() {
               <div className="flex items-end gap-2">
                 <textarea
                   value={input}
+                  data-no-uppercase
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {

@@ -15,6 +15,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const SKIP_UPPERCASE_INPUT_TYPES = new Set([
+  "password",
+  "email",
+  "number",
+  "date",
+  "datetime-local",
+  "time",
+  "month",
+  "week",
+  "file",
+  "checkbox",
+  "radio",
+  "hidden",
+  "range",
+  "color",
+  "url",
+]);
+
+export function shouldUppercaseInput(type?: string) {
+  return !SKIP_UPPERCASE_INPUT_TYPES.has((type || "text").toLowerCase());
+}
+
 export function formatDate(value?: string | Date | null, pattern = "dd/MM/yyyy") {
   if (!value) return "—";
   const date = typeof value === "string" ? parseISO(value) : value;

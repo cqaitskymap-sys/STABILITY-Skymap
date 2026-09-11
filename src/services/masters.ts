@@ -117,5 +117,5 @@ export async function setMasterStatus(
 }
 
 export function buildLocationLabel(chamberName: string, rack: string, shelf: string, position: string) {
-  return `${chamberName} / ${rack} / ${shelf} / ${position}`;
+  return [chamberName, rack, shelf, position].filter((part) => part.trim()).join(" / ");
 }
