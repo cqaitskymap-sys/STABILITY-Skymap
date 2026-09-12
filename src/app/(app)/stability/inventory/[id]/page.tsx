@@ -141,6 +141,35 @@ export default function SampleDetailPage() {
         <p className="text-sm text-slate-500">Stability Sample Inventory Record</p>
       </div>
 
+      <Card className="mb-4 print-card">
+        <CardHeader title="Stability Sample Label" description="Color is an aid only — identification fields are always printed." />
+        <div
+          className="m-4 rounded-xl border-4 p-4"
+          style={{
+            borderColor: (sample.studyType || "").toLowerCase().includes("accel")
+              ? "#dc2626"
+              : (sample.studyType || "").toLowerCase().includes("inter")
+                ? "#ca8a04"
+                : "#16a34a",
+          }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{companyName}</p>
+          <p className="text-lg font-semibold text-slate-900">{sample.productName}</p>
+          <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+            <p>Batch: {sample.batchNumber}</p>
+            <p>Sample ID: {sample.sampleId}</p>
+            <p>Study type: {sample.studyType}</p>
+            <p>Condition: {sample.storageCondition}</p>
+            <p>Chamber: {sample.chamberName}</p>
+            <p>Position: {sample.locationLabel}</p>
+            <p>Charging: {formatDate(sample.chargingDate)}</p>
+            <p>Orientation: {sample.orientation || "Upright"}</p>
+            <p>Status: {sample.status}</p>
+            <p>Next pull: {formatDate(sample.nextPullDate)}</p>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="Sample Summary" description="Charged inventory balance and study linkage." />
@@ -165,6 +194,8 @@ export default function SampleDetailPage() {
             <Info label="Manufacturing Date" value={formatDate(sample.manufacturingDate)} />
             <Info label="Expiry Date" value={formatDate(sample.expiryDate)} />
             <Info label="Date of Charging" value={formatDate(sample.chargingDate)} />
+            <Info label="Incubation Date" value={formatDate(sample.incubationDate || sample.chargingDate)} />
+            <Info label="Orientation" value={sample.orientation || "Upright"} />
             <Info label="Next Pull" value={formatDate(sample.nextPullDate)} />
             <Info label="Status" value={<StatusBadge status={sample.status} />} />
             <Info label="Created By" value={sample.createdByName} />

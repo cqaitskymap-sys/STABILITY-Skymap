@@ -6,6 +6,7 @@ import type {
   PullPointMaster,
   StorageCondition,
   StorageLocation,
+  StudyReason,
   StudyType,
   Unit,
 } from "@/types";
@@ -18,7 +19,9 @@ export interface ChargeFormState {
   manufacturingDate: string;
   expiryDate: string;
   chargingDate: string;
+  incubationDate: string;
   studyTypeId: string;
+  studyReasonId: string;
   storageConditionId: string;
   chamberId: string;
   locationId: string;
@@ -26,6 +29,10 @@ export interface ChargeFormState {
   reservedQuantity: string;
   unit: string;
   notes: string;
+  receiptDocId: string;
+  invertedPercent: string;
+  applyInvertedSplit: boolean;
+  lateChargingReason: string;
   pullAllocations: PullAllocationMap;
 }
 
@@ -36,7 +43,9 @@ export function emptyChargeForm(chargingDate: string): ChargeFormState {
     manufacturingDate: "",
     expiryDate: "",
     chargingDate,
+    incubationDate: chargingDate,
     studyTypeId: "",
+    studyReasonId: "",
     storageConditionId: "",
     chamberId: "",
     locationId: "",
@@ -44,6 +53,10 @@ export function emptyChargeForm(chargingDate: string): ChargeFormState {
     reservedQuantity: "0",
     unit: "",
     notes: "",
+    receiptDocId: "",
+    invertedPercent: "25",
+    applyInvertedSplit: true,
+    lateChargingReason: "",
     pullAllocations: {},
   };
 }
@@ -184,6 +197,8 @@ export function resolveChargePayload(
     locations: StorageLocation[];
     units: Unit[];
     pullPoints: PullPointMaster[];
+    reasons?: StudyReason[];
+    studyReasons?: StudyReason[];
   },
   user: AppUser
 ) {
@@ -215,13 +230,19 @@ export function resolveChargePayload(
   return {
     productId: product.id,
     productName: product.productName,
+    genericName: product.genericName,
     batchId: batch.id,
     batchNumber: batch.batchNumber,
+    batchSize: batch.batchSize,
     manufacturingDate: form.manufacturingDate,
     expiryDate: form.expiryDate,
+    releaseDate: batch.releaseDate,
     chargingDate: form.chargingDate,
+    incubationDate: form.incubationDate || form.chargingDate,
     studyTypeId: studyType.id,
     studyType: studyType.name,
+    studyReasonId: form.studyReasonId || undefined,
+    studyReason: (masters.reasons || masters.studyReasons || []).find((r) => r.id === form.studyReasonId)?.name,
     storageConditionId: condition.id,
     storageCondition: condition.displayLabel || condition.name,
     chamberId: chamber.id,
@@ -233,6 +254,10 @@ export function resolveChargePayload(
     unit: unitLabel,
     notes: form.notes.trim() || undefined,
     duration: deriveDuration(form.pullAllocations, relevantPulls) || studyType.code || "N/A",
+    invertedPercent: Number(form.invertedPercent || 25),
+    applyInvertedSplit: form.applyInvertedSplit,
+    lateChargingReason: form.lateChargingReason.trim() || undefined,
+    receiptDocId: form.receiptDocId || undefined,
     pullAllocations,
     user,
   };

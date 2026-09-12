@@ -47,6 +47,8 @@ export default function BatchesPage() {
         { key: "batchNumber", label: "Batch Number", required: true },
         { key: "manufacturingDate", label: "Manufacturing Date", type: "date", required: true },
         { key: "expiryDate", label: "Expiry Date", type: "date", required: true },
+        { key: "releaseDate", label: "Release Date", type: "date" },
+        { key: "batchSize", label: "Batch Size" },
         {
           key: "status",
           label: "Status",
@@ -73,6 +75,8 @@ export default function BatchesPage() {
           batchNumber: values.batchNumber.trim(),
           manufacturingDate: values.manufacturingDate.trim(),
           expiryDate: values.expiryDate.trim(),
+          releaseDate: values.releaseDate.trim() || undefined,
+          batchSize: values.batchSize.trim() || undefined,
           status: values.status,
         };
       }}

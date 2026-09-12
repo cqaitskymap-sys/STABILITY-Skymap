@@ -52,7 +52,7 @@ export default function TransactionsPage() {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
 
-  const rows = data || [];
+  const rows = useMemo(() => data || [], [data]);
   const filtersActive = Boolean(search.trim() || type !== "all" || from || to);
 
   const stats = useMemo(() => {

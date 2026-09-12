@@ -4,6 +4,10 @@ import { derivePullStatus, roundPct } from "@/lib/utils";
 import type { Chamber, DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
 import { listPullPoints, listSamples, listStudies, listTransactions } from "@/services/inventory";
 import { listStudyTypes } from "@/services/masters";
+import { listSampleReceipts } from "@/services/receipts";
+import { listControlSamples } from "@/services/control-samples";
+import { listAnalysisRequests } from "@/services/analysis";
+import { listChamberAlarms, listChamberExcursions, listChamberCalibration, listTemperatureMappings } from "@/services/chamber-ops";
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [studies, samples, pulls, chamberSnap, studyTypeMasters] = await Promise.all([
@@ -43,7 +47,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const typePulls = enrichedPulls.filter(
       (p) =>
         p.studyType === studyType &&
-        ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"].includes(p.status)
+        ["Upcoming", "Due Soon", "Due Today", "Due", "Within Window", "Overdue", "Partially Withdrawn"].includes(p.status)
     );
     return {
       studyType,
@@ -54,15 +58,43 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     };
   });
 
+  const extras = await Promise.allSettled([
+    listSampleReceipts(),
+    listControlSamples(),
+    listAnalysisRequests(),
+    listChamberAlarms(),
+    listChamberExcursions(),
+    listChamberCalibration(),
+    listTemperatureMappings(),
+  ]);
+  const receipts = extras[0].status === "fulfilled" ? extras[0].value : [];
+  const controls = extras[1].status === "fulfilled" ? extras[1].value : [];
+  const analysis = extras[2].status === "fulfilled" ? extras[2].value : [];
+  const alarms = extras[3].status === "fulfilled" ? extras[3].value : [];
+  const excursions = extras[4].status === "fulfilled" ? extras[4].value : [];
+  const calibration = extras[5].status === "fulfilled" ? extras[5].value : [];
+  const mappings = extras[6].status === "fulfilled" ? extras[6].value : [];
+  const today = new Date().toISOString().slice(0, 10);
+
   return {
     totalActiveStudies: activeStudies.length,
     totalSamples: samples.reduce((s, x) => s + x.totalQuantity, 0),
     availableSamples: samples.reduce((s, x) => s + x.availableQuantity, 0),
     samplesWithdrawn: samples.reduce((s, x) => s + x.withdrawnQuantity, 0),
-    samplesDueSoon: enrichedPulls.filter((p) => p.status === "Due Soon" || p.status === "Due Today").length,
+    samplesDueSoon: enrichedPulls.filter((p) => p.status === "Due Soon" || p.status === "Due Today" || p.status === "Due").length,
     overdueSamples: enrichedPulls.filter((p) => p.status === "Overdue").length,
     activeChambers: activeChambers.length,
     chamberUtilization: roundPct(usedCapacity, totalCapacity),
+    samplesAwaitingCoa: receipts.filter((r) => r.status === "Received - Awaiting COA").length,
+    samplesReadyForCharging: receipts.filter((r) => r.status === "COA Received - Ready for Charging").length,
+    controlSampleCount: controls.length,
+    pendingReconciliation: samples.filter((s) => s.status === "Under Reconciliation").length,
+    activeChamberAlarms: alarms.filter((a) => a.status === "Active").length,
+    chamberExcursions: excursions.filter((e) => e.status !== "Closed").length,
+    calibrationDue: calibration.filter((c) => c.dueDate <= today).length,
+    mappingDue: mappings.filter((m) => m.nextDueDate <= today).length,
+    cleaningDue: 0,
+    analysisPending: analysis.filter((a) => a.status !== "Completed" && a.status !== "Cancelled").length,
     studyTypeOverview,
   };
 }

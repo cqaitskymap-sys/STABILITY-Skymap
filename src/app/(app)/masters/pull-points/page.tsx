@@ -10,6 +10,7 @@ import { listPullPoints, listStudyTypes } from "@/services/masters";
 import type { PullPointMaster, StudyType } from "@/types";
 
 const PULL_POINT_PRESETS = [
+  { code: "0M", months: 0, label: "Initial (0 Month)" },
   { code: "1M", months: 1, label: "1 Month" },
   { code: "3M", months: 3, label: "3 Months" },
   { code: "6M", months: 6, label: "6 Months" },
@@ -65,8 +66,7 @@ function studyTypeLabel(ids: string[] | undefined, studyTypes: StudyType[]) {
 
 export default function PullPointsPage() {
   const studyTypes = useAsync(listStudyTypes, []);
-
-  const allStudyTypes = studyTypes.data || [];
+  const allStudyTypes = useMemo(() => studyTypes.data || [], [studyTypes.data]);
 
   const studyTypeOptions = useMemo(
     () =>

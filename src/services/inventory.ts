@@ -22,6 +22,9 @@ import {
 } from "@/lib/utils";
 import { nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
+import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow, pullWindowEnd, splitOrientation } from "@/lib/sop";
+import { getOrganizationSettings } from "@/services/organization";
+import { createAnalysisRequestFromWithdrawal } from "@/services/analysis";
 import type {
   AppUser,
   DisposalReason,
@@ -70,18 +73,61 @@ function sampleStatusFromQty(sample: Pick<StabilitySample, "availableQuantity" |
   return "Available";
 }
 
-function studyStatusFromSample(sampleStatus: SampleStatus): StudyStatus {
-  switch (sampleStatus) {
-    case "Partially Withdrawn":
-      return "Partially Withdrawn";
-    case "Fully Withdrawn":
-      return "Fully Withdrawn";
-    case "Disposed":
-      return "Disposed";
-    case "Depleted":
-      return "Completed";
-    default:
-      return "Active";
+function studyStatusFromSamples(
+  samples: Array<
+    Pick<
+      StabilitySample,
+      "status" | "availableQuantity" | "withdrawnQuantity" | "disposedQuantity" | "totalQuantity"
+    >
+  >
+): StudyStatus {
+  if (samples.length === 0) return "Active";
+  const allDisposed = samples.every(
+    (s) => s.status === "Disposed" || (s.disposedQuantity >= s.totalQuantity && s.availableQuantity === 0)
+  );
+  if (allDisposed) return "Disposed";
+  const anyRemaining = samples.some((s) => s.availableQuantity > 0);
+  const anyWithdrawn = samples.some((s) => s.withdrawnQuantity > 0);
+  const anyDisposed = samples.some((s) => s.disposedQuantity > 0);
+  if (!anyRemaining && anyWithdrawn) return "Fully Withdrawn";
+  if (anyWithdrawn || anyDisposed) return "Partially Withdrawn";
+  return "Active";
+}
+
+function studyTotalsFromSamples(samples: StabilitySample[]) {
+  return {
+    totalQuantity: samples.reduce((n, s) => n + Number(s.totalQuantity || 0), 0),
+    withdrawnQuantity: samples.reduce((n, s) => n + Number(s.withdrawnQuantity || 0), 0),
+    availableQuantity: samples.reduce((n, s) => n + Number(s.availableQuantity || 0), 0),
+    disposedQuantity: samples.reduce((n, s) => n + Number(s.disposedQuantity || 0), 0),
+    returnedQuantity: samples.reduce((n, s) => n + Number(s.returnedQuantity || 0), 0),
+    status: studyStatusFromSamples(samples),
+  };
+}
+
+async function studyPatchAfterSampleChange(studyDocId: string, updatedSample: StabilitySample) {
+  const siblings = await listSamplesByStudy(studyDocId);
+  const samples = siblings.some((s) => s.id === updatedSample.id)
+    ? siblings.map((s) => (s.id === updatedSample.id ? updatedSample : s))
+    : [...siblings, updatedSample];
+  return studyTotalsFromSamples(samples);
+}
+
+async function assertLocationAvailable(locationId: string, exceptSampleId?: string) {
+  const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
+  if (settings.allowMultiOccupancy) return;
+  const snap = await getDocs(
+    query(collection(getDb(), COLLECTIONS.stabilitySamples), where("locationId", "==", locationId))
+  );
+  const occupied = snap.docs.some((d) => {
+    if (exceptSampleId && d.id === exceptSampleId) return false;
+    const sample = d.data() as StabilitySample;
+    return sample.status !== "Disposed" && Number(sample.availableQuantity || 0) > 0;
+  });
+  if (occupied) {
+    throw new Error(
+      "This location is already occupied. Enable multi-occupancy in Organization settings to place another sample here."
+    );
   }
 }
 
@@ -270,13 +316,19 @@ export async function listTransactions() {
 export async function createStudyAndCharge(input: {
   productId: string;
   productName: string;
+  genericName?: string;
   batchId: string;
   batchNumber: string;
+  batchSize?: string;
   manufacturingDate: string;
   expiryDate: string;
+  releaseDate?: string;
   chargingDate: string;
+  incubationDate?: string;
   studyTypeId: string;
   studyType: string;
+  studyReasonId?: string;
+  studyReason?: string;
   storageConditionId: string;
   storageCondition: string;
   chamberId: string;
@@ -288,12 +340,48 @@ export async function createStudyAndCharge(input: {
   unit: string;
   notes?: string;
   duration: string;
+  invertedPercent?: number;
+  applyInvertedSplit?: boolean;
+  lateChargingReason?: string;
+  receiptDocId?: string;
   pullAllocations: { code: string; months: number; quantity: number }[];
+  invertedPullAllocations?: { code: string; months: number; quantity: number }[];
   user: AppUser;
 }) {
   if (input.totalQuantity <= 0) throw new Error("Total quantity must be greater than zero.");
   if (input.manufacturingDate && input.expiryDate && input.expiryDate < input.manufacturingDate) {
     throw new Error("Expiry date cannot be before manufacturing date.");
+  }
+
+  const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
+  const lateCharging = isChargingBeyondWindow(
+    input.releaseDate,
+    input.chargingDate,
+    settings.chargingWindowDays
+  );
+  if (lateCharging && settings.requireLateChargingReason && !input.lateChargingReason?.trim()) {
+    throw new Error(
+      `Charging is beyond ${settings.chargingWindowDays} days of batch release. Record a reason before continuing.`
+    );
+  }
+  if (settings.requireReceiptBeforeCharging && !input.receiptDocId) {
+    throw new Error("Sample must be received and COA-cleared before charging. Open Sample Inward first.");
+  }
+  let receiptIdForAudit: string | undefined;
+  if (input.receiptDocId) {
+    const receiptSnap = await getDoc(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId));
+    if (!receiptSnap.exists()) throw new Error("Selected inward record was not found.");
+    const receipt = receiptSnap.data() as {
+      status?: string;
+      chargingEligibility?: boolean;
+      receiptId?: string;
+    };
+    if (receipt.status === "Charged") throw new Error("This inward record has already been charged.");
+    if (receipt.status === "Voided") throw new Error("This inward record has been voided.");
+    if (receipt.status !== "COA Received - Ready for Charging" && !receipt.chargingEligibility) {
+      throw new Error("COA has not been received. Sample is not eligible for charging.");
+    }
+    receiptIdForAudit = receipt.receiptId;
   }
 
   const allocated = input.pullAllocations.reduce((s, p) => s + p.quantity, 0) + input.reservedQuantity;
@@ -304,23 +392,29 @@ export async function createStudyAndCharge(input: {
   const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, input.chamberId));
   if (!chamberSnap.exists()) throw new Error("Selected chamber was not found.");
   const chamber = chamberSnap.data();
-  if (chamber.status === "Inactive") throw new Error("Cannot allocate samples to an inactive chamber.");
+  if (chamber.status === "Inactive" || chamber.status === "Out of Service") {
+    throw new Error("Cannot allocate samples to an inactive chamber.");
+  }
   if (Number(chamber.usedCapacity || 0) + input.totalQuantity > Number(chamber.capacity || 0)) {
     throw new Error("Chamber capacity is insufficient for this charge quantity.");
   }
+  if (input.locationId) {
+    await assertLocationAvailable(input.locationId);
+  }
+
+  const orientation = splitOrientation(
+    input.totalQuantity,
+    input.applyInvertedSplit === false ? 0 : (input.invertedPercent ?? settings.invertedPercentDefault)
+  );
+  const incubationDate = input.incubationDate || input.chargingDate;
 
   const studyId = await nextSequentialId("STB");
-  const sampleId = await nextSequentialId("SMP");
-  const txId = await nextSequentialId("TRX");
   const stamp = nowISO();
-  const availableQuantity = calcAvailableQuantity(input.totalQuantity, 0, 0);
+  const availableQuantity = calcAvailableQuantity(input.totalQuantity, 0, 0, 0);
 
   const nextPullDate =
     input.pullAllocations.length > 0
-      ? addMonthsToDate(
-          input.chargingDate,
-          Math.min(...input.pullAllocations.map((p) => p.months))
-        )
+      ? addMonthsToDate(incubationDate, Math.min(...input.pullAllocations.map((p) => p.months)))
       : null;
 
   const studyPayload: Omit<StabilityStudy, "id"> = {
@@ -328,12 +422,17 @@ export async function createStudyAndCharge(input: {
     productId: input.productId,
     batchId: input.batchId,
     productName: input.productName,
+    genericName: input.genericName,
     batchNumber: input.batchNumber,
+    batchSize: input.batchSize,
     manufacturingDate: input.manufacturingDate,
     expiryDate: input.expiryDate,
     chargingDate: input.chargingDate,
+    incubationDate,
     studyTypeId: input.studyTypeId,
     studyType: input.studyType,
+    studyReasonId: input.studyReasonId,
+    studyReason: input.studyReason,
     storageConditionId: input.storageConditionId,
     storageCondition: input.storageCondition,
     chamberId: input.chamberId,
@@ -345,8 +444,15 @@ export async function createStudyAndCharge(input: {
     reservedQuantity: input.reservedQuantity,
     availableQuantity,
     withdrawnQuantity: 0,
+    returnedQuantity: 0,
     disposedQuantity: 0,
     unit: input.unit,
+    invertedPercent: orientation.invertedPercent,
+    uprightQuantity: orientation.uprightQuantity,
+    invertedQuantity: orientation.invertedQuantity,
+    lateCharging,
+    lateChargingReason: input.lateChargingReason,
+    receiptDocId: input.receiptDocId,
     notes: input.notes,
     status: "Active",
     nextPullDate,
@@ -360,111 +466,215 @@ export async function createStudyAndCharge(input: {
   const studyRef = doc(collection(getDb(), COLLECTIONS.stabilityStudies));
   batch.set(studyRef, omitUndefined(studyPayload as unknown as Record<string, unknown>));
 
-  const samplePayload: Omit<StabilitySample, "id"> = {
-    sampleId,
-    studyId,
-    studyDocId: studyRef.id,
-    productId: input.productId,
-    batchId: input.batchId,
-    productName: input.productName,
-    batchNumber: input.batchNumber,
-    manufacturingDate: input.manufacturingDate,
-    expiryDate: input.expiryDate,
-    chargingDate: input.chargingDate,
-    studyType: input.studyType,
-    studyTypeId: input.studyTypeId,
-    storageCondition: input.storageCondition,
-    storageConditionId: input.storageConditionId,
-    chamberId: input.chamberId,
-    chamberName: input.chamberName,
-    locationId: input.locationId,
-    locationLabel: input.locationLabel,
-    totalQuantity: input.totalQuantity,
-    reservedQuantity: input.reservedQuantity,
-    withdrawnQuantity: 0,
-    disposedQuantity: 0,
-    availableQuantity,
-    unit: input.unit,
-    status: "Available",
-    nextPullDate,
-    notes: input.notes,
-    createdBy: input.user.uid,
-    createdByName: input.user.displayName || input.user.email,
-    createdAt: stamp,
-    updatedAt: stamp,
-  };
+  const lots: {
+    qty: number;
+    reserved: number;
+    orientation: "Upright" | "Inverted";
+    pulls: { code: string; months: number; quantity: number }[];
+  }[] = [];
+  if (orientation.invertedQuantity > 0 && orientation.uprightQuantity > 0) {
+    const ratio = orientation.uprightQuantity / input.totalQuantity;
+    const uprightPulls = input.pullAllocations.map((p) => ({
+      ...p,
+      quantity: Math.round(p.quantity * ratio),
+    }));
+    const invertedPulls =
+      input.invertedPullAllocations && input.invertedPullAllocations.length
+        ? input.invertedPullAllocations
+        : input.pullAllocations.map((p, i) => ({
+            ...p,
+            quantity: Math.max(0, p.quantity - uprightPulls[i].quantity),
+          }));
+    lots.push({
+      qty: orientation.uprightQuantity,
+      reserved: input.reservedQuantity,
+      orientation: "Upright",
+      pulls: uprightPulls,
+    });
+    lots.push({
+      qty: orientation.invertedQuantity,
+      reserved: 0,
+      orientation: "Inverted",
+      pulls: invertedPulls.filter((p) => p.quantity > 0),
+    });
+  } else {
+    lots.push({
+      qty: input.totalQuantity,
+      reserved: input.reservedQuantity,
+      orientation: orientation.invertedQuantity > 0 ? "Inverted" : "Upright",
+      pulls: input.pullAllocations,
+    });
+  }
 
-  const sampleRef = doc(collection(getDb(), COLLECTIONS.stabilitySamples));
-  batch.set(sampleRef, omitUndefined(samplePayload as unknown as Record<string, unknown>));
+  let primarySampleId = "";
+  let primarySampleDocId = "";
 
-  for (const pull of input.pullAllocations) {
-    const pullRef = doc(collection(getDb(), COLLECTIONS.studyPullPoints));
-    const plannedDate = addMonthsToDate(input.chargingDate, pull.months);
-    const pullPayload: Omit<StudyPullPoint, "id"> = {
-      pullPointId: `${sampleId}-${pull.code}`,
+  for (const lot of lots) {
+    const sampleId = await nextSequentialId("SMP");
+    const txId = await nextSequentialId("TRX");
+    const sampleRef = doc(collection(getDb(), COLLECTIONS.stabilitySamples));
+    if (!primarySampleId) {
+      primarySampleId = sampleId;
+      primarySampleDocId = sampleRef.id;
+    }
+    const lotAvailable = calcAvailableQuantity(lot.qty, 0, 0, 0);
+    const samplePayload: Omit<StabilitySample, "id"> = {
+      sampleId,
       studyId,
       studyDocId: studyRef.id,
-      sampleId,
-      sampleDocId: sampleRef.id,
+      productId: input.productId,
+      batchId: input.batchId,
       productName: input.productName,
       batchNumber: input.batchNumber,
+      manufacturingDate: input.manufacturingDate,
+      expiryDate: input.expiryDate,
+      chargingDate: input.chargingDate,
+      incubationDate,
       studyType: input.studyType,
+      studyTypeId: input.studyTypeId,
       storageCondition: input.storageCondition,
+      storageConditionId: input.storageConditionId,
       chamberId: input.chamberId,
       chamberName: input.chamberName,
-      pullPoint: pull.code,
-      months: pull.months,
-      plannedDate,
-      plannedQuantity: pull.quantity,
-      actualQuantity: 0,
-      status: derivePullStatus(plannedDate, 0, pull.quantity),
-      withdrawalId: null,
-      completedDate: null,
+      locationId: input.locationId,
+      locationLabel: input.locationLabel,
+      totalQuantity: lot.qty,
+      reservedQuantity: lot.reserved,
+      withdrawnQuantity: 0,
+      returnedQuantity: 0,
+      disposedQuantity: 0,
+      availableQuantity: lotAvailable,
+      unit: input.unit,
+      orientation: lot.orientation,
+      sampleKind: "stability",
+      receiptDocId: input.receiptDocId,
+      status: "Available",
+      nextPullDate,
+      notes: input.notes,
+      createdBy: input.user.uid,
+      createdByName: input.user.displayName || input.user.email,
       createdAt: stamp,
       updatedAt: stamp,
     };
-    batch.set(pullRef, omitUndefined(pullPayload as unknown as Record<string, unknown>));
-  }
+    batch.set(sampleRef, omitUndefined(samplePayload as unknown as Record<string, unknown>));
 
-  const txPayload: Omit<InventoryTransaction, "id"> = {
-    transactionId: txId,
-    sampleId,
-    sampleDocId: sampleRef.id,
-    studyId,
-    productName: input.productName,
-    batchNumber: input.batchNumber,
-    transactionType: "SAMPLE_CHARGED",
-    quantity: input.totalQuantity,
-    toLocation: input.locationLabel,
-    reason: "Initial sample charging",
-    performedBy: input.user.uid,
-    performedByName: input.user.displayName || input.user.email,
-    performedAt: stamp,
-  };
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), omitUndefined(txPayload as unknown as Record<string, unknown>));
+    for (const pull of lot.pulls) {
+      if (pull.quantity <= 0) continue;
+      const pullRef = doc(collection(getDb(), COLLECTIONS.studyPullPoints));
+      const plannedDate = addMonthsToDate(incubationDate, pull.months);
+      const pullPayload: Omit<StudyPullPoint, "id"> = {
+        pullPointId: `${sampleId}-${pull.code}-${lot.orientation}`,
+        studyId,
+        studyDocId: studyRef.id,
+        sampleId,
+        sampleDocId: sampleRef.id,
+        productName: input.productName,
+        batchNumber: input.batchNumber,
+        studyType: input.studyType,
+        storageCondition: input.storageCondition,
+        chamberId: input.chamberId,
+        chamberName: input.chamberName,
+        pullPoint: pull.code,
+        months: pull.months,
+        plannedDate,
+        windowEndDate: pullWindowEnd(plannedDate, settings.withdrawalWindowDays),
+        plannedQuantity: pull.quantity,
+        actualQuantity: 0,
+        orientation: lot.orientation,
+        status: derivePullStatus(plannedDate, 0, pull.quantity, settings.withdrawalWindowDays),
+        withdrawalId: null,
+        completedDate: null,
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      batch.set(pullRef, omitUndefined(pullPayload as unknown as Record<string, unknown>));
+    }
+
+    batch.set(
+      doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
+      omitUndefined({
+        transactionId: txId,
+        sampleId,
+        sampleDocId: sampleRef.id,
+        studyId,
+        productName: input.productName,
+        batchNumber: input.batchNumber,
+        transactionType: "SAMPLE_CHARGED",
+        quantity: lot.qty,
+        unit: input.unit,
+        previousBalance: 0,
+        newBalance: lotAvailable,
+        toLocation: input.locationLabel,
+        reason:
+          lot.orientation === "Inverted"
+            ? "Initial sample charging (inverted)"
+            : "Initial sample charging",
+        reference: input.receiptDocId,
+        performedBy: input.user.uid,
+        performedByName: input.user.displayName || input.user.email,
+        performedAt: stamp,
+      } as unknown as Record<string, unknown>)
+    );
+  }
 
   batch.update(doc(getDb(), COLLECTIONS.chambers, input.chamberId), {
     usedCapacity: Number(chamber.usedCapacity || 0) + input.totalQuantity,
     updatedAt: stamp,
   });
 
+  if (input.receiptDocId) {
+    batch.update(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId), {
+      status: "Charged",
+      chargedStudyId: studyId,
+      chargedAt: stamp,
+      updatedAt: stamp,
+    });
+  }
+
   await batch.commit();
+
+  if (input.receiptDocId) {
+    try {
+      await writeAuditLog({
+        action: "Charge",
+        module: "Sample Inward",
+        recordId: receiptIdForAudit || input.receiptDocId,
+        recordType: "sampleReceipt",
+        newValue: { studyId },
+        userId: input.user.uid,
+        userName: input.user.displayName || input.user.email,
+        userEmail: input.user.email,
+        userRole: input.user.role,
+      });
+    } catch (err) {
+      console.error("Study charged but inward audit log failed:", err);
+    }
+  }
 
   try {
     await writeAuditLog({
-      action: "Sample Charged / Study Created",
+      action: "Charge",
+      module: "Sample Charging",
       recordId: studyId,
       recordType: "stabilityStudy",
-      newValue: { studyId, sampleId, totalQuantity: input.totalQuantity },
+      newValue: {
+        studyId,
+        sampleId: primarySampleId,
+        totalQuantity: input.totalQuantity,
+        invertedQuantity: orientation.invertedQuantity,
+        lateCharging,
+      },
+      reason: input.lateChargingReason,
       userId: input.user.uid,
       userName: input.user.displayName || input.user.email,
       userEmail: input.user.email,
+      userRole: input.user.role,
     });
   } catch (auditErr) {
     console.error("Study created but audit log failed:", auditErr);
   }
 
-  return { studyDocId: studyRef.id, sampleDocId: sampleRef.id, studyId, sampleId };
+  return { studyDocId: studyRef.id, sampleDocId: primarySampleDocId, studyId, sampleId: primarySampleId };
 }
 
 export async function updateStudy(
@@ -525,22 +735,47 @@ export async function withdrawSample(input: {
     throw new Error("Sample chamber is missing; cannot update chamber capacity.");
   }
 
+  const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
   const withdrawalId = await nextSequentialId("WDR");
   const txId = await nextSequentialId("TRX");
   const stamp = nowISO();
   const newWithdrawn = sample.withdrawnQuantity + input.actualQuantity;
-  const newAvailable = calcAvailableQuantity(sample.totalQuantity, newWithdrawn, sample.disposedQuantity);
+  const newAvailable = calcAvailableQuantity(
+    sample.totalQuantity,
+    newWithdrawn,
+    sample.disposedQuantity,
+    sample.returnedQuantity || 0
+  );
   const newActual = pull.actualQuantity + input.actualQuantity;
-  const pullStatus = derivePullStatus(pull.plannedDate, newActual, pull.plannedQuantity);
+  const pullStatus = derivePullStatus(
+    pull.plannedDate,
+    newActual,
+    pull.plannedQuantity,
+    settings.withdrawalWindowDays
+  );
   const newSampleStatus = sampleStatusFromQty({
     ...sample,
     withdrawnQuantity: newWithdrawn,
     availableQuantity: newAvailable,
   });
+  const updatedSample: StabilitySample = {
+    ...sample,
+    withdrawnQuantity: newWithdrawn,
+    availableQuantity: newAvailable,
+    status: newSampleStatus,
+  };
 
   const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
   if (!chamberSnap.exists()) throw new Error("Chamber not found for this sample.");
   const chamberUsed = Number(chamberSnap.data()?.usedCapacity || 0);
+
+  const remainingPulls = (await listPullPoints({ studyDocId: sample.studyDocId }))
+    .filter((p) => p.id !== pull.id)
+    .concat([{ ...pull, actualQuantity: newActual, status: pullStatus }]);
+  const nextOpen = remainingPulls
+    .filter((p) => p.status !== "Withdrawn")
+    .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
+  const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
 
   const batch = writeBatch(getDb());
   const withdrawalRef = doc(collection(getDb(), COLLECTIONS.sampleWithdrawals));
@@ -563,12 +798,18 @@ export async function withdrawSample(input: {
     withdrawalDate: input.withdrawalDate,
     withdrawnBy: input.withdrawnBy,
     receivedBy: input.receivedBy,
+    scheduledDate: pull.plannedDate,
+    windowEndDate: pull.windowEndDate,
+    status: "Withdrawn",
     remarks: input.remarks,
     createdBy: input.user.uid,
     createdByName: input.user.displayName || input.user.email,
     createdAt: stamp,
   };
-  batch.set(withdrawalRef, withdrawalPayload);
+  batch.set(
+    withdrawalRef,
+    omitUndefined(withdrawalPayload as unknown as Record<string, unknown>)
+  );
 
   batch.update(doc(getDb(), COLLECTIONS.studyPullPoints, pull.id), {
     actualQuantity: newActual,
@@ -577,13 +818,6 @@ export async function withdrawSample(input: {
     completedDate: pullStatus === "Withdrawn" ? input.withdrawalDate : null,
     updatedAt: stamp,
   });
-
-  const remainingPulls = (await listPullPoints({ sampleDocId: sample.id }))
-    .filter((p) => p.id !== pull.id)
-    .concat([{ ...pull, actualQuantity: newActual, status: pullStatus }]);
-  const nextOpen = remainingPulls
-    .filter((p) => p.status !== "Withdrawn")
-    .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
 
   batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
     withdrawnQuantity: newWithdrawn,
@@ -594,9 +828,7 @@ export async function withdrawSample(input: {
   });
 
   batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-    withdrawnQuantity: newWithdrawn,
-    availableQuantity: newAvailable,
-    status: studyStatusFromSample(newSampleStatus),
+    ...studyPatch,
     nextPullDate: nextOpen?.plannedDate ?? null,
     updatedAt: stamp,
   });
@@ -606,22 +838,28 @@ export async function withdrawSample(input: {
     updatedAt: stamp,
   });
 
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), {
-    transactionId: txId,
-    sampleId: sample.sampleId,
-    sampleDocId: sample.id,
-    studyId: sample.studyId,
-    productName: sample.productName,
-    batchNumber: sample.batchNumber,
-    transactionType: "SAMPLE_WITHDRAWN" as TransactionType,
-    quantity: input.actualQuantity,
-    fromLocation: sample.locationLabel,
-    reason: `Withdrawal ${pull.pullPoint}`,
-    remarks: input.remarks,
-    performedBy: input.user.uid,
-    performedByName: input.user.displayName || input.user.email,
-    performedAt: stamp,
-  } satisfies Omit<InventoryTransaction, "id">);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
+    omitUndefined({
+      transactionId: txId,
+      sampleId: sample.sampleId,
+      sampleDocId: sample.id,
+      studyId: sample.studyId,
+      productName: sample.productName,
+      batchNumber: sample.batchNumber,
+      transactionType: "SAMPLE_WITHDRAWN" as TransactionType,
+      quantity: input.actualQuantity,
+      unit: sample.unit,
+      previousBalance: sample.availableQuantity,
+      newBalance: newAvailable,
+      fromLocation: sample.locationLabel,
+      reason: `Withdrawal ${pull.pullPoint}`,
+      remarks: input.remarks,
+      performedBy: input.user.uid,
+      performedByName: input.user.displayName || input.user.email,
+      performedAt: stamp,
+    } as unknown as Record<string, unknown>)
+  );
 
   await batch.commit();
 
@@ -634,6 +872,15 @@ export async function withdrawSample(input: {
     userName: input.user.displayName || input.user.email,
     userEmail: input.user.email,
   });
+
+  try {
+    await createAnalysisRequestFromWithdrawal(
+      { id: withdrawalRef.id, ...withdrawalPayload },
+      { user: input.user }
+    );
+  } catch (err) {
+    console.error("Withdrawal saved but analysis request failed:", err);
+  }
 
   return { withdrawalDocId: withdrawalRef.id, withdrawalId };
 }
@@ -676,6 +923,8 @@ export async function moveSample(input: {
     throw new Error("Destination location does not belong to the selected chamber.");
   }
 
+  await assertLocationAvailable(input.toLocationId, sample.id);
+
   const qty = Number(sample.availableQuantity || 0);
   const changingChamber = sample.chamberId !== input.toChamberId;
   if (changingChamber && qty > 0) {
@@ -716,7 +965,10 @@ export async function moveSample(input: {
     createdByName: input.user.displayName || input.user.email,
     createdAt: stamp,
   };
-  batch.set(doc(collection(getDb(), COLLECTIONS.sampleMovements)), movementPayload);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.sampleMovements)),
+    omitUndefined(movementPayload as unknown as Record<string, unknown>)
+  );
 
   batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
     chamberId: input.toChamberId,
@@ -726,13 +978,28 @@ export async function moveSample(input: {
     updatedAt: stamp,
   });
 
-  batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-    chamberId: input.toChamberId,
-    chamberName: input.toChamberName,
-    locationId: input.toLocationId,
-    locationLabel: input.toLocationLabel,
-    updatedAt: stamp,
-  });
+  const siblings = await listSamplesByStudy(sample.studyDocId);
+  const afterMove = siblings.map((s) =>
+    s.id === sample.id
+      ? {
+          ...s,
+          chamberId: input.toChamberId,
+          chamberName: input.toChamberName,
+          locationId: input.toLocationId,
+          locationLabel: input.toLocationLabel,
+        }
+      : s
+  );
+  const sameLocation = afterMove.every((s) => s.locationId === input.toLocationId);
+  if (sameLocation) {
+    batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
+      chamberId: input.toChamberId,
+      chamberName: input.toChamberName,
+      locationId: input.toLocationId,
+      locationLabel: input.toLocationLabel,
+      updatedAt: stamp,
+    });
+  }
 
   if (changingChamber) {
     if (sample.chamberId) {
@@ -750,23 +1017,26 @@ export async function moveSample(input: {
     });
   }
 
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), {
-    transactionId: txId,
-    sampleId: sample.sampleId,
-    sampleDocId: sample.id,
-    studyId: sample.studyId,
-    productName: sample.productName,
-    batchNumber: sample.batchNumber,
-    transactionType: "SAMPLE_TRANSFERRED",
-    quantity: qty,
-    fromLocation: sample.locationLabel,
-    toLocation: input.toLocationLabel,
-    reason: input.reason.trim(),
-    remarks: input.remarks,
-    performedBy: input.user.uid,
-    performedByName: input.user.displayName || input.user.email,
-    performedAt: stamp,
-  } satisfies Omit<InventoryTransaction, "id">);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
+    omitUndefined({
+      transactionId: txId,
+      sampleId: sample.sampleId,
+      sampleDocId: sample.id,
+      studyId: sample.studyId,
+      productName: sample.productName,
+      batchNumber: sample.batchNumber,
+      transactionType: "SAMPLE_TRANSFERRED",
+      quantity: qty,
+      fromLocation: sample.locationLabel,
+      toLocation: input.toLocationLabel,
+      reason: input.reason.trim(),
+      remarks: input.remarks,
+      performedBy: input.user.uid,
+      performedByName: input.user.displayName || input.user.email,
+      performedAt: stamp,
+    } as unknown as Record<string, unknown>)
+  );
 
   await batch.commit();
   await writeAuditLog({
@@ -829,14 +1099,17 @@ export async function reconcileSample(input: {
     createdAt: stamp,
     updatedAt: stamp,
   };
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryReconciliations)), payload);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.inventoryReconciliations)),
+    omitUndefined(payload as unknown as Record<string, unknown>)
+  );
 
   if (input.adjust && variance !== 0) {
     const newAvailable = input.physicalQuantity;
     const delta = sample.availableQuantity - newAvailable;
     const newWithdrawn = sample.withdrawnQuantity;
     // Adjust total so available formula holds: available = total - withdrawn - disposed
-    const newTotal = newAvailable + newWithdrawn + sample.disposedQuantity;
+    const newTotal = newAvailable + newWithdrawn + sample.disposedQuantity - (sample.returnedQuantity || 0);
     const capacityDelta = newAvailable - sample.availableQuantity;
     const newStatus = sampleStatusFromQty({
       totalQuantity: newTotal,
@@ -844,6 +1117,13 @@ export async function reconcileSample(input: {
       disposedQuantity: sample.disposedQuantity,
       availableQuantity: newAvailable,
     });
+    const updatedSample: StabilitySample = {
+      ...sample,
+      totalQuantity: newTotal,
+      availableQuantity: newAvailable,
+      status: newStatus,
+    };
+    const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
 
     if (sample.chamberId && capacityDelta !== 0) {
       const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
@@ -866,28 +1146,29 @@ export async function reconcileSample(input: {
       updatedAt: stamp,
     });
     batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-      totalQuantity: newTotal,
-      availableQuantity: newAvailable,
-      status: studyStatusFromSample(newStatus),
+      ...studyPatch,
       updatedAt: stamp,
     });
 
     const txId = await nextSequentialId("TRX");
-    batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), {
-      transactionId: txId,
-      sampleId: sample.sampleId,
-      sampleDocId: sample.id,
-      studyId: sample.studyId,
-      productName: sample.productName,
-      batchNumber: sample.batchNumber,
-      transactionType: "SAMPLE_ADJUSTED",
-      quantity: Math.abs(delta),
-      reason: input.reason,
-      remarks: input.remarks,
-      performedBy: input.user.uid,
-      performedByName: input.user.displayName || input.user.email,
-      performedAt: stamp,
-    } satisfies Omit<InventoryTransaction, "id">);
+    batch.set(
+      doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
+      omitUndefined({
+        transactionId: txId,
+        sampleId: sample.sampleId,
+        sampleDocId: sample.id,
+        studyId: sample.studyId,
+        productName: sample.productName,
+        batchNumber: sample.batchNumber,
+        transactionType: "SAMPLE_ADJUSTED",
+        quantity: Math.abs(delta),
+        reason: input.reason,
+        remarks: input.remarks,
+        performedBy: input.user.uid,
+        performedByName: input.user.displayName || input.user.email,
+        performedAt: stamp,
+      } as unknown as Record<string, unknown>)
+    );
   } else if (variance !== 0) {
     batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
       status: "Under Reconciliation",
@@ -896,12 +1177,14 @@ export async function reconcileSample(input: {
   } else if (sample.status === "Under Reconciliation") {
     // Matched count clears prior under-reconciliation hold.
     const cleared = sampleStatusFromQty(sample);
+    const updatedSample: StabilitySample = { ...sample, status: cleared };
+    const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
     batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
       status: cleared,
       updatedAt: stamp,
     });
     batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-      status: studyStatusFromSample(cleared),
+      ...studyPatch,
       updatedAt: stamp,
     });
   }
@@ -952,30 +1235,45 @@ export async function disposeSample(input: {
   const txId = await nextSequentialId("TRX");
   const stamp = nowISO();
   const newDisposed = sample.disposedQuantity + input.quantity;
-  const newAvailable = calcAvailableQuantity(sample.totalQuantity, sample.withdrawnQuantity, newDisposed);
+  const newAvailable = calcAvailableQuantity(
+    sample.totalQuantity,
+    sample.withdrawnQuantity,
+    newDisposed,
+    sample.returnedQuantity || 0
+  );
   const newStatus = sampleStatusFromQty({
     ...sample,
     disposedQuantity: newDisposed,
     availableQuantity: newAvailable,
   });
+  const updatedSample: StabilitySample = {
+    ...sample,
+    disposedQuantity: newDisposed,
+    availableQuantity: newAvailable,
+    status: newStatus,
+  };
+  const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
 
   const batch = writeBatch(getDb());
-  batch.set(doc(collection(getDb(), COLLECTIONS.sampleDisposals)), {
-    disposalId,
-    sampleId: sample.sampleId,
-    sampleDocId: sample.id,
-    studyId: sample.studyId,
-    productName: sample.productName,
-    batchNumber: sample.batchNumber,
-    quantity: input.quantity,
-    disposalDate: input.disposalDate,
-    reason: input.reason,
-    disposedBy: input.disposedBy.trim(),
-    remarks: input.remarks?.trim() || undefined,
-    createdBy: input.user.uid,
-    createdByName: input.user.displayName || input.user.email,
-    createdAt: stamp,
-  } satisfies Omit<SampleDisposal, "id">);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.sampleDisposals)),
+    omitUndefined({
+      disposalId,
+      sampleId: sample.sampleId,
+      sampleDocId: sample.id,
+      studyId: sample.studyId,
+      productName: sample.productName,
+      batchNumber: sample.batchNumber,
+      quantity: input.quantity,
+      disposalDate: input.disposalDate,
+      reason: input.reason,
+      disposedBy: input.disposedBy.trim(),
+      remarks: input.remarks?.trim() || undefined,
+      createdBy: input.user.uid,
+      createdByName: input.user.displayName || input.user.email,
+      createdAt: stamp,
+    } as unknown as Record<string, unknown>)
+  );
 
   batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
     disposedQuantity: newDisposed,
@@ -984,9 +1282,7 @@ export async function disposeSample(input: {
     updatedAt: stamp,
   });
   batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-    disposedQuantity: newDisposed,
-    availableQuantity: newAvailable,
-    status: studyStatusFromSample(newStatus),
+    ...studyPatch,
     updatedAt: stamp,
   });
 
@@ -1000,22 +1296,28 @@ export async function disposeSample(input: {
     }
   }
 
-  batch.set(doc(collection(getDb(), COLLECTIONS.inventoryTransactions)), {
-    transactionId: txId,
-    sampleId: sample.sampleId,
-    sampleDocId: sample.id,
-    studyId: sample.studyId,
-    productName: sample.productName,
-    batchNumber: sample.batchNumber,
-    transactionType: "SAMPLE_DISPOSED",
-    quantity: input.quantity,
-    fromLocation: sample.locationLabel,
-    reason: input.reason,
-    remarks: input.remarks?.trim() || undefined,
-    performedBy: input.user.uid,
-    performedByName: input.user.displayName || input.user.email,
-    performedAt: stamp,
-  } satisfies Omit<InventoryTransaction, "id">);
+  batch.set(
+    doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
+    omitUndefined({
+      transactionId: txId,
+      sampleId: sample.sampleId,
+      sampleDocId: sample.id,
+      studyId: sample.studyId,
+      productName: sample.productName,
+      batchNumber: sample.batchNumber,
+      transactionType: "SAMPLE_DISPOSED",
+      quantity: input.quantity,
+      unit: sample.unit,
+      previousBalance: sample.availableQuantity,
+      newBalance: newAvailable,
+      fromLocation: sample.locationLabel,
+      reason: input.reason,
+      remarks: input.remarks?.trim() || undefined,
+      performedBy: input.user.uid,
+      performedByName: input.user.displayName || input.user.email,
+      performedAt: stamp,
+    } as unknown as Record<string, unknown>)
+  );
 
   await batch.commit();
   await writeAuditLog({
@@ -1032,7 +1334,7 @@ export async function disposeSample(input: {
 }
 
 export async function refreshAlerts() {
-  const [pulls, samples, chambers, reconciliations] = await Promise.all([
+  const [pulls, samples, chambers, reconciliations, settings] = await Promise.all([
     listPullPoints(),
     listSamples(),
     getDocs(collection(getDb(), COLLECTIONS.chambers)).then((s) =>
@@ -1046,6 +1348,7 @@ export async function refreshAlerts() {
       })
     ),
     listReconciliations(),
+    getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS),
   ]);
 
   const existing = await listAlerts();
@@ -1066,7 +1369,7 @@ export async function refreshAlerts() {
     if (remaining <= 0) continue;
 
     // Use date urgency even for Partially Withdrawn (remaining qty still due).
-    const urgency = pullDueUrgency(p.plannedDate);
+    const urgency = pullDueUrgency(p.plannedDate, settings.withdrawalWindowDays);
     if (urgency === "Due Soon") {
       alerts.push({
         alertType: "WITHDRAWAL_DUE_7_DAYS",

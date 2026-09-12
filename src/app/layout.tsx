@@ -38,7 +38,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${plusJakarta.variable} ${sourceSans.variable} h-full`}>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${plusJakarta.variable} ${sourceSans.variable} h-full`}
+    >
       <body className="min-h-full antialiased">{children}</body>
     </html>
   );

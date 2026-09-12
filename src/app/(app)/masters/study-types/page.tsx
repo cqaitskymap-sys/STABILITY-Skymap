@@ -6,9 +6,11 @@ import { listStudyTypes } from "@/services/masters";
 import type { StudyType } from "@/types";
 
 const STUDY_TYPE_PRESETS = [
-  { name: "Accelerated", code: "Acc" },
-  { name: "Long Term", code: "Lt" },
-  { name: "Intermediate", code: "Int" },
+  { name: "Accelerated", code: "Acc", workflow: "standard-inventory" },
+  { name: "Long Term", code: "Lt", workflow: "standard-inventory" },
+  { name: "Intermediate", code: "Int", workflow: "standard-inventory" },
+  { name: "Photostability", code: "Photo", workflow: "photostability" },
+  { name: "In-use Stability", code: "InUse", workflow: "in-use" },
 ] as const;
 
 function codeForName(name: string) {
@@ -53,7 +55,7 @@ export default function StudyTypesPage() {
             { label: "Select code", value: "" },
             ...STUDY_TYPE_PRESETS.map((p) => ({ label: p.code, value: p.code })),
           ],
-          hint: "Acc, Lt, or Int — matches the selected name.",
+          hint: "Acc, Lt, Int, Photo, or InUse — matches the selected name. Photostability and In-use use a separate workflow flag.",
           syncOnChange: (code) => ({ name: nameForCode(code) }),
         },
         { key: "description", label: "Description", placeholder: "Optional notes" },
@@ -98,7 +100,7 @@ export default function StudyTypesPage() {
         description: values.description.trim() || undefined,
         sortOrder: sortOrderForName(values.name.trim()),
         status: values.status,
-        ...(isCreate ? { defaultPullPointIds: [] } : {}),
+        ...(isCreate ? { defaultPullPointIds: [], workflow: STUDY_TYPE_PRESETS.find((p) => p.name === values.name.trim())?.workflow || "standard-inventory" } : {}),
       })}
     />
   );

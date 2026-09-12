@@ -30,13 +30,6 @@ function chamberOptionLabel(preset: (typeof CHAMBER_PRESETS)[number]) {
   return `${preset.chamberId} — ${condition} — ${preset.studyType}`;
 }
 
-function conditionFromPreset(preset: (typeof CHAMBER_PRESETS)[number]) {
-  return {
-    temperature: preset.temperature,
-    relativeHumidity: preset.relativeHumidity,
-  };
-}
-
 export default function ChambersPage() {
   return (
     <MasterPage<Chamber>
@@ -47,37 +40,55 @@ export default function ChambersPage() {
       loader={listChambers}
       fields={[
         {
-          key: "chamberId",
-          label: "Chamber ID",
+          key: "presetId",
+          label: "Apply chamber preset",
           type: "select",
-          required: true,
           options: [
-            { label: "Select chamber", value: "" },
+            { label: "None — enter Chamber ID manually", value: "" },
             ...CHAMBER_PRESETS.map((p) => ({ label: chamberOptionLabel(p), value: p.chamberId })),
           ],
-          hint: "Unique business ID used in reports and labels.",
-          syncOnChange: (chamberId) => {
-            const preset = presetForId(chamberId);
-            return preset ? conditionFromPreset(preset) : { temperature: "", relativeHumidity: "" };
+          hint: "Optional shortcut. Presets fill ID and set points; they are not a hard-coded plant code.",
+          syncOnChange: (value): Record<string, string> => {
+            const preset = presetForId(value);
+            if (!preset) return {};
+            return {
+              chamberId: preset.chamberId,
+              temperature: preset.temperature,
+              relativeHumidity: preset.relativeHumidity,
+              chamberType: preset.studyType,
+            };
           },
         },
         {
-          key: "temperature",
-          label: "Temperature",
+          key: "chamberId",
+          label: "Chamber ID",
           required: true,
-          readOnly: true,
+          hint: "Unique business ID. Presets are optional shortcuts, not a hard-coded plant code.",
         },
+        { key: "chamberName", label: "Chamber Name" },
         {
-          key: "relativeHumidity",
-          label: "Relative Humidity",
-          readOnly: true,
+          key: "chamberType",
+          label: "Chamber Type",
         },
+        { key: "location", label: "Location" },
+        { key: "temperature", label: "Set Temperature" },
+        { key: "relativeHumidity", label: "Set RH" },
+        { key: "temperatureChannels", label: "Temperature channels", type: "number" },
+        { key: "humidityChannels", label: "Humidity channels", type: "number" },
+        { key: "calibrationDueDate", label: "Calibration due", type: "date" },
+        { key: "mappingDueDate", label: "Mapping due", type: "date" },
+        { key: "capacity", label: "Capacity", type: "number", required: true },
         {
-          key: "capacity",
-          label: "Capacity",
-          type: "number",
+          key: "status",
+          label: "Status",
+          type: "select",
           required: true,
-          hint: "Total sample units the chamber can hold. Used capacity is updated by charging/withdrawals.",
+          options: [
+            { label: "Active", value: "Active" },
+            { label: "Under Maintenance", value: "Under Maintenance" },
+            { label: "Inactive", value: "Inactive" },
+            { label: "Out of Service", value: "Out of Service" },
+          ],
         },
       ]}
       mapRow={(item) => {
@@ -91,19 +102,19 @@ export default function ChambersPage() {
           Used: used,
           Free: free,
           "Utilization %": roundPct(used, capacity),
+          Status: item.status || "Active",
         };
       }}
       getCreateDefaults={() => ({
         capacity: "100",
+        status: "Active",
       })}
       validate={({ values, items, editing }) => {
         const chamberId = values.chamberId.trim();
-        const preset = presetForId(chamberId);
         const capacity = Number(values.capacity);
         const used = Number(editing?.usedCapacity) || 0;
-        const legacyMatch = !!editing && editing.chamberId.trim().toUpperCase() === chamberId.toUpperCase();
 
-        if (!preset && !legacyMatch) return "Select a chamber ID.";
+        if (!chamberId) return "Chamber ID is required.";
         if (!Number.isFinite(capacity) || capacity <= 0) {
           return "Capacity must be greater than zero.";
         }
@@ -121,24 +132,26 @@ export default function ChambersPage() {
       buildPayload={(values, isCreate) => {
         const chamberId = values.chamberId.trim();
         const preset = presetForId(chamberId);
-        const temperature = preset?.temperature || values.temperature.trim();
-        const relativeHumidity = preset ? preset.relativeHumidity : values.relativeHumidity.trim();
+        const temperature = values.temperature.trim() || preset?.temperature || "";
+        const relativeHumidity = values.relativeHumidity.trim() || preset?.relativeHumidity || "";
         return {
-          chamberId: preset?.chamberId || chamberId,
-          chamberName: preset?.chamberId || chamberId,
+          chamberId,
+          chamberName: values.chamberName.trim() || chamberId,
+          chamberType: values.chamberType.trim() || preset?.studyType || "",
+          location: values.location.trim(),
           temperature,
           relativeHumidity,
+          temperatureChannels: Number(values.temperatureChannels) || 0,
+          humidityChannels: Number(values.humidityChannels) || 0,
+          calibrationDueDate: values.calibrationDueDate || undefined,
+          mappingDueDate: values.mappingDueDate || undefined,
           capacity: Number(values.capacity) || 0,
+          status: values.status || "Active",
           ...(isCreate
             ? {
-                chamberType: preset?.studyType || "",
-                location: "",
-                status: "Active",
                 usedCapacity: 0,
               }
-            : preset
-              ? { chamberType: preset.studyType }
-              : {}),
+            : {}),
         };
       }}
     />

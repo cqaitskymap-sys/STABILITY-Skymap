@@ -51,13 +51,20 @@ export function Button({
 const fieldClass =
   "h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm";
 
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string; hint?: string }>(
-  function Input({ className, label, error, hint, id, type, onChange, ...props }, ref) {
+export const Input = forwardRef<
+  HTMLInputElement,
+  InputHTMLAttributes<HTMLInputElement> & {
+    label?: string;
+    error?: string;
+    hint?: string;
+    uppercase?: boolean;
+  }
+>(function Input({ className, label, error, hint, id, type, onChange, uppercase: uppercaseProp, ...props }, ref) {
     const inputId = id || props.name;
     const [passwordVisible, setPasswordVisible] = useState(false);
     const isPassword = type === "password";
     const inputType = isPassword ? (passwordVisible ? "text" : "password") : type;
-    const uppercase = shouldUppercaseInput(type);
+    const uppercase = uppercaseProp ?? shouldUppercaseInput(type);
 
     return (
       <label className="block space-y-1.5">
@@ -72,7 +79,9 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
             ref={ref}
             id={inputId}
             type={inputType}
-            autoCapitalize={uppercase ? "characters" : undefined}
+            autoCapitalize={uppercase ? "characters" : "off"}
+            autoCorrect={uppercase ? undefined : "off"}
+            spellCheck={uppercase ? undefined : false}
             className={cn(
               fieldClass,
               isPassword && "pr-10",
@@ -84,6 +93,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
               onChange?.(e);
             }}
             {...props}
+            data-no-uppercase={uppercase ? undefined : ""}
           />
           {isPassword ? (
             <button
@@ -244,6 +254,47 @@ export function StatusBadge({ status }: { status: string }) {
     "Under Maintenance": "yellow",
     Inactive: "slate",
     Draft: "slate",
+    Collected: "blue",
+    Submitted: "teal",
+    Received: "yellow",
+    "Verification Pending": "yellow",
+    "Verification Exception": "red",
+    Stored: "green",
+    "Observation Due": "orange",
+    "Observation Completed": "green",
+    OK: "green",
+    "Abnormal Observation": "red",
+    "QA Review": "orange",
+    "Destruction Eligible": "orange",
+    "Destruction Hold": "red",
+    "Note Created": "blue",
+    "QA Initiated": "teal",
+    "Destroyed Pending Verification": "orange",
+    Issued: "blue",
+    Returned: "green",
+    Rejected: "red",
+    Hold: "red",
+    "Due": "orange",
+    "Within Window": "yellow",
+    "Sent to QC": "teal",
+    "Received - Awaiting COA": "yellow",
+    "COA Received - Ready for Charging": "green",
+    Charged: "teal",
+    Acknowledged: "yellow",
+    Rectified: "blue",
+    Closed: "green",
+    Voided: "slate",
+    "QA Assessment": "orange",
+    Retention: "purple",
+    "Partially Issued": "teal",
+    Valid: "green",
+    Expired: "red",
+    "Out of Service": "red",
+    "Pending Authorization": "yellow",
+    Approved: "green",
+    Destroyed: "slate",
+    Verified: "green",
+    Cancelled: "slate",
     "SAMPLE CHARGED": "green",
     "SAMPLE ALLOCATED": "teal",
     "SAMPLE WITHDRAWN": "blue",

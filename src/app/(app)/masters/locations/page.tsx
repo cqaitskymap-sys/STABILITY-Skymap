@@ -11,8 +11,7 @@ import type { StorageLocation } from "@/types";
 
 export default function LocationsPage() {
   const chambers = useAsync(listChambers, []);
-
-  const allChambers = chambers.data || [];
+  const allChambers = useMemo(() => chambers.data || [], [chambers.data]);
 
   const chamberOptions = useMemo(
     () =>
@@ -97,6 +96,16 @@ export default function LocationsPage() {
             required: true,
             placeholder: "e.g. S2",
           },
+          {
+            key: "status",
+            label: "Status",
+            type: "select",
+            required: true,
+            options: [
+              { label: "Active", value: "Active" },
+              { label: "Inactive", value: "Inactive" },
+            ],
+          },
         ]}
         mapRow={(item) => ({
           Label: item.label,
@@ -104,9 +113,11 @@ export default function LocationsPage() {
             allChambers.find((c) => c.id === item.chamberId)?.chamberId || item.chamberName,
           Tray: item.rack,
           Shelf: item.shelf,
+          Status: item.status || "Active",
         })}
         getCreateDefaults={() => ({
           chamberId: firstActiveChamberId,
+          status: "Active",
         })}
         validate={({ values, items, editing }) => {
           const chamberId = values.chamberId.trim();
@@ -147,7 +158,8 @@ export default function LocationsPage() {
             chamberName,
             rack,
             shelf,
-            ...(isCreate ? { position: "", status: "Active" } : {}),
+            status: values.status || "Active",
+            ...(isCreate ? { position: "" } : {}),
             label: buildLocationLabel(chamberName, rack, shelf, ""),
           };
         }}

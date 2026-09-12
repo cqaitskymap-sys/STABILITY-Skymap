@@ -34,6 +34,8 @@ const OPEN_STATUSES: PullPointStatus[] = [
   "Upcoming",
   "Due Soon",
   "Due Today",
+  "Due",
+  "Within Window",
   "Overdue",
   "Partially Withdrawn",
 ];

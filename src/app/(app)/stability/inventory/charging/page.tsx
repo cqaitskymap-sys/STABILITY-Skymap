@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, PackagePlus, RefreshCw } from "lucide-react";
 import {
@@ -31,7 +31,10 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { addMonthsToDate, formatDate, friendlyError, todayISO } from "@/lib/utils";
+import { isChargingBeyondWindow, splitOrientation, DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { createStudyAndCharge } from "@/services/inventory";
+import { listSampleReceipts } from "@/services/receipts";
+import { getOrganizationSettings } from "@/services/organization";
 import {
   listBatches,
   listChambers,
@@ -39,17 +42,28 @@ import {
   listProducts,
   listPullPoints as listPullPointMasters,
   listStorageConditions,
+  listStudyReasons,
   listStudyTypes,
   listUnits,
 } from "@/services/masters";
 
 export default function SampleChargingPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton rows={8} />}>
+      <SampleChargingPageInner />
+    </Suspense>
+  );
+}
+
+function SampleChargingPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const receiptFromUrl = searchParams.get("receipt") || "";
   const { profile, hasPermission } = useAuth();
   const canCharge = hasPermission("charging.perform") || hasPermission("studies.create");
 
   const masters = useAsync(async () => {
-    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units] =
+    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, receipts, settings] =
       await Promise.all([
         listProducts(),
         listBatches(),
@@ -59,14 +73,37 @@ export default function SampleChargingPage() {
         listChambers(),
         listLocations(),
         listUnits(),
+        listStudyReasons(),
+        listSampleReceipts(),
+        getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS),
       ]);
-    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units };
+    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, receipts, settings };
   }, []);
 
   const [form, setForm] = useState<ChargeFormState>(() => emptyChargeForm(todayISO()));
   const [errors, setErrors] = useState<ChargeFormErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!receiptFromUrl || !masters.data) return;
+    const receipt = masters.data.receipts.find((r) => r.id === receiptFromUrl);
+    if (!receipt) return;
+    if (receipt.status !== "COA Received - Ready for Charging") {
+      toast.error("This inward record is not ready for charging. Mark COA received first.");
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      receiptDocId: receipt.id,
+      productId: receipt.productId,
+      batchId: receipt.batchId,
+      manufacturingDate: receipt.manufacturingDate,
+      expiryDate: receipt.expiryDate,
+      totalQuantity: String(receipt.sampleQuantity),
+      unit: receipt.unit,
+    }));
+  }, [receiptFromUrl, masters.data]);
 
   const activeProducts = useMemo(
     () => (masters.data?.products || []).filter((p) => p.status === "Active"),
@@ -119,6 +156,25 @@ export default function SampleChargingPage() {
   const chamberAvailable = selectedChamber
     ? Math.max(0, Number(selectedChamber.capacity || 0) - Number(selectedChamber.usedCapacity || 0))
     : null;
+
+  const selectedBatch = productBatches.find((b) => b.id === form.batchId);
+  const chargingWindowDays =
+    masters.data?.settings.chargingWindowDays ?? DEFAULT_ORG_SETTINGS.chargingWindowDays;
+  const requireLateChargingReason =
+    masters.data?.settings.requireLateChargingReason ?? DEFAULT_ORG_SETTINGS.requireLateChargingReason;
+  const lateCharging = isChargingBeyondWindow(
+    selectedBatch?.releaseDate,
+    form.chargingDate,
+    chargingWindowDays
+  );
+  const orientation = splitOrientation(
+    totalQuantity,
+    form.applyInvertedSplit ? Number(form.invertedPercent || 25) : 0
+  );
+  const readyReceipts = (masters.data?.receipts || []).filter(
+    (r) => r.status === "COA Received - Ready for Charging"
+  );
+  const activeReasons = (masters.data?.reasons || []).filter((r) => r.status === "Active");
 
   function updateField<K extends keyof ChargeFormState>(key: K, value: ChargeFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -197,6 +253,12 @@ export default function SampleChargingPage() {
       return;
     }
     if (!validate()) return;
+    if (lateCharging && requireLateChargingReason && !form.lateChargingReason.trim()) {
+      toast.error(
+        `Charging beyond ${chargingWindowDays} days of batch release requires a reason.`
+      );
+      return;
+    }
     setConfirmOpen(true);
   }
 
@@ -273,6 +335,34 @@ export default function SampleChargingPage() {
             />
             <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
               <Select
+                label="Inward record (optional)"
+                value={form.receiptDocId}
+                onChange={(e) => {
+                  const receipt = readyReceipts.find((r) => r.id === e.target.value);
+                  updateField("receiptDocId", e.target.value);
+                  if (receipt) {
+                    setForm((prev) => ({
+                      ...prev,
+                      receiptDocId: receipt.id,
+                      productId: receipt.productId,
+                      batchId: receipt.batchId,
+                      manufacturingDate: receipt.manufacturingDate,
+                      expiryDate: receipt.expiryDate,
+                      totalQuantity: String(receipt.sampleQuantity),
+                      unit: receipt.unit,
+                    }));
+                  }
+                }}
+                hint="Prefer charging from a COA-cleared inward record."
+              >
+                <option value="">No inward record selected</option>
+                {readyReceipts.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.receiptId} — {r.productName} / {r.batchNumber}
+                  </option>
+                ))}
+              </Select>
+              <Select
                 label="Product"
                 required
                 value={form.productId}
@@ -338,8 +428,38 @@ export default function SampleChargingPage() {
                 required
                 value={form.chargingDate}
                 error={errors.chargingDate}
-                onChange={(e) => updateField("chargingDate", e.target.value)}
+                onChange={(e) => {
+                  updateField("chargingDate", e.target.value);
+                  if (!form.incubationDate || form.incubationDate === form.chargingDate) {
+                    updateField("incubationDate", e.target.value);
+                  }
+                }}
               />
+              <Input
+                label="Incubation / Charging Date (pull calculation)"
+                type="date"
+                required
+                value={form.incubationDate}
+                hint="Pull dates are calculated from this date, not manufacturing date."
+                onChange={(e) => updateField("incubationDate", e.target.value)}
+              />
+              <Select
+                label="Study Reason"
+                value={form.studyReasonId}
+                onChange={(e) => updateField("studyReasonId", e.target.value)}
+                hint={
+                  activeReasons.length
+                    ? undefined
+                    : "Configure reasons in Masters if you need protocol-defined study reasons."
+                }
+              >
+                <option value="">Select reason (optional)</option>
+                {activeReasons.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
               <Select
                 label="Study Type"
                 required
@@ -497,12 +617,67 @@ export default function SampleChargingPage() {
               </div>
             </div>
             <div className="px-4 pb-4">
+              {lateCharging ? (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">
+                    Charging beyond {chargingWindowDays} days of batch release
+                  </p>
+                  <p className="mt-1">
+                    Release date {selectedBatch?.releaseDate || "not recorded"}.
+                    {requireLateChargingReason
+                      ? " A reason is required before charging."
+                      : " Record a reason if this needs explanation."}
+                  </p>
+                  <div className="mt-3">
+                    <Textarea
+                      label="Late charging reason"
+                      required
+                      value={form.lateChargingReason}
+                      onChange={(e) => updateField("lateChargingReason", e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <Textarea
                 label="Notes"
                 value={form.notes}
                 onChange={(e) => updateField("notes", e.target.value)}
                 placeholder="Optional charging remarks"
               />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Orientation (25% inverted default)"
+              description="Used to study compatibility with the closure system. Protocol may override the default split."
+            />
+            <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={form.applyInvertedSplit}
+                  onChange={(e) => setForm((prev) => ({ ...prev, applyInvertedSplit: e.target.checked }))}
+                />
+                Apply inverted split
+              </label>
+              <Input
+                label="Inverted %"
+                type="number"
+                min={0}
+                max={100}
+                value={form.invertedPercent}
+                disabled={!form.applyInvertedSplit}
+                onChange={(e) => updateField("invertedPercent", e.target.value)}
+              />
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Upright</p>
+                <p className="text-lg font-semibold text-slate-900">{orientation.uprightQuantity}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Inverted</p>
+                <p className="text-lg font-semibold text-slate-900">{orientation.invertedQuantity}</p>
+              </div>
             </div>
           </Card>
 

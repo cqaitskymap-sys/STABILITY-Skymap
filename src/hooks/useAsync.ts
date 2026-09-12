@@ -17,6 +17,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   });
   const [version, setVersion] = useState(0);
   const depsKey = JSON.stringify(deps);
+  const [resolvedKey, setResolvedKey] = useState(depsKey);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +27,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
       .then((result) => {
         if (!cancelled) {
           setState({ data: result, loading: false, error: null });
+          setResolvedKey(depsKey);
         }
       })
       .catch((err) => {
@@ -35,6 +37,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
             loading: false,
             error: friendlyError(err, "Unable to load data. Please try again."),
           });
+          setResolvedKey(depsKey);
         }
       });
 
@@ -46,7 +49,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
 
   return {
     data: state.data,
-    loading: state.loading,
+    loading: state.loading || resolvedKey !== depsKey,
     error: state.error,
     reload: () => {
       setState((prev) => ({ ...prev, loading: true, error: null }));

@@ -16,6 +16,9 @@ export default function ProductsPage() {
       fields={[
         { key: "productName", label: "Product Name", required: true },
         { key: "productCode", label: "Product Code" },
+        { key: "genericName", label: "Generic Name" },
+        { key: "labelClaim", label: "Label Claim" },
+        { key: "stpNumber", label: "STP Number" },
         { key: "strength", label: "Strength" },
         { key: "dosageForm", label: "Dosage Form" },
         {
@@ -39,6 +42,9 @@ export default function ProductsPage() {
       buildPayload={(values) => ({
         productName: values.productName.trim(),
         productCode: values.productCode.trim() || undefined,
+        genericName: values.genericName.trim() || undefined,
+        labelClaim: values.labelClaim.trim() || undefined,
+        stpNumber: values.stpNumber.trim() || undefined,
         strength: values.strength.trim() || undefined,
         dosageForm: values.dosageForm.trim() || undefined,
         status: values.status,

@@ -25,7 +25,7 @@ function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/stability/dashboard");
+    if (!loading && user) router.replace("/home");
   }, [loading, user, router]);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ function LoginForm() {
         clearRememberedLogin();
       }
       toast.success("Signed in successfully.");
-      router.replace("/stability/dashboard");
+      router.replace("/home");
     } catch (error) {
       toast.error(friendlyError(error, "Unable to sign in. Please try again."));
     } finally {
@@ -119,6 +119,7 @@ function LoginForm() {
                 label="Employee ID"
                 type="text"
                 required
+                uppercase={false}
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
                 autoComplete="username"
@@ -129,6 +130,7 @@ function LoginForm() {
                 type="password"
                 required
                 minLength={6}
+                uppercase={false}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"

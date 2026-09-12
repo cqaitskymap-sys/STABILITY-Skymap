@@ -9,10 +9,17 @@ import { Header } from "@/components/layout/header";
 import { AssistantPanel } from "@/components/ai/assistant-panel";
 import { LoadingSkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { resolveAppModule } from "@/lib/modules";
 import { listAlerts } from "@/services/inventory";
 
 const TITLE_MAP: Record<string, string> = {
+  "/home": "Select a module",
   "/stability/dashboard": "Stability Dashboard",
+  "/stability/control-samples": "Control Samples",
+  "/stability/admin/users": "User Management",
+  "/stability/admin/organization": "Organization",
+  "/stability/audit": "Audit Trail",
+  "/stability/backup": "Backup & Recovery",
   "/stability/studies": "Stability Studies",
   "/stability/studies/new": "Create Stability Study",
   "/stability/inventory": "Sample Inventory",
@@ -41,6 +48,9 @@ function resolveTitle(pathname: string) {
   if (pathname.startsWith("/stability/studies/")) return "Study Details";
   if (pathname.startsWith("/stability/inventory/")) return "Sample Details";
   if (pathname.startsWith("/stability/withdrawals/")) return "Withdrawal Details";
+  const moduleId = resolveAppModule(pathname);
+  if (moduleId === "control-samples") return "Control Samples";
+  if (moduleId === "admin") return "Admin";
   return "Stability Inventory";
 }
 
@@ -75,15 +85,32 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   }
 
   const title = resolveTitle(pathname);
-  const crumbs = [
-    { label: "Stability", href: "/stability/dashboard" },
-    { label: title },
-  ];
+  const currentModule = resolveAppModule(pathname);
+  const isHome = currentModule === "home";
+  const moduleLabel =
+    currentModule === "control-samples"
+      ? "Control Samples"
+      : currentModule === "admin"
+        ? "Admin"
+        : "Stability Inventory";
+  const moduleHref =
+    currentModule === "control-samples"
+      ? "/stability/control-samples"
+      : currentModule === "admin"
+        ? "/stability/admin/users"
+        : "/stability/dashboard";
+  const crumbs = isHome
+    ? undefined
+    : [
+        { label: "Modules", href: "/home" },
+        { label: moduleLabel, href: title === moduleLabel ? undefined : moduleHref },
+        ...(title === moduleLabel ? [] : [{ label: title }]),
+      ];
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} />
-      <div className={cn("min-w-0 transition-all", collapsed ? "lg:pl-[76px]" : "lg:pl-72")}>
+      {!isHome ? <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} /> : null}
+      <div className={cn("min-w-0 transition-all", isHome ? "" : collapsed ? "lg:pl-[76px]" : "lg:pl-72")}>
         <Header
           title={title}
           breadcrumbs={crumbs}
@@ -91,10 +118,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
           alertCount={alertCount}
+          hideNav={isHome}
         />
         <main className="animate-fade-up px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6 lg:px-8">{children}</main>
       </div>
-      <AssistantPanel />
+      {isHome ? null : <AssistantPanel />}
       <Toaster
         richColors
         position="top-center"

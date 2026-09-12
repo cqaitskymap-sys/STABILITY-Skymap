@@ -14,14 +14,24 @@ import { nowISO } from "@/lib/utils";
 import type {
   Chamber,
   MasterStatus,
+  PackagingMaterial,
   Product,
   PullPointMaster,
   StorageCondition,
   StorageLocation,
+  StudyReason,
   StudyType,
   Unit,
   Batch,
 } from "@/types";
+
+function omitUndefined<T extends Record<string, unknown>>(input: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out as T;
+}
 
 async function listCollection<T>(name: string, orderField = "createdAt") {
   try {
@@ -75,6 +85,15 @@ export async function listUnits() {
   return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
+export async function listStudyReasons() {
+  const rows = await listCollection<StudyReason>(COLLECTIONS.studyReasons, "sortOrder");
+  return rows.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+export async function listPackagingMaterials() {
+  return listCollection<PackagingMaterial>(COLLECTIONS.packagingMaterials);
+}
+
 export async function listProducts() {
   return listCollection<Product>(COLLECTIONS.products);
 }
@@ -95,13 +114,13 @@ export async function createMaster<T extends Record<string, unknown>>(
   collectionName: string,
   data: T
 ) {
-  const payload = { ...data, createdAt: nowISO(), updatedAt: nowISO() };
+  const payload = omitUndefined({ ...data, createdAt: nowISO(), updatedAt: nowISO() } as Record<string, unknown>);
   const ref = await addDoc(collection(getDb(), collectionName), payload);
   return { id: ref.id, ...payload };
 }
 
 export async function updateMaster(collectionName: string, id: string, data: Record<string, unknown>) {
-  await updateDoc(doc(getDb(), collectionName, id), { ...data, updatedAt: nowISO() });
+  await updateDoc(doc(getDb(), collectionName, id), omitUndefined({ ...data, updatedAt: nowISO() }));
 }
 
 export async function deleteMaster(collectionName: string, id: string) {

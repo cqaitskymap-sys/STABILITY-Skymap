@@ -18,7 +18,7 @@ export const MODULE_ACCESS: {
   {
     permission: "masters.manage",
     label: "Masters",
-    description: "Study types, conditions, chambers, locations, units",
+    description: "Study types, conditions, chambers, locations, units, reasons",
   },
   {
     permission: "studies.create",
@@ -29,6 +29,11 @@ export const MODULE_ACCESS: {
     permission: "studies.edit",
     label: "Edit Studies",
     description: "Update existing stability studies",
+  },
+  {
+    permission: "receiving.perform",
+    label: "Sample Inward",
+    description: "Receive stability samples and record COA status",
   },
   {
     permission: "charging.perform",
@@ -57,13 +62,48 @@ export const MODULE_ACCESS: {
   },
   {
     permission: "disposal.perform",
-    label: "Disposal",
-    description: "Dispose samples from inventory",
+    label: "Disposal / Destruction",
+    description: "Authorize and record sample destruction",
+  },
+  {
+    permission: "control.collect",
+    label: "Control Sample Collection (IPQA)",
+    description: "Collect control samples and submit daily collection records",
+  },
+  {
+    permission: "control.perform",
+    label: "Control Samples (QA)",
+    description: "Receive, verify, store, observe, withdraw, and prepare destruction",
+  },
+  {
+    permission: "chamber.ops",
+    label: "Chamber Operations",
+    description: "Alarms, excursions, cleaning, calibration, mapping, maintenance",
+  },
+  {
+    permission: "protocol.manage",
+    label: "Protocols & Reports",
+    description: "Stability protocols, study reports, and water-loss studies",
+  },
+  {
+    permission: "analysis.perform",
+    label: "Analysis Requests",
+    description: "Stability analysis request handoff to QC",
+  },
+  {
+    permission: "approve.records",
+    label: "Electronic Approval",
+    description: "Checked / approved electronic signatures",
   },
   {
     permission: "reports.view",
     label: "Reports & Alerts",
     description: "Reports, alerts, and transaction history",
+  },
+  {
+    permission: "audit.view",
+    label: "Audit Trail",
+    description: "View immutable audit records",
   },
 ];
 
@@ -72,18 +112,62 @@ export const ALL_PERMISSIONS: Permission[] = MODULE_ACCESS.map((m) => m.permissi
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   Admin: [...ALL_PERMISSIONS],
   "QA Manager": [
+    "masters.manage",
     "studies.create",
     "studies.edit",
+    "receiving.perform",
     "charging.perform",
     "withdrawal.perform",
     "movement.perform",
     "reconciliation.perform",
     "disposal.perform",
+    "control.collect",
+    "control.perform",
+    "chamber.ops",
+    "protocol.manage",
+    "analysis.perform",
+    "approve.records",
+    "reports.view",
+    "inventory.view",
+    "audit.view",
+  ],
+  "QA Executive": [
+    "studies.create",
+    "studies.edit",
+    "receiving.perform",
+    "charging.perform",
+    "withdrawal.perform",
+    "movement.perform",
+    "reconciliation.perform",
+    "control.collect",
+    "control.perform",
+    "protocol.manage",
+    "analysis.perform",
     "reports.view",
     "inventory.view",
   ],
-  "QA User": ["withdrawal.perform", "reports.view", "inventory.view"],
+  "QA User": [
+    "receiving.perform",
+    "control.collect",
+    "withdrawal.perform",
+    "reports.view",
+    "inventory.view",
+    "analysis.perform",
+  ],
+  "QC User": ["inventory.view", "analysis.perform", "reports.view"],
+  "Engineering User": ["chamber.ops", "inventory.view", "reports.view"],
+  "Read Only": ["inventory.view", "reports.view"],
 };
+
+export const USER_ROLES: UserRole[] = [
+  "Admin",
+  "QA Manager",
+  "QA Executive",
+  "QA User",
+  "QC User",
+  "Engineering User",
+  "Read Only",
+];
 
 export function permissionsForRole(role: UserRole): Permission[] {
   return [...(ROLE_PERMISSIONS[role] ?? [])];

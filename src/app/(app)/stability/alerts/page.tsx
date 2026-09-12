@@ -58,7 +58,7 @@ export default function AlertsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [ackingId, setAckingId] = useState<string | null>(null);
 
-  const rows = data || [];
+  const rows = useMemo(() => data || [], [data]);
 
   const stats = useMemo(() => {
     const active = rows.filter((a) => !a.acknowledged);

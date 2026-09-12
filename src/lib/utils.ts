@@ -66,12 +66,14 @@ export function addMonthsToDate(isoDate: string, months: number) {
   return format(addMonths(base, months), "yyyy-MM-dd");
 }
 
+/** Available = Initial − Withdrawn + Returned − Disposed */
 export function calcAvailableQuantity(
   total: number,
   withdrawn: number,
-  disposed: number
+  disposed: number,
+  returned = 0
 ) {
-  return Math.max(0, total - withdrawn - disposed);
+  return Math.max(0, Number(total || 0) - Number(withdrawn || 0) + Number(returned || 0) - Number(disposed || 0));
 }
 
 export function clampNonNegative(value: number) {
@@ -83,25 +85,48 @@ export function roundPct(used: number, capacity: number) {
   return Math.min(100, Math.round((used / capacity) * 100));
 }
 
-export function derivePullStatus(plannedDate: string, actualQuantity: number, plannedQuantity: number): PullPointStatus {
+export function derivePullStatus(
+  plannedDate: string,
+  actualQuantity: number,
+  plannedQuantity: number,
+  windowDays = 7
+): PullPointStatus {
   if (actualQuantity > 0 && actualQuantity >= plannedQuantity) return "Withdrawn";
   if (actualQuantity > 0 && actualQuantity < plannedQuantity) return "Partially Withdrawn";
 
-  const urgency = pullDueUrgency(plannedDate);
-  if (urgency) return urgency;
-  return "Upcoming";
+  if (!plannedDate) return "Upcoming";
+  try {
+    const today = startOfDay(new Date());
+    const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
+    const days = differenceInCalendarDays(due, today);
+    if (Number.isNaN(days)) return "Upcoming";
+    if (days > 7) return "Upcoming";
+    if (days > 0) return "Due Soon";
+    if (days === 0) return "Due Today";
+    if (Math.abs(days) <= windowDays) return "Within Window";
+    return "Overdue";
+  } catch {
+    return "Upcoming";
+  }
 }
 
 /** Date-only urgency for open pulls (including partially withdrawn remaining qty). */
-export function pullDueUrgency(plannedDate: string): "Overdue" | "Due Today" | "Due Soon" | null {
+export function pullDueUrgency(
+  plannedDate: string,
+  windowDays = 7
+): "Overdue" | "Due Today" | "Due Soon" | null {
   if (!plannedDate) return null;
   try {
     const today = startOfDay(new Date());
     const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
     const days = differenceInCalendarDays(due, today);
     if (Number.isNaN(days)) return null;
-    if (days < 0) return "Overdue";
-    if (isToday(due)) return "Due Today";
+    if (days < 0) {
+      // Align with derivePullStatus: past due but still inside the withdrawal window is not overdue.
+      if (Math.abs(days) <= windowDays) return null;
+      return "Overdue";
+    }
+    if (isToday(due) || days === 0) return "Due Today";
     if (days <= 7) return "Due Soon";
     return null;
   } catch {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, Pencil, RefreshCw, Ban } from "lucide-react";
 import {
   Button,
   Card,
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { friendlyError } from "@/lib/utils";
-import { createMaster, deleteMaster, updateMaster } from "@/services/masters";
+import { createMaster, setMasterStatus, updateMaster } from "@/services/masters";
 import { writeAuditLog } from "@/services/audit";
 import { useAsync } from "@/hooks/useAsync";
 
@@ -33,6 +33,8 @@ export type FieldDef = {
   hint?: string;
   readOnly?: boolean;
   disabled?: boolean;
+  /** When false, skip auto-uppercase (names, remarks). Default: uppercase IDs/codes. */
+  uppercase?: boolean;
   /** Extra field updates applied when this field changes. */
   syncOnChange?: (value: string) => Record<string, string>;
 };
@@ -78,7 +80,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const canManage = hasPermission("masters.manage");
-  const items = data || [];
+  const items = useMemo(() => data || [], [data]);
   const statusField = fields.find((f) => f.key === "status");
   const hasStatusField = Boolean(statusField);
   const statusFilterOptions = statusField?.options || [
@@ -98,10 +100,15 @@ export function MasterPage<T extends { id: string; status?: string }>({
   const filtersActive = Boolean(search.trim() || statusFilter !== "all");
 
   function applyFieldChange(field: FieldDef, value: string) {
-    const next =
-      field.type === "number" || field.type === "select" || field.type === "multiselect" || field.type === "date"
-        ? value
-        : value.toUpperCase();
+    const skipUpper =
+      field.type === "number" ||
+      field.type === "select" ||
+      field.type === "multiselect" ||
+      field.type === "date" ||
+      field.uppercase === false ||
+      (field.uppercase !== true &&
+        /(name|description|remarks|reason|notes|labelClaim|material|^location$)/i.test(field.key));
+    const next = skipUpper ? value : value.toUpperCase();
     const extra = field.syncOnChange?.(next) || {};
     setValues((s) => ({ ...s, [field.key]: next, ...extra }));
   }
@@ -225,23 +232,27 @@ export function MasterPage<T extends { id: string; status?: string }>({
 
   async function confirmDelete() {
     if (!deleteId || !canManage || !profile) return;
+    const item = items.find((i) => i.id === deleteId);
     setSaving(true);
     try {
-      await deleteMaster(collectionName, deleteId);
+      await setMasterStatus(collectionName, deleteId, "Inactive");
       await writeAuditLog({
-        action: "Master Data Changed",
+        action: "Deactivate",
+        module: "Masters",
         recordId: deleteId,
         recordType,
-        previousValue: { deleted: true },
+        previousValue: { status: item?.status },
+        newValue: { status: "Inactive" },
+        reason: "Master record deactivated (not permanently deleted)",
         userId: profile.uid,
         userName: profile.displayName || profile.email,
         userEmail: profile.email,
       });
-      toast.success("Record deleted.");
+      toast.success("Record deactivated. History is retained.");
       setDeleteId(null);
       await reload();
     } catch (err) {
-      toast.error(friendlyError(err, err instanceof Error ? err.message : "Unable to delete master record."));
+      toast.error(friendlyError(err, err instanceof Error ? err.message : "Unable to deactivate master record."));
     } finally {
       setSaving(false);
     }
@@ -381,7 +392,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                                 Edit
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => setDeleteId(item.id)}>
-                                <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                                <Ban className="h-3.5 w-3.5 text-rose-600" />
                               </Button>
                             </div>
                           </td>
@@ -412,7 +423,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
                           Edit
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setDeleteId(item.id)}>
-                          Delete
+                          Deactivate
                         </Button>
                       </div>
                     ) : null}
@@ -531,9 +542,9 @@ export function MasterPage<T extends { id: string; status?: string }>({
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Delete record?"
-        description="This master record will be removed. Existing studies keep their stored study-type name; deactivate instead if you need history preserved in selectors."
-        confirmLabel="Delete"
+        title="Deactivate record?"
+        description="The record will be set Inactive. Existing studies keep stored names. This is not a silent delete."
+        confirmLabel="Deactivate"
         tone="danger"
         loading={saving}
         onCancel={() => setDeleteId(null)}

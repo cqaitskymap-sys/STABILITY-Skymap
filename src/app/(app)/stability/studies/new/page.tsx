@@ -40,6 +40,7 @@ import {
   listProducts,
   listPullPoints as listPullPointMasters,
   listStorageConditions,
+  listStudyReasons,
   listStudyTypes,
   listUnits,
 } from "@/services/masters";
@@ -59,7 +60,7 @@ export default function NewStabilityStudyPage() {
   const canCreate = hasPermission("studies.create") || hasPermission("charging.perform");
 
   const masters = useAsync(async () => {
-    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, studyIdPreview] =
+    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview] =
       await Promise.all([
         listProducts(),
         listBatches(),
@@ -69,9 +70,10 @@ export default function NewStabilityStudyPage() {
         listChambers(),
         listLocations(),
         listUnits(),
+        listStudyReasons(),
         peekNextId("STB"),
       ]);
-    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, studyIdPreview };
+    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview };
   }, []);
 
   const [step, setStep] = useState(0);
@@ -131,6 +133,7 @@ export default function NewStabilityStudyPage() {
   const selectedStudyType = activeStudyTypes.find((s) => s.id === form.studyTypeId);
   const selectedCondition = activeConditions.find((c) => c.id === form.storageConditionId);
   const selectedLocation = chamberLocations.find((l) => l.id === form.locationId);
+  const activeReasons = (masters.data?.reasons || []).filter((r) => r.status === "Active");
 
   const mastersReady = useMemo(
     () => (masters.data ? getMissingChargeMasters(masters.data) : null),
@@ -383,6 +386,18 @@ export default function NewStabilityStudyPage() {
                     </option>
                   ))}
                 </Select>
+                <Select
+                  label="Study Reason"
+                  value={form.studyReasonId}
+                  onChange={(e) => updateField("studyReasonId", e.target.value)}
+                >
+                  <option value="">Select reason (optional)</option>
+                  {activeReasons.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </Card>
           ) : null}
@@ -612,6 +627,10 @@ export default function NewStabilityStudyPage() {
                 <ReviewRow label="Product" value={selectedProduct?.productName} />
                 <ReviewRow label="Batch" value={selectedBatch?.batchNumber} />
                 <ReviewRow label="Study Type" value={selectedStudyType?.name} />
+                <ReviewRow
+                  label="Study Reason"
+                  value={activeReasons.find((r) => r.id === form.studyReasonId)?.name}
+                />
                 <ReviewRow label="Charging Date" value={formatDate(form.chargingDate)} />
                 <ReviewRow label="Condition" value={selectedCondition?.displayLabel || selectedCondition?.name} />
                 <ReviewRow label="Chamber" value={selectedChamber?.chamberName} />

@@ -22,6 +22,7 @@ export function SkymapLogo({ className, priority = false, variant = "full" }: Sk
       width={size.width}
       height={size.height}
       priority={priority}
+      loading={priority ? "eager" : "lazy"}
       className={cn("h-auto w-auto object-contain", className)}
     />
   );

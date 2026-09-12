@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/auth-context";
 import {
   MODULE_ACCESS,
   permissionsForRole,
+  USER_ROLES,
   type Permission,
 } from "@/lib/permissions";
 import { cn, friendlyError } from "@/lib/utils";
@@ -27,7 +28,7 @@ import type { AppUser, UserRole } from "@/types";
 
 type AdminTab = "create" | "manage" | "access";
 
-const ROLES: UserRole[] = ["Admin", "QA Manager", "QA User"];
+const ROLES = USER_ROLES;
 
 const TABS: { id: AdminTab; label: string; description: string; icon: typeof UserPlus }[] = [
   {

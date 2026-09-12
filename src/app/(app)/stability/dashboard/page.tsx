@@ -6,10 +6,10 @@ import {
   Boxes,
   CalendarClock,
   CheckCircle2,
+  ClipboardCheck,
   FlaskConical,
   PackageMinus,
   Thermometer,
-  Warehouse,
 } from "lucide-react";
 import {
   Badge,
@@ -39,7 +39,7 @@ export default function StabilityDashboardPage() {
     return pulls
       .map((p) => ({ ...p, status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity) }))
       .filter((p) =>
-        ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"].includes(p.status)
+        ["Upcoming", "Due Soon", "Due Today", "Due", "Within Window", "Overdue", "Partially Withdrawn"].includes(p.status)
       )
       .slice(0, 8);
   }, []);
@@ -91,7 +91,9 @@ export default function StabilityDashboardPage() {
             <StatCard title="Samples Withdrawn" value={stats.data.samplesWithdrawn} icon={PackageMinus} tone="indigo" />
             <StatCard title="Samples Due Soon" value={stats.data.samplesDueSoon} icon={CalendarClock} tone="amber" />
             <StatCard title="Overdue Samples" value={stats.data.overdueSamples} icon={AlertTriangle} tone="rose" />
-            <StatCard title="Active Chambers" value={stats.data.activeChambers} icon={Warehouse} tone="blue" />
+            <StatCard title="Samples Awaiting COA" value={stats.data.samplesAwaitingCoa} icon={CalendarClock} tone="amber" />
+            <StatCard title="Ready for Charging" value={stats.data.samplesReadyForCharging} icon={CheckCircle2} tone="emerald" />
+            <StatCard title="Pending Reconciliation" value={stats.data.pendingReconciliation} icon={ClipboardCheck} tone="amber" />
             <StatCard
               title="Chamber Capacity Utilization"
               value={`${stats.data.chamberUtilization}%`}

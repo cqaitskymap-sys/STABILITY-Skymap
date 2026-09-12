@@ -36,7 +36,12 @@ service cloud.firestore {
       return hasRole(['Admin', 'QA Manager']);
     }
     function isQAStaff() {
-      return hasRole(['Admin', 'QA Manager', 'QA User']);
+      return hasRole(['Admin', 'QA Manager', 'QA Executive', 'QA User', 'QC User', 'Engineering User', 'Read Only']);
+    }
+    // App role defaults live in the client. Firestore still allows any provisioned QA staff
+    // so pages do not fail when a user has no custom moduleAccess list.
+    function canControl() {
+      return isQAStaff() || hasModuleAccess('control.perform') || hasModuleAccess('control.collect');
     }
     function isSelf(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -52,6 +57,7 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && docId == 'bootstrap'
         && bootstrapOpen();
+      allow create: if canManageUsers() && docId == 'organization';
       allow update, delete: if canManageUsers();
     }
 
@@ -169,9 +175,162 @@ service cloud.firestore {
       allow write: if isQAStaff() || hasModuleAccess('reports.view');
     }
     match /auditLogs/{docId} {
-      allow read: if isQAManagerOrAdmin();
+      allow read: if isQAManagerOrAdmin() || hasModuleAccess('audit.view');
       allow create: if isSignedIn();
       allow update, delete: if false;
+    }
+
+    match /studyReasons/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage');
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+    }
+    match /packagingMaterials/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('masters.manage');
+      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+    }
+    match /sampleReceipts/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('receiving.perform') || hasModuleAccess('charging.perform');
+      allow create, update: if isQAStaff() || hasModuleAccess('receiving.perform') || hasModuleAccess('charging.perform');
+      allow delete: if false;
+    }
+    match /controlSamples/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleCollections/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleObservations/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleWithdrawals/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleMovements/{docId} {
+      allow read: if canControl();
+      allow create: if canControl();
+      allow update, delete: if false;
+    }
+    match /controlSampleDestructions/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleDestructionLogs/{docId} {
+      allow read: if canControl();
+      allow create: if canControl();
+      allow update, delete: if false;
+    }
+    match /controlSampleTransactions/{docId} {
+      allow read: if canControl();
+      allow create: if canControl();
+      allow update, delete: if false;
+    }
+    match /controlSampleLocations/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleBoxes/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleQuantityMasters/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleObservationParameters/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleHolds/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /controlSampleBoxCategories/{docId} {
+      allow read: if canControl();
+      allow create, update: if canControl();
+      allow delete: if false;
+    }
+    match /analysisRequests/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('analysis.perform');
+      allow create, update: if isQAStaff() || hasModuleAccess('analysis.perform') || hasModuleAccess('withdrawal.perform');
+      allow delete: if false;
+    }
+    match /chamberAlarms/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow delete: if false;
+    }
+    match /chamberExcursions/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow delete: if false;
+    }
+    match /chamberCleaning/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /chamberCalibration/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /temperatureMappings/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /chamberMaintenance/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /chamberEvents/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /chamberDataLogs/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('chamber.ops') || hasModuleAccess('reports.view');
+      allow create: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow update, delete: if false;
+    }
+    match /electronicSignatures/{docId} {
+      allow read: if isQAStaff();
+      allow create: if isQAStaff() || hasModuleAccess('approve.records');
+      allow update, delete: if false;
+    }
+    match /stabilityProtocols/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
+      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow delete: if false;
+    }
+    match /stabilityReports/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
+      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow delete: if false;
+    }
+    match /waterLossStudies/{docId} {
+      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
+      allow create: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow update, delete: if false;
+    }
+    match /sopTasks/{docId} {
+      allow read: if isQAStaff();
+      allow write: if isQAStaff();
     }
   }
 }
