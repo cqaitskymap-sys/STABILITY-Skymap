@@ -17,7 +17,7 @@ import type { ControlSample, OrganizationSettings } from "@/types";
  */
 export const CONTROL_SAMPLE_ANNEXURES = [
   { annexure: "Annexure-I", feature: "Control Sample Quantity Master", href: "/stability/control-samples/quantity-master" },
-  { annexure: "Annexure-II", feature: "Daily Collection Record", href: "/stability/control-samples/collection/daily-record" },
+      { annexure: "Annexure-II", feature: "Daily Collection Record", href: "/stability/control-samples/daily-collection" },
   { annexure: "Annexure-III", feature: "Control Sample Stamp", href: "/stability/control-samples/register" },
   { annexure: "Annexure-IV", feature: "Control Sample Log Book", href: "/stability/control-samples/register" },
   { annexure: "Annexure-V", feature: "Withdrawal / Requisition", href: "/stability/control-samples/withdrawal" },

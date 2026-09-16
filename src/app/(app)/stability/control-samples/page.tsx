@@ -47,6 +47,7 @@ export default function ControlSampleDashboardPage() {
               Refresh
             </Button>
             <Link href="/stability/control-samples/collection"><Button>New collection</Button></Link>
+            <Link href="/stability/control-samples/daily-collection"><Button variant="outline">Daily Collection Record</Button></Link>
           </div>
         }
       />

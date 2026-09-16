@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, PackagePlus, RefreshCw } from "lucide-react";
 import {
@@ -84,26 +84,25 @@ function SampleChargingPageInner() {
   const [errors, setErrors] = useState<ChargeFormErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [appliedReceiptId, setAppliedReceiptId] = useState("");
 
-  useEffect(() => {
-    if (!receiptFromUrl || !masters.data) return;
-    const receipt = masters.data.receipts.find((r) => r.id === receiptFromUrl);
-    if (!receipt) return;
-    if (receipt.status !== "COA Received - Ready for Charging") {
-      toast.error("This inward record is not ready for charging. Mark COA received first.");
-      return;
+  const receipt = (masters.data?.receipts || []).find((r) => r.id === receiptFromUrl) || null;
+  if (receipt && appliedReceiptId !== receipt.id) {
+    setAppliedReceiptId(receipt.id);
+    if (receipt.status === "COA Received - Ready for Charging") {
+      setForm((prev) => ({
+        ...prev,
+        receiptDocId: receipt.id,
+        productId: receipt.productId,
+        batchId: receipt.batchId,
+        manufacturingDate: receipt.manufacturingDate,
+        expiryDate: receipt.expiryDate,
+        totalQuantity: String(receipt.sampleQuantity),
+        unit: receipt.unit,
+      }));
     }
-    setForm((prev) => ({
-      ...prev,
-      receiptDocId: receipt.id,
-      productId: receipt.productId,
-      batchId: receipt.batchId,
-      manufacturingDate: receipt.manufacturingDate,
-      expiryDate: receipt.expiryDate,
-      totalQuantity: String(receipt.sampleQuantity),
-      unit: receipt.unit,
-    }));
-  }, [receiptFromUrl, masters.data]);
+  }
+  const receiptNotReady = Boolean(receipt && receipt.status !== "COA Received - Ready for Charging");
 
   const activeProducts = useMemo(
     () => (masters.data?.products || []).filter((p) => p.status === "Active"),
@@ -298,6 +297,12 @@ function SampleChargingPageInner() {
           </div>
         }
       />
+
+      {receiptNotReady ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          This inward record is not ready for charging. Mark COA received first.
+        </Card>
+      ) : null}
 
       {!canCharge ? (
         <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

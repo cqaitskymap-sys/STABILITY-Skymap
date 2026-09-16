@@ -15,6 +15,7 @@ import type {
   Chamber,
   MasterStatus,
   PackagingMaterial,
+  PackSize,
   Product,
   PullPointMaster,
   StorageCondition,
@@ -23,6 +24,7 @@ import type {
   StudyType,
   Unit,
   Batch,
+  Market,
 } from "@/types";
 
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
@@ -92,6 +94,16 @@ export async function listStudyReasons() {
 
 export async function listPackagingMaterials() {
   return listCollection<PackagingMaterial>(COLLECTIONS.packagingMaterials);
+}
+
+export async function listMarkets() {
+  const rows = await listCollection<Market>(COLLECTIONS.markets);
+  return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+export async function listPackSizes() {
+  const rows = await listCollection<PackSize>(COLLECTIONS.packSizes);
+  return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
 export async function listProducts() {

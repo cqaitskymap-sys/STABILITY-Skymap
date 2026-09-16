@@ -19,6 +19,7 @@ import { executeSkymapTool } from "@/lib/ai/execute-tool";
 import { getInventoryContext } from "@/lib/ai/inventory-context";
 import { OPEN_AI_EVENT } from "@/lib/ai/events";
 import { TOOL_LABELS } from "@/lib/ai/tools";
+import { getFirebaseAuth } from "@/lib/firebase/config";
 
 const SUGGESTIONS = [
   "Add product Paracetamol 500 mg tablet, code PCM-500",
@@ -89,25 +90,25 @@ function ToolChip({ part }: { part: UIMessage["parts"][number] }) {
 }
 
 export function AssistantPanel() {
-  const { user, profile, hasPermission } = useAuth();
-  const userRef = useRef(user);
+  const { profile, hasPermission } = useAuth();
   const profileRef = useRef(profile);
   const hasPermissionRef = useRef(hasPermission);
-  userRef.current = user;
-  profileRef.current = profile;
-  hasPermissionRef.current = hasPermission;
 
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [queuedPrompt, setQueuedPrompt] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    profileRef.current = profile;
+    hasPermissionRef.current = hasPermission;
+  }, [profile, hasPermission]);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/ai/chat",
         prepareSendMessagesRequest: async ({ id, messages, api, headers }) => {
-          const token = await userRef.current?.getIdToken();
+          const token = await getFirebaseAuth().currentUser?.getIdToken();
           if (!token) throw new Error("Sign in required.");
           const context = await getInventoryContext();
           return {
@@ -160,18 +161,11 @@ export function AssistantPanel() {
     function onOpen(event: Event) {
       const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt?.trim();
       setOpen(true);
-      if (prompt) setQueuedPrompt(prompt);
+      if (prompt) void sendMessage({ text: prompt });
     }
     window.addEventListener(OPEN_AI_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_AI_EVENT, onOpen);
-  }, []);
-
-  useEffect(() => {
-    if (!open || !queuedPrompt || busy) return;
-    const prompt = queuedPrompt;
-    setQueuedPrompt(null);
-    void sendMessage({ text: prompt });
-  }, [open, queuedPrompt, busy, sendMessage]);
+  }, [sendMessage]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });

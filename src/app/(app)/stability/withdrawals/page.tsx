@@ -68,12 +68,11 @@ function WithdrawalsPageInner() {
   const history = useAsync(listWithdrawals, []);
 
   const [manualPullId, setManualPullId] = useState("");
-  const selectedPullId = pullId || manualPullId;
   const [sample, setSample] = useState<StabilitySample | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [actualQuantity, setActualQuantity] = useState("");
   const [withdrawalDate, setWithdrawalDate] = useState(todayISO());
-  const [withdrawnBy, setWithdrawnBy] = useState(profile?.displayName || "");
+  const [withdrawnBy, setWithdrawnBy] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
   const [remarks, setRemarks] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -81,37 +80,28 @@ function WithdrawalsPageInner() {
   const [page, setPage] = useState(1);
   const [duePick, setDuePick] = useState("");
 
-  useEffect(() => {
-    if (profile?.displayName && !withdrawnBy) {
-      setWithdrawnBy(profile.displayName);
-    }
-  }, [profile?.displayName, withdrawnBy]);
-
   const withdrawnByValue = withdrawnBy || profile?.displayName || "";
+
+  const autoPull = useMemo(() => {
+    if (pullId || !sampleFromUrl || !pulls.data?.length) return null;
+    return (
+      pulls.data
+        .filter((p) => p.sampleDocId === sampleFromUrl && OPEN_STATUSES.includes(p.status))
+        .sort((a, b) => {
+          const byStatus = statusPriority(a.status) - statusPriority(b.status);
+          if (byStatus !== 0) return byStatus;
+          return a.plannedDate.localeCompare(b.plannedDate);
+        })[0] || null
+    );
+  }, [pullId, sampleFromUrl, pulls.data]);
+
+  const selectedPullId = pullId || manualPullId || autoPull?.id || "";
+  const missingSamplePull = Boolean(sampleFromUrl && !pullId && pulls.data && !autoPull);
 
   const selectedPull = useMemo(
     () => (pulls.data || []).find((p) => p.id === selectedPullId) || null,
     [pulls.data, selectedPullId]
   );
-
-  // Inventory / Upcoming links with ?sample= — auto-select the earliest open pull for that sample.
-  useEffect(() => {
-    if (pullId || !sampleFromUrl || !pulls.data?.length) return;
-    const open = pulls.data
-      .filter((p) => p.sampleDocId === sampleFromUrl && OPEN_STATUSES.includes(p.status))
-      .sort((a, b) => {
-        const byStatus = statusPriority(a.status) - statusPriority(b.status);
-        if (byStatus !== 0) return byStatus;
-        return a.plannedDate.localeCompare(b.plannedDate);
-      })[0];
-    if (open) {
-      setManualPullId(open.id);
-      setDuePick(open.id);
-      router.replace(`/stability/withdrawals?pull=${open.id}`);
-    } else {
-      toast.error("No open pull points found for this sample.");
-    }
-  }, [pullId, sampleFromUrl, pulls.data, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,6 +256,12 @@ function WithdrawalsPageInner() {
       {!canWithdraw ? (
         <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Your role can view withdrawal history but cannot submit withdrawals.
+        </Card>
+      ) : null}
+
+      {missingSamplePull ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          No open pull points found for this sample. Select a pull point below.
         </Card>
       ) : null}
 

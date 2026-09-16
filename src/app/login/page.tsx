@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FlaskConical, Lock, ShieldCheck } from "lucide-react";
@@ -13,36 +13,40 @@ import {
   clearRememberedLogin,
   loadRememberedLogin,
   saveRememberedLogin,
+  subscribeRememberedLogin,
 } from "@/lib/remember-login";
 import { friendlyError } from "@/lib/utils";
+
+function rememberedEmployeeId() {
+  return loadRememberedLogin()?.employeeId || "";
+}
 
 function LoginForm() {
   const { login, user, loading } = useAuth();
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
+  const rememberedId = useSyncExternalStore(
+    subscribeRememberedLogin,
+    rememberedEmployeeId,
+    () => ""
+  );
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [password, setPassword] = useState("");
-  const [rememberPassword, setRememberPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState<boolean | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const employeeIdValue = employeeId ?? rememberedId;
+  const rememberChecked = keepSignedIn ?? Boolean(rememberedId);
 
   useEffect(() => {
     if (!loading && user) router.replace("/home");
   }, [loading, user, router]);
 
-  useEffect(() => {
-    const saved = loadRememberedLogin();
-    if (!saved) return;
-    setEmployeeId(saved.employeeId);
-    setPassword(saved.password);
-    setRememberPassword(true);
-  }, []);
-
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await login(employeeId, password, { remember: rememberPassword });
-      if (rememberPassword) {
-        saveRememberedLogin(employeeId, password);
+      await login(employeeIdValue, password, { remember: rememberChecked });
+      if (rememberChecked) {
+        saveRememberedLogin(employeeIdValue);
       } else {
         clearRememberedLogin();
       }
@@ -56,7 +60,7 @@ function LoginForm() {
   }
 
   function onRememberChange(checked: boolean) {
-    setRememberPassword(checked);
+    setKeepSignedIn(checked);
     if (!checked) clearRememberedLogin();
   }
 
@@ -120,7 +124,7 @@ function LoginForm() {
                 type="text"
                 required
                 uppercase={false}
-                value={employeeId}
+                value={employeeIdValue}
                 onChange={(e) => setEmployeeId(e.target.value)}
                 autoComplete="username"
                 hint="Your Employee ID is your login ID."
@@ -138,11 +142,11 @@ function LoginForm() {
               <label className="flex cursor-pointer select-none items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={rememberPassword}
+                  checked={rememberChecked}
                   onChange={(e) => onRememberChange(e.target.checked)}
                   className="h-4 w-4 rounded border-slate-300 accent-teal-700"
                 />
-                <span className="text-sm text-slate-700">Remember password</span>
+                <span className="text-sm text-slate-700">Keep me signed in on this device</span>
               </label>
               <Button type="submit" className="w-full" loading={submitting}>
                 <Lock className="h-4 w-4" />

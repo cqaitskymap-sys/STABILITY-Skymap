@@ -41,6 +41,9 @@ const TITLE_MAP: Record<string, string> = {
   "/masters/chambers": "Chamber Master",
   "/masters/locations": "Storage Location Master",
   "/masters/units": "Unit Master",
+  "/masters/markets": "Market Master",
+  "/masters/pack-sizes": "Pack Size Master",
+  "/stability/control-samples/daily-collection": "Daily Collection Record",
 };
 
 function resolveTitle(pathname: string) {

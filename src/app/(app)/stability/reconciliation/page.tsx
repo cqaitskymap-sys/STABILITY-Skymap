@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ClipboardCheck, RefreshCw } from "lucide-react";
@@ -36,7 +36,7 @@ function ReconciliationPageInner() {
   const samples = useAsync(listSamples, []);
   const history = useAsync(listReconciliations, []);
 
-  const [sampleDocId, setSampleDocId] = useState(sampleFromUrl);
+  const [sampleOverride, setSampleOverride] = useState<string | null>(null);
   const [physicalQty, setPhysicalQty] = useState("");
   const [adjust, setAdjust] = useState(false);
   const [reason, setReason] = useState("");
@@ -45,18 +45,12 @@ function ReconciliationPageInner() {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    if (sampleFromUrl) setSampleDocId(sampleFromUrl);
-  }, [sampleFromUrl]);
-
-  useEffect(() => {
-    if (!sampleFromUrl || !samples.data?.length) return;
-    const exists = samples.data.some((s) => s.id === sampleFromUrl);
-    if (!exists) {
-      toast.error("Linked sample was not found. Select a sample to reconcile.");
-      setSampleDocId("");
-    }
-  }, [sampleFromUrl, samples.data]);
+  const urlSampleUsable =
+    !samples.data || !sampleFromUrl
+      ? Boolean(sampleFromUrl)
+      : samples.data.some((s) => s.id === sampleFromUrl);
+  const sampleDocId = sampleOverride ?? (urlSampleUsable ? sampleFromUrl : "");
+  const linkedSampleMissing = Boolean(sampleFromUrl && samples.data && !urlSampleUsable && sampleOverride === null);
 
   const selectedSample = useMemo(
     () => (samples.data || []).find((s) => s.id === sampleDocId) || null,
@@ -146,13 +140,16 @@ function ReconciliationPageInner() {
             />
           ) : null}
 
+          {linkedSampleMissing ? (
+            <p className="mb-3 text-sm text-amber-800">Linked sample was not found. Select another sample to reconcile.</p>
+          ) : null}
           {!samples.loading && !samples.error && (samples.data || []).length > 0 ? (
             <Select
               label="Sample"
               required
               value={sampleDocId}
               onChange={(e) => {
-                setSampleDocId(e.target.value);
+                setSampleOverride(e.target.value);
                 setPhysicalQty("");
                 setAdjust(false);
                 setReason("");

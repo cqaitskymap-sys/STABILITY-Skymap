@@ -10,11 +10,10 @@ service cloud.firestore {
     function userDocExists() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
-    function hasRole(roles) {
-      return isSignedIn() && userDocExists() && userDoc().role in roles;
-    }
-    function isAdmin() {
-      return hasRole(['Admin']);
+    function isActiveUser() {
+      return isSignedIn()
+        && userDocExists()
+        && (!('active' in userDoc()) || userDoc().active == true);
     }
     function usesCustomModules() {
       return userDocExists()
@@ -25,35 +24,77 @@ service cloud.firestore {
     function hasModuleAccess(permission) {
       return usesCustomModules() && permission in userDoc().moduleAccess;
     }
-    // Matches app effectivePermissions: custom moduleAccess OR Admin role defaults.
-    function canManageUsers() {
-      return isSignedIn() && userDocExists() && (
-        hasModuleAccess('users.manage')
-        || (!usesCustomModules() && userDoc().role == 'Admin')
+    // Mirrors src/lib/permissions.ts role defaults.
+    function hasDefaultPermission(p) {
+      return userDoc().role == 'Admin'
+        || (userDoc().role == 'QA Manager' && p in [
+          'masters.manage', 'studies.create', 'studies.edit', 'receiving.perform',
+          'charging.perform', 'withdrawal.perform', 'movement.perform',
+          'reconciliation.perform', 'disposal.perform', 'control.collect',
+          'control.perform', 'chamber.ops', 'protocol.manage', 'analysis.perform',
+          'approve.records', 'reports.view', 'inventory.view', 'audit.view'
+        ])
+        || (userDoc().role == 'QA Executive' && p in [
+          'studies.create', 'studies.edit', 'receiving.perform', 'charging.perform',
+          'withdrawal.perform', 'movement.perform', 'reconciliation.perform',
+          'control.collect', 'control.perform', 'protocol.manage', 'analysis.perform',
+          'reports.view', 'inventory.view'
+        ])
+        || (userDoc().role == 'QA User' && p in [
+          'receiving.perform', 'control.collect', 'withdrawal.perform',
+          'reports.view', 'inventory.view', 'analysis.perform'
+        ])
+        || (userDoc().role == 'QC User' && p in [
+          'inventory.view', 'analysis.perform', 'reports.view'
+        ])
+        || (userDoc().role == 'Engineering User' && p in [
+          'chamber.ops', 'inventory.view', 'reports.view'
+        ])
+        || (userDoc().role == 'Read Only' && p in [
+          'inventory.view', 'reports.view'
+        ]);
+    }
+    function hasPermission(p) {
+      return isActiveUser() && (
+        hasModuleAccess(p)
+        || (!usesCustomModules() && hasDefaultPermission(p))
       );
     }
-    function isQAManagerOrAdmin() {
-      return hasRole(['Admin', 'QA Manager']);
+    function canManageUsers() {
+      return hasPermission('users.manage');
     }
-    function isQAStaff() {
-      return hasRole(['Admin', 'QA Manager', 'QA Executive', 'QA User', 'QC User', 'Engineering User', 'Read Only']);
+    function canManageMasters() {
+      return hasPermission('masters.manage');
     }
-    // App role defaults live in the client. Firestore still allows any provisioned QA staff
-    // so pages do not fail when a user has no custom moduleAccess list.
+    function canReadInventory() {
+      return hasPermission('inventory.view')
+        || hasPermission('charging.perform')
+        || hasPermission('receiving.perform')
+        || hasPermission('studies.create')
+        || hasPermission('reports.view');
+    }
+    function canMutateInventoryQty() {
+      return hasPermission('charging.perform')
+        || hasPermission('withdrawal.perform')
+        || hasPermission('movement.perform')
+        || hasPermission('disposal.perform')
+        || hasPermission('reconciliation.perform')
+        || hasPermission('receiving.perform')
+        || hasPermission('studies.create')
+        || hasPermission('studies.edit');
+    }
     function canControl() {
-      return isQAStaff() || hasModuleAccess('control.perform') || hasModuleAccess('control.collect');
+      return hasPermission('control.perform') || hasPermission('control.collect');
     }
     function isSelf(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-
     function bootstrapOpen() {
       return !exists(/databases/$(database)/documents/settings/bootstrap);
     }
 
     match /settings/{docId} {
       allow read: if isSignedIn();
-      // First signed-in bootstrap admin may close public profile creation.
       allow create: if isSignedIn()
         && docId == 'bootstrap'
         && bootstrapOpen();
@@ -63,7 +104,6 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSelf(userId) || canManageUsers();
-      // User managers provision accounts. One-time bootstrap: first Admin may self-create while open.
       allow create: if canManageUsers()
         || (
           bootstrapOpen()
@@ -75,262 +115,272 @@ service cloud.firestore {
       allow update: if canManageUsers()
         || (
           isSelf(userId)
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'moduleAccess'])
+          && isActiveUser()
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'moduleAccess', 'active'])
         );
       allow delete: if canManageUsers();
     }
 
     match /counters/{docId} {
-      allow read, write: if isQAStaff();
+      allow read: if isActiveUser();
+      allow write: if canMutateInventoryQty() || canControl() || hasPermission('chamber.ops')
+        || hasPermission('analysis.perform') || hasPermission('protocol.manage')
+        || canManageUsers();
     }
 
     match /products/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      allow write: if isQAManagerOrAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || canControl();
+      allow write: if canManageMasters();
     }
     match /batches/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      allow write: if isQAManagerOrAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || canControl();
+      allow write: if canManageMasters();
     }
     match /studyTypes/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      // App permission: masters.manage (Admin role default, or custom moduleAccess).
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters();
+      allow write: if canManageMasters();
     }
     match /storageConditions/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      // App permission: masters.manage (Admin role default, or custom moduleAccess).
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters();
+      allow write: if canManageMasters();
     }
     match /pullPoints/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      // App permission: masters.manage (Admin role default, or custom moduleAccess).
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters();
+      allow write: if canManageMasters();
     }
     match /chambers/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create') || hasModuleAccess('movement.perform');
-      // Master create/delete: Admin or masters.manage. Inventory workflows (QA staff) update usedCapacity.
-      allow create, delete: if isAdmin() || hasModuleAccess('masters.manage');
-      allow update: if isQAStaff() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || hasPermission('movement.perform') || hasPermission('chamber.ops');
+      allow create, delete: if canManageMasters();
+      allow update: if canManageMasters() || canMutateInventoryQty() || hasPermission('chamber.ops');
     }
     match /storageLocations/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create') || hasModuleAccess('movement.perform');
-      // App permission: masters.manage (Admin role default, or custom moduleAccess).
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || hasPermission('movement.perform');
+      allow write: if canManageMasters();
     }
     match /units/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage') || hasModuleAccess('inventory.view') || hasModuleAccess('charging.perform') || hasModuleAccess('studies.create');
-      // App permission: masters.manage (Admin role default, or custom moduleAccess).
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || canControl();
+      allow write: if canManageMasters();
     }
 
     match /stabilityStudies/{docId} {
-      allow read: if isQAStaff();
-      allow create: if isQAManagerOrAdmin()
-        || hasModuleAccess('studies.create')
-        || hasModuleAccess('charging.perform');
-      // Withdrawals / adjustments update study quantity balances.
-      allow update: if isQAStaff();
+      allow read: if canReadInventory();
+      allow create: if hasPermission('studies.create') || hasPermission('charging.perform');
+      allow update: if canMutateInventoryQty();
       allow delete: if false;
     }
     match /stabilitySamples/{docId} {
-      allow read: if isQAStaff();
-      allow create, update: if isQAStaff();
+      allow read: if canReadInventory();
+      allow create: if hasPermission('charging.perform') || hasPermission('receiving.perform') || hasPermission('studies.create');
+      allow update: if canMutateInventoryQty();
       allow delete: if false;
     }
     match /studyPullPoints/{docId} {
-      allow read: if isQAStaff();
-      allow create, update: if isQAStaff();
+      allow read: if canReadInventory() || hasPermission('withdrawal.perform');
+      allow create: if hasPermission('charging.perform') || hasPermission('studies.create');
+      allow update: if hasPermission('withdrawal.perform') || hasPermission('charging.perform') || hasPermission('studies.edit');
       allow delete: if false;
     }
     match /sampleWithdrawals/{docId} {
-      allow read: if isQAStaff();
-      allow create: if isQAStaff();
+      allow read: if canReadInventory() || hasPermission('withdrawal.perform') || hasPermission('analysis.perform');
+      allow create: if hasPermission('withdrawal.perform');
       allow update, delete: if false;
     }
     match /sampleMovements/{docId} {
-      allow read: if isQAStaff();
-      // App permission: movement.perform (role default for QA Manager/Admin, or custom moduleAccess).
-      allow create: if isQAManagerOrAdmin() || hasModuleAccess('movement.perform');
+      allow read: if canReadInventory() || hasPermission('movement.perform');
+      allow create: if hasPermission('movement.perform');
       allow update, delete: if false;
     }
     match /sampleDisposals/{docId} {
-      allow read: if isQAStaff();
-      // App permission: disposal.perform (role default for QA Manager/Admin, or custom moduleAccess).
-      allow create: if isQAManagerOrAdmin() || hasModuleAccess('disposal.perform');
+      allow read: if canReadInventory() || hasPermission('disposal.perform');
+      allow create: if hasPermission('disposal.perform');
       allow update, delete: if false;
     }
     match /inventoryReconciliations/{docId} {
-      allow read: if isQAStaff();
-      allow create, update: if isQAManagerOrAdmin();
+      allow read: if canReadInventory() || hasPermission('reconciliation.perform');
+      allow create, update: if hasPermission('reconciliation.perform');
       allow delete: if false;
     }
     match /inventoryTransactions/{docId} {
-      allow read: if isQAStaff();
-      allow create: if isQAStaff();
+      allow read: if canReadInventory() || hasPermission('reports.view');
+      allow create: if canMutateInventoryQty();
       allow update, delete: if false;
     }
     match /inventoryAlerts/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('reports.view');
-      allow write: if isQAStaff() || hasModuleAccess('reports.view');
+      allow read: if canReadInventory() || hasPermission('reports.view');
+      allow write: if canMutateInventoryQty() || hasPermission('reports.view') || hasPermission('chamber.ops');
     }
     match /auditLogs/{docId} {
-      allow read: if isQAManagerOrAdmin() || hasModuleAccess('audit.view');
-      allow create: if isSignedIn();
+      allow read: if hasPermission('audit.view');
+      allow create: if isActiveUser()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['action', 'userId', 'createdAt']);
       allow update, delete: if false;
     }
 
     match /studyReasons/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage');
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters();
+      allow write: if canManageMasters();
     }
     match /packagingMaterials/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('masters.manage');
-      allow write: if isAdmin() || hasModuleAccess('masters.manage');
+      allow read: if canReadInventory() || canManageMasters() || canControl();
+      allow write: if canManageMasters();
+    }
+    match /markets/{docId} {
+      allow read: if canManageMasters() || canControl() || canReadInventory();
+      allow write: if canManageMasters();
+    }
+    match /packSizes/{docId} {
+      allow read: if canManageMasters() || canControl() || canReadInventory();
+      allow write: if canManageMasters();
+    }
+    match /dailyCollectionRecords/{docId} {
+      allow read: if canControl() || hasPermission('inventory.view') || hasPermission('receiving.perform');
+      allow create, update: if canControl();
+      allow delete: if false;
     }
     match /sampleReceipts/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('receiving.perform') || hasModuleAccess('charging.perform');
-      allow create, update: if isQAStaff() || hasModuleAccess('receiving.perform') || hasModuleAccess('charging.perform');
+      allow read: if canReadInventory() || hasPermission('receiving.perform') || hasPermission('charging.perform');
+      allow create, update: if hasPermission('receiving.perform') || hasPermission('charging.perform');
       allow delete: if false;
     }
     match /controlSamples/{docId} {
-      allow read: if canControl();
+      allow read: if canControl() || hasPermission('inventory.view');
       allow create, update: if canControl();
       allow delete: if false;
     }
     match /controlSampleCollections/{docId} {
-      allow read: if canControl();
+      allow read: if canControl() || hasPermission('inventory.view');
       allow create, update: if canControl();
       allow delete: if false;
     }
     match /controlSampleObservations/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleWithdrawals/{docId} {
-      allow read: if canControl();
-      allow create, update: if canControl();
+      allow read: if canControl() || hasPermission('approve.records');
+      allow create, update: if hasPermission('control.perform') || hasPermission('approve.records');
       allow delete: if false;
     }
     match /controlSampleMovements/{docId} {
       allow read: if canControl();
-      allow create: if canControl();
+      allow create: if hasPermission('control.perform');
       allow update, delete: if false;
     }
     match /controlSampleDestructions/{docId} {
-      allow read: if canControl();
-      allow create, update: if canControl();
+      allow read: if canControl() || hasPermission('disposal.perform');
+      allow create, update: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow delete: if false;
     }
     match /controlSampleDestructionLogs/{docId} {
-      allow read: if canControl();
-      allow create: if canControl();
+      allow read: if canControl() || hasPermission('disposal.perform');
+      allow create: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow update, delete: if false;
     }
     match /controlSampleTransactions/{docId} {
-      allow read: if canControl();
+      allow read: if canControl() || hasPermission('reports.view');
       allow create: if canControl();
       allow update, delete: if false;
     }
     match /controlSampleLocations/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleBoxes/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleQuantityMasters/{docId} {
-      allow read: if canControl();
-      allow create, update: if canControl();
+      allow read: if canControl() || canManageMasters();
+      allow create, update: if hasPermission('control.perform') || canManageMasters();
       allow delete: if false;
     }
     match /controlSampleObservationParameters/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleHolds/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleBoxCategories/{docId} {
       allow read: if canControl();
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /analysisRequests/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('analysis.perform');
-      allow create, update: if isQAStaff() || hasModuleAccess('analysis.perform') || hasModuleAccess('withdrawal.perform');
+      allow read: if hasPermission('analysis.perform') || hasPermission('withdrawal.perform') || hasPermission('reports.view') || canReadInventory();
+      allow create, update: if hasPermission('analysis.perform') || hasPermission('withdrawal.perform');
       allow delete: if false;
     }
     match /chamberAlarms/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create, update: if hasPermission('chamber.ops');
       allow delete: if false;
     }
     match /chamberExcursions/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create, update: if hasPermission('chamber.ops');
       allow delete: if false;
     }
     match /chamberCleaning/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /chamberCalibration/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /temperatureMappings/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /chamberMaintenance/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /chamberEvents/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops');
-      allow create: if isQAStaff() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || canReadInventory();
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /chamberDataLogs/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('chamber.ops') || hasModuleAccess('reports.view');
-      allow create: if isQAManagerOrAdmin() || hasModuleAccess('chamber.ops');
+      allow read: if hasPermission('chamber.ops') || hasPermission('reports.view');
+      allow create: if hasPermission('chamber.ops');
       allow update, delete: if false;
     }
     match /electronicSignatures/{docId} {
-      allow read: if isQAStaff();
-      allow create: if isQAStaff() || hasModuleAccess('approve.records');
+      allow read: if isActiveUser();
+      allow create: if hasPermission('approve.records');
       allow update, delete: if false;
     }
     match /stabilityProtocols/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
-      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow read: if hasPermission('protocol.manage') || canReadInventory();
+      allow create, update: if hasPermission('protocol.manage');
       allow delete: if false;
     }
     match /stabilityReports/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
-      allow create, update: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow read: if hasPermission('protocol.manage') || hasPermission('reports.view');
+      allow create, update: if hasPermission('protocol.manage');
       allow delete: if false;
     }
     match /waterLossStudies/{docId} {
-      allow read: if isQAStaff() || hasModuleAccess('protocol.manage');
-      allow create: if isQAManagerOrAdmin() || hasModuleAccess('protocol.manage');
+      allow read: if hasPermission('protocol.manage') || canReadInventory();
+      allow create: if hasPermission('protocol.manage');
       allow update, delete: if false;
     }
     match /sopTasks/{docId} {
-      allow read: if isQAStaff();
-      allow write: if isQAStaff();
+      allow read: if isActiveUser();
+      allow write: if hasPermission('chamber.ops') || hasPermission('inventory.view');
     }
   }
 }

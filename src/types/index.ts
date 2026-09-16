@@ -290,6 +290,24 @@ export interface Unit {
   updatedAt: string;
 }
 
+export interface Market {
+  id: string;
+  name: string;
+  code: string;
+  status: MasterStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PackSize {
+  id: string;
+  name: string;
+  code?: string;
+  status: MasterStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SampleOrientation = "Upright" | "Inverted" | "Mixed";
 export type SampleKind = "stability" | "control";
 
@@ -1109,4 +1127,13 @@ export type {
   ControlObservationParameter,
   ControlSampleTx,
 } from "./control-samples";
+
+export type {
+  DailyCollectionAction,
+  DailyCollectionCorrection,
+  DailyCollectionInput,
+  DailyCollectionRecord,
+  DailyCollectionSampleType,
+  DailyCollectionStatus,
+} from "./daily-collection";
 

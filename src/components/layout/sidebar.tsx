@@ -75,7 +75,7 @@ const NAV: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/stability/dashboard", icon: LayoutDashboard },
       { label: "Alerts", href: "/stability/alerts", icon: AlertTriangle, permission: "reports.view" },
-      { label: "Tasks", href: "/stability/tasks", icon: ListTodo },
+      { label: "Tasks", href: "/stability/tasks", icon: ListTodo, permission: ["inventory.view", "chamber.ops", "reports.view"] },
     ],
   },
   {
@@ -120,7 +120,7 @@ const NAV: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/stability/control-samples", icon: LayoutDashboard, permission: ["control.perform", "control.collect", "inventory.view"] },
       { label: "Collection / Inward", href: "/stability/control-samples/collection", icon: Inbox, permission: ["control.collect", "control.perform"] },
-      { label: "Daily Collection Record", href: "/stability/control-samples/collection/daily-record", icon: ClipboardCheck, permission: ["control.collect", "control.perform"] },
+      { label: "Daily Collection Record", href: "/stability/control-samples/daily-collection", icon: ClipboardCheck, permission: ["control.collect", "control.perform"] },
       { label: "Control Sample Register", href: "/stability/control-samples/register", icon: Shield, permission: ["control.perform", "control.collect", "inventory.view"] },
       { label: "Periodic Observation", href: "/stability/control-samples/observation", icon: ClipboardCheck, permission: "control.perform" },
       { label: "Withdrawal / Requisition", href: "/stability/control-samples/withdrawal", icon: PackageMinus, permission: ["control.perform", "approve.records"] },
@@ -173,6 +173,8 @@ const NAV: NavGroup[] = [
       { label: "Chambers", href: "/masters/chambers", icon: Warehouse, permission: "masters.manage" },
       { label: "Locations", href: "/masters/locations", icon: MapPin, permission: "masters.manage" },
       { label: "Packaging", href: "/masters/packaging", icon: Package, permission: "masters.manage" },
+      { label: "Markets", href: "/masters/markets", icon: MapPin, permission: "masters.manage" },
+      { label: "Pack Sizes", href: "/masters/pack-sizes", icon: Ruler, permission: "masters.manage" },
       { label: "Units", href: "/masters/units", icon: Ruler, permission: "masters.manage" },
     ],
   },
@@ -229,11 +231,11 @@ export function Sidebar({
         >
           {collapsed ? (
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/5 ring-1 ring-white/10">
-              <SkymapLogo variant="compact" className="h-10 w-auto max-w-none scale-125" />
+              <SkymapLogo priority variant="compact" className="h-10 w-auto max-w-none scale-125" />
             </div>
           ) : (
             <div className="flex flex-col gap-1">
-              <SkymapLogo className="h-11 w-auto max-w-[158px]" />
+              <SkymapLogo priority className="h-11 w-auto max-w-[158px]" />
               <p className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300/80">
                 {MODULE_SUBTITLE[moduleId]}
               </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RefreshCw, Trash2 } from "lucide-react";
@@ -43,39 +43,15 @@ function DisposalPageInner() {
   const samples = useAsync(listSamples, []);
   const history = useAsync(listDisposals, []);
 
-  const [sampleDocId, setSampleDocId] = useState(sampleFromUrl);
+  const [sampleOverride, setSampleOverride] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("");
   const [disposalDate, setDisposalDate] = useState(todayISO());
   const [reason, setReason] = useState<DisposalReason | "">("");
-  const [disposedBy, setDisposedBy] = useState(profile?.displayName || "");
+  const [disposedBy, setDisposedBy] = useState("");
   const [remarks, setRemarks] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    if (sampleFromUrl) setSampleDocId(sampleFromUrl);
-  }, [sampleFromUrl]);
-
-  useEffect(() => {
-    if (profile?.displayName && !disposedBy) {
-      setDisposedBy(profile.displayName);
-    }
-  }, [profile?.displayName, disposedBy]);
-
-  useEffect(() => {
-    if (!sampleFromUrl || !samples.data?.length) return;
-    const match = samples.data.find((s) => s.id === sampleFromUrl);
-    if (!match) {
-      toast.error("Linked sample was not found. Select a sample to dispose.");
-      setSampleDocId("");
-      return;
-    }
-    if (match.availableQuantity <= 0 || match.status === "Disposed") {
-      toast.error("This sample has no available quantity to dispose.");
-      setSampleDocId("");
-    }
-  }, [sampleFromUrl, samples.data]);
 
   const disposedByValue = disposedBy || profile?.displayName || "";
 
@@ -84,19 +60,21 @@ function DisposalPageInner() {
       (samples.data || []).filter((s) => s.availableQuantity > 0 && s.status !== "Disposed"),
     [samples.data]
   );
+  const urlSampleUsable =
+    !samples.data || !sampleFromUrl
+      ? Boolean(sampleFromUrl)
+      : disposableSamples.some((s) => s.id === sampleFromUrl);
+  const sampleDocId = sampleOverride ?? (urlSampleUsable ? sampleFromUrl : "");
+  const linkedSampleMissing = Boolean(sampleFromUrl && samples.data && !urlSampleUsable && sampleOverride === null);
 
   const selectedSample = useMemo(
     () => disposableSamples.find((s) => s.id === sampleDocId) || null,
     [disposableSamples, sampleDocId]
   );
 
-  useEffect(() => {
-    if (!selectedSample) return;
-    if (quantity.trim() !== "") return;
-    setQuantity(String(selectedSample.availableQuantity));
-  }, [selectedSample, quantity]);
-
-  const qtyParsed = quantity.trim() === "" ? NaN : Number(quantity);
+  const quantityValue =
+    quantity.trim() !== "" ? quantity : selectedSample ? String(selectedSample.availableQuantity) : "";
+  const qtyParsed = quantityValue.trim() === "" ? NaN : Number(quantityValue);
   const hasQty = Number.isFinite(qtyParsed) && qtyParsed > 0;
   const qty = hasQty ? qtyParsed : NaN;
   const available = selectedSample?.availableQuantity ?? 0;
@@ -123,7 +101,7 @@ function DisposalPageInner() {
                     : null;
 
   function resetForm(keepSample = true) {
-    if (!keepSample) setSampleDocId("");
+    if (!keepSample) setSampleOverride("");
     setQuantity("");
     setReason("");
     setRemarks("");
@@ -213,6 +191,9 @@ function DisposalPageInner() {
               />
             ) : null}
 
+            {linkedSampleMissing ? (
+              <p className="text-sm text-amber-800">Linked sample was not found or has no available quantity. Select another sample to dispose.</p>
+            ) : null}
             {disposableSamples.length > 0 ? (
               <>
                 <Select
@@ -220,7 +201,7 @@ function DisposalPageInner() {
                   required
                   value={sampleDocId}
                   onChange={(e) => {
-                    setSampleDocId(e.target.value);
+                    setSampleOverride(e.target.value);
                     setQuantity("");
                   }}
                 >
@@ -271,7 +252,7 @@ function DisposalPageInner() {
                         min={0}
                         step="any"
                         required
-                        value={quantity}
+                        value={quantityValue}
                         onChange={(e) => setQuantity(e.target.value)}
                         hint={`Max ${available} ${selectedSample.unit}. Remaining after: ${
                           hasQty ? remainingAfter : "—"

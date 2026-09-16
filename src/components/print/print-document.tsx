@@ -8,14 +8,18 @@ export function PrintDocument({
   title,
   documentNumber,
   revision = "00",
+  companyName,
+  department,
   children,
 }: {
   title: string;
   documentNumber?: string;
   revision?: string;
+  companyName?: string;
+  department?: string;
   children: ReactNode;
 }) {
-  const company = process.env.NEXT_PUBLIC_COMPANY_NAME || "Stability Management";
+  const company = companyName || process.env.NEXT_PUBLIC_COMPANY_NAME || "Stability Management";
   const generated = new Date().toLocaleString();
 
   return (
@@ -30,6 +34,7 @@ export function PrintDocument({
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm print:border-0 print:shadow-none">
         <header className="border-b border-slate-200 px-6 py-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">{company}</p>
+          {department ? <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{department}</p> : null}
           <h1 className="mt-1 text-xl font-semibold text-slate-900">{title}</h1>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
             {documentNumber ? <span>Document No.: {documentNumber}</span> : null}

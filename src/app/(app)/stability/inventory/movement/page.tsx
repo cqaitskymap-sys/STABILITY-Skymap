@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeftRight, RefreshCw } from "lucide-react";
@@ -37,40 +37,16 @@ function MovementPageInner() {
   const locations = useAsync(listLocations, []);
   const movements = useAsync(listMovements, []);
 
-  const [sampleDocId, setSampleDocId] = useState(sampleFromUrl);
+  const [sampleOverride, setSampleOverride] = useState<string | null>(null);
   const [toChamberId, setToChamberId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [movementDate, setMovementDate] = useState(todayISO());
-  const [movedBy, setMovedBy] = useState(profile?.displayName || "");
+  const [movedBy, setMovedBy] = useState("");
   const [reason, setReason] = useState("");
   const [remarks, setRemarks] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    if (sampleFromUrl) setSampleDocId(sampleFromUrl);
-  }, [sampleFromUrl]);
-
-  useEffect(() => {
-    if (profile?.displayName && !movedBy) {
-      setMovedBy(profile.displayName);
-    }
-  }, [profile?.displayName, movedBy]);
-
-  useEffect(() => {
-    if (!sampleFromUrl || !samples.data?.length) return;
-    const match = samples.data.find((s) => s.id === sampleFromUrl);
-    if (!match) {
-      toast.error("Linked sample was not found. Select a sample to move.");
-      setSampleDocId("");
-      return;
-    }
-    if (match.status === "Disposed") {
-      toast.error("Disposed samples cannot be moved.");
-      setSampleDocId("");
-    }
-  }, [sampleFromUrl, samples.data]);
 
   const movedByValue = movedBy || profile?.displayName || "";
 
@@ -78,6 +54,12 @@ function MovementPageInner() {
     () => (samples.data || []).filter((s) => s.status !== "Disposed"),
     [samples.data]
   );
+  const urlSampleUsable =
+    !samples.data || !sampleFromUrl
+      ? Boolean(sampleFromUrl)
+      : movableSamples.some((s) => s.id === sampleFromUrl);
+  const sampleDocId = sampleOverride ?? (urlSampleUsable ? sampleFromUrl : "");
+  const linkedSampleMissing = Boolean(sampleFromUrl && samples.data && !urlSampleUsable && sampleOverride === null);
 
   const selectedSample = useMemo(
     () => movableSamples.find((s) => s.id === sampleDocId) || null,
@@ -153,7 +135,7 @@ function MovementPageInner() {
                               : null;
 
   function resetForm(keepSample = true) {
-    if (!keepSample) setSampleDocId("");
+    if (!keepSample) setSampleOverride("");
     setToChamberId("");
     setToLocationId("");
     setReason("");
@@ -255,6 +237,9 @@ function MovementPageInner() {
               />
             ) : null}
 
+            {linkedSampleMissing ? (
+              <p className="text-sm text-amber-800">Linked sample was not found or is disposed. Select another sample to move.</p>
+            ) : null}
             {movableSamples.length > 0 && mastersReady ? (
               <>
                 <Select
@@ -262,7 +247,7 @@ function MovementPageInner() {
                   required
                   value={sampleDocId}
                   onChange={(e) => {
-                    setSampleDocId(e.target.value);
+                    setSampleOverride(e.target.value);
                     setToChamberId("");
                     setToLocationId("");
                   }}

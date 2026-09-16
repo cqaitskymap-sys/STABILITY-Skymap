@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { cn, shouldUppercaseInput } from "@/lib/utils";
 import { AlertTriangle, Eye, EyeOff, Inbox, Loader2, type LucideIcon } from "lucide-react";
@@ -295,6 +295,8 @@ export function StatusBadge({ status }: { status: string }) {
     Destroyed: "slate",
     Verified: "green",
     Cancelled: "slate",
+    Reviewed: "blue",
+    Finalized: "green",
     "SAMPLE CHARGED": "green",
     "SAMPLE ALLOCATED": "teal",
     "SAMPLE WITHDRAWN": "blue",
@@ -407,24 +409,21 @@ export function Modal({
   children?: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -432,6 +431,7 @@ export function Modal({
     sm: "sm:max-w-md",
     md: "sm:max-w-lg",
     lg: "sm:max-w-2xl",
+    xl: "sm:max-w-4xl",
   };
 
   const dialog = (

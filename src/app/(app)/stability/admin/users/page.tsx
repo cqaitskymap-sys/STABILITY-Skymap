@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, RefreshCw, Shield, Trash2, UserCog, UserPlus, Users } from "lucide-react";
 import {
@@ -16,6 +16,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
+import { useAsync } from "@/hooks/useAsync";
 import {
   MODULE_ACCESS,
   permissionsForRole,
@@ -101,10 +102,15 @@ function ModuleAccessPicker({
 
 export default function AdminUsersPage() {
   const { profile, hasPermission, createUser, refreshProfile, loading: authLoading } = useAuth();
+  const canManage = hasPermission("users.manage");
   const [tab, setTab] = useState<AdminTab>("create");
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  const usersState = useAsync(async () => {
+    if (authLoading || !canManage) return [] as AppUser[];
+    return listUsers();
+  }, [authLoading, profile?.uid, canManage]);
+  const users = useMemo(() => usersState.data || [], [usersState.data]);
+  const loadingUsers = usersState.loading;
+  const usersError = usersState.error;
 
   const [displayName, setDisplayName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -129,51 +135,29 @@ export default function AdminUsersPage() {
 
   const isSelf = selectedUser?.uid === profile?.uid;
 
-  async function loadUsers() {
-    setLoadingUsers(true);
-    setUsersError(null);
-    try {
-      const rows = await listUsers();
-      setUsers(rows);
-      if (selectedUid && !rows.some((u) => u.uid === selectedUid)) {
-        setSelectedUid("");
-      }
-    } catch (err) {
-      const message = friendlyError(err, "Unable to load users.");
-      setUsersError(message);
-      toast.error(message);
-    } finally {
-      setLoadingUsers(false);
-    }
-  }
-
-  useEffect(() => {
-    if (authLoading || !hasPermission("users.manage")) return;
-    void loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, profile?.uid, hasPermission]);
-
-  useEffect(() => {
-    setCreateAccess(permissionsForRole(role));
-  }, [role]);
-
-  useEffect(() => {
-    if (!selectedUser) {
+  function applyUserSelection(u: AppUser | null) {
+    if (!u) {
+      setSelectedUid("");
       setEditName("");
       setEditRole("QA User");
       setEditActive(true);
       setEditAccess([]);
       return;
     }
-    setEditName(selectedUser.displayName);
-    setEditRole(selectedUser.role);
-    setEditActive(selectedUser.active);
+    setSelectedUid(u.uid);
+    setEditName(u.displayName);
+    setEditRole(u.role);
+    setEditActive(u.active);
     setEditAccess(
-      selectedUser.moduleAccess && selectedUser.moduleAccess.length > 0
-        ? [...selectedUser.moduleAccess]
-        : permissionsForRole(selectedUser.role)
+      u.moduleAccess && u.moduleAccess.length > 0
+        ? [...u.moduleAccess]
+        : permissionsForRole(u.role)
     );
-  }, [selectedUser]);
+  }
+
+  async function reloadUsers() {
+    await usersState.reload();
+  }
 
   if (authLoading) {
     return (
@@ -212,7 +196,7 @@ export default function AdminUsersPage() {
       setPassword("");
       setRole("QA User");
       setCreateAccess(permissionsForRole("QA User"));
-      await loadUsers();
+      await reloadUsers();
       setTab("manage");
     } catch (err) {
       toast.error(friendlyError(err, "Unable to create user."));
@@ -238,7 +222,7 @@ export default function AdminUsersPage() {
         actor: profile,
       });
       toast.success("User updated.");
-      await loadUsers();
+      await reloadUsers();
       if (selectedUser.uid === profile.uid) await refreshProfile();
     } catch (err) {
       toast.error(friendlyError(err, "Unable to update user."));
@@ -262,7 +246,7 @@ export default function AdminUsersPage() {
         actor: profile,
       });
       toast.success("Module access updated.");
-      await loadUsers();
+      await reloadUsers();
       if (selectedUser.uid === profile.uid) await refreshProfile();
     } catch (err) {
       toast.error(friendlyError(err, "Unable to update module access."));
@@ -283,9 +267,8 @@ export default function AdminUsersPage() {
         actor: profile,
       });
       toast.success("User deleted.");
-      setDeleteOpen(false);
-      setSelectedUid("");
-      await loadUsers();
+      applyUserSelection(null);
+      await reloadUsers();
     } catch (err) {
       toast.error(friendlyError(err, "Unable to delete user."));
     } finally {
@@ -299,7 +282,7 @@ export default function AdminUsersPage() {
         title="Admin · User Management"
         description="Create users, manage accounts, and assign module access."
         actions={
-          <Button variant="outline" onClick={() => void loadUsers()} disabled={loadingUsers}>
+          <Button variant="outline" onClick={() => void reloadUsers()} disabled={loadingUsers}>
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
@@ -334,7 +317,7 @@ export default function AdminUsersPage() {
         })}
       </div>
 
-      {usersError ? <ErrorState message={usersError} onRetry={() => void loadUsers()} /> : null}
+      {usersError ? <ErrorState message={usersError} onRetry={() => void reloadUsers()} /> : null}
 
       {tab === "create" ? (
         <Card>
@@ -373,7 +356,11 @@ export default function AdminUsersPage() {
                 label="Role"
                 required
                 value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
+                onChange={(e) => {
+                  const next = e.target.value as UserRole;
+                  setRole(next);
+                  setCreateAccess(permissionsForRole(next));
+                }}
                 hint="Role sets the default module access below."
               >
                 {ROLES.map((r) => (
@@ -431,7 +418,7 @@ export default function AdminUsersPage() {
                                 "cursor-pointer border-b border-slate-100 text-slate-700",
                                 active ? "bg-teal-50" : "hover:bg-slate-50"
                               )}
-                              onClick={() => setSelectedUid(u.uid)}
+                              onClick={() => applyUserSelection(u)}
                             >
                               <td className="px-2 py-2">
                                 <div className="font-medium">{u.displayName}</div>
@@ -452,7 +439,7 @@ export default function AdminUsersPage() {
                         <button
                           key={u.uid}
                           type="button"
-                          onClick={() => setSelectedUid(u.uid)}
+                          onClick={() => applyUserSelection(u)}
                           className={cn(
                             "w-full rounded-xl border px-3 py-3 text-left transition",
                             active ? "border-teal-300 bg-teal-50" : "border-slate-200 hover:border-slate-300"
@@ -557,7 +544,7 @@ export default function AdminUsersPage() {
                     <button
                       key={u.uid}
                       type="button"
-                      onClick={() => setSelectedUid(u.uid)}
+                      onClick={() => applyUserSelection(u)}
                       className={cn(
                         "w-full rounded-xl border px-3 py-2.5 text-left transition",
                         active ? "border-teal-300 bg-teal-50" : "border-slate-200 hover:border-slate-300"

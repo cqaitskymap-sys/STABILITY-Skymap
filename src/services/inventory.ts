@@ -9,6 +9,7 @@ import {
   updateDoc,
   where,
   writeBatch,
+  runTransaction,
 } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import {
@@ -102,6 +103,41 @@ function studyTotalsFromSamples(samples: StabilitySample[]) {
     disposedQuantity: samples.reduce((n, s) => n + Number(s.disposedQuantity || 0), 0),
     returnedQuantity: samples.reduce((n, s) => n + Number(s.returnedQuantity || 0), 0),
     status: studyStatusFromSamples(samples),
+  };
+}
+
+function studyTotalsAfterDelta(
+  study: Pick<
+    StabilityStudy,
+    "totalQuantity" | "withdrawnQuantity" | "availableQuantity" | "disposedQuantity" | "returnedQuantity"
+  >,
+  delta: { available?: number; withdrawn?: number; disposed?: number }
+) {
+  const totalQuantity = Number(study.totalQuantity || 0);
+  const withdrawnQuantity = Number(study.withdrawnQuantity || 0) + (delta.withdrawn || 0);
+  const availableQuantity = Number(study.availableQuantity || 0) + (delta.available || 0);
+  const disposedQuantity = Number(study.disposedQuantity || 0) + (delta.disposed || 0);
+  const returnedQuantity = Number(study.returnedQuantity || 0);
+  return {
+    totalQuantity,
+    withdrawnQuantity,
+    availableQuantity,
+    disposedQuantity,
+    returnedQuantity,
+    status: studyStatusFromSamples([
+      {
+        status: sampleStatusFromQty({
+          availableQuantity,
+          withdrawnQuantity,
+          disposedQuantity,
+          totalQuantity,
+        }),
+        availableQuantity,
+        withdrawnQuantity,
+        disposedQuantity,
+        totalQuantity,
+      },
+    ]),
   };
 }
 
@@ -711,157 +747,158 @@ export async function withdrawSample(input: {
 }) {
   if (input.actualQuantity <= 0) throw new Error("Withdrawn quantity must be greater than zero.");
 
-  const pullSnap = await getDoc(doc(getDb(), COLLECTIONS.studyPullPoints, input.pullPointDocId));
-  if (!pullSnap.exists()) throw new Error("Pull point not found.");
-  const pull = { id: pullSnap.id, ...pullSnap.data() } as StudyPullPoint;
-
-  const sampleSnap = await getDoc(doc(getDb(), COLLECTIONS.stabilitySamples, pull.sampleDocId));
-  if (!sampleSnap.exists()) throw new Error("Sample inventory not found.");
-  const sample = { id: sampleSnap.id, ...sampleSnap.data() } as StabilitySample;
-
-  if (input.actualQuantity > sample.availableQuantity) {
-    throw new Error("Actual quantity cannot exceed available quantity.");
-  }
-
-  const remainingPlanned = Math.max(0, pull.plannedQuantity - pull.actualQuantity);
-  if (remainingPlanned <= 0) {
-    throw new Error("This pull point is already fully withdrawn.");
-  }
-  if (input.actualQuantity > remainingPlanned) {
-    throw new Error(`Cannot withdraw more than remaining planned quantity (${remainingPlanned}).`);
-  }
-
-  if (!sample.chamberId) {
-    throw new Error("Sample chamber is missing; cannot update chamber capacity.");
-  }
-
   const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
   const withdrawalId = await nextSequentialId("WDR");
   const txId = await nextSequentialId("TRX");
   const stamp = nowISO();
-  const newWithdrawn = sample.withdrawnQuantity + input.actualQuantity;
-  const newAvailable = calcAvailableQuantity(
-    sample.totalQuantity,
-    newWithdrawn,
-    sample.disposedQuantity,
-    sample.returnedQuantity || 0
-  );
-  const newActual = pull.actualQuantity + input.actualQuantity;
-  const pullStatus = derivePullStatus(
-    pull.plannedDate,
-    newActual,
-    pull.plannedQuantity,
-    settings.withdrawalWindowDays
-  );
-  const newSampleStatus = sampleStatusFromQty({
-    ...sample,
-    withdrawnQuantity: newWithdrawn,
-    availableQuantity: newAvailable,
-  });
-  const updatedSample: StabilitySample = {
-    ...sample,
-    withdrawnQuantity: newWithdrawn,
-    availableQuantity: newAvailable,
-    status: newSampleStatus,
-  };
-
-  const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
-  if (!chamberSnap.exists()) throw new Error("Chamber not found for this sample.");
-  const chamberUsed = Number(chamberSnap.data()?.usedCapacity || 0);
-
-  const remainingPulls = (await listPullPoints({ studyDocId: sample.studyDocId }))
-    .filter((p) => p.id !== pull.id)
-    .concat([{ ...pull, actualQuantity: newActual, status: pullStatus }]);
-  const nextOpen = remainingPulls
-    .filter((p) => p.status !== "Withdrawn")
-    .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
-  const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
-
-  const batch = writeBatch(getDb());
+  const pullPreviewSnap = await getDoc(doc(getDb(), COLLECTIONS.studyPullPoints, input.pullPointDocId));
+  if (!pullPreviewSnap.exists()) throw new Error("Pull point not found.");
+  const pullPreview = { id: pullPreviewSnap.id, ...pullPreviewSnap.data() } as StudyPullPoint;
+  const siblingPulls = await listPullPoints({ studyDocId: pullPreview.studyDocId });
   const withdrawalRef = doc(collection(getDb(), COLLECTIONS.sampleWithdrawals));
-  const withdrawalPayload: Omit<SampleWithdrawal, "id"> = {
-    withdrawalId,
-    sampleId: sample.sampleId,
-    sampleDocId: sample.id,
-    studyId: sample.studyId,
-    studyDocId: sample.studyDocId,
-    pullPointDocId: pull.id,
-    productName: sample.productName,
-    batchNumber: sample.batchNumber,
-    studyType: sample.studyType,
-    storageCondition: sample.storageCondition,
-    chamberName: sample.chamberName,
-    locationLabel: sample.locationLabel,
-    pullPoint: pull.pullPoint,
-    plannedQuantity: pull.plannedQuantity,
-    actualQuantity: input.actualQuantity,
-    withdrawalDate: input.withdrawalDate,
-    withdrawnBy: input.withdrawnBy,
-    receivedBy: input.receivedBy,
-    scheduledDate: pull.plannedDate,
-    windowEndDate: pull.windowEndDate,
-    status: "Withdrawn",
-    remarks: input.remarks,
-    createdBy: input.user.uid,
-    createdByName: input.user.displayName || input.user.email,
-    createdAt: stamp,
-  };
-  batch.set(
-    withdrawalRef,
-    omitUndefined(withdrawalPayload as unknown as Record<string, unknown>)
-  );
+  const inventoryTxRef = doc(collection(getDb(), COLLECTIONS.inventoryTransactions));
+  let withdrawalPayload: Omit<SampleWithdrawal, "id"> | undefined;
 
-  batch.update(doc(getDb(), COLLECTIONS.studyPullPoints, pull.id), {
-    actualQuantity: newActual,
-    status: pullStatus,
-    withdrawalId,
-    completedDate: pullStatus === "Withdrawn" ? input.withdrawalDate : null,
-    updatedAt: stamp,
-  });
+  await runTransaction(getDb(), async (tx) => {
+    const pullRef = doc(getDb(), COLLECTIONS.studyPullPoints, input.pullPointDocId);
+    const pullSnap = await tx.get(pullRef);
+    if (!pullSnap.exists()) throw new Error("Pull point not found.");
+    const pull = { id: pullSnap.id, ...pullSnap.data() } as StudyPullPoint;
 
-  batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
-    withdrawnQuantity: newWithdrawn,
-    availableQuantity: newAvailable,
-    status: newSampleStatus,
-    nextPullDate: nextOpen?.plannedDate ?? null,
-    updatedAt: stamp,
-  });
+    const sampleRef = doc(getDb(), COLLECTIONS.stabilitySamples, pull.sampleDocId);
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Sample inventory not found.");
+    const sample = { id: sampleSnap.id, ...sampleSnap.data() } as StabilitySample;
 
-  batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-    ...studyPatch,
-    nextPullDate: nextOpen?.plannedDate ?? null,
-    updatedAt: stamp,
-  });
+    if (input.actualQuantity > sample.availableQuantity) {
+      throw new Error("Actual quantity cannot exceed available quantity.");
+    }
 
-  batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
-    usedCapacity: Math.max(0, chamberUsed - input.actualQuantity),
-    updatedAt: stamp,
-  });
+    const remainingPlanned = Math.max(0, pull.plannedQuantity - pull.actualQuantity);
+    if (remainingPlanned <= 0) {
+      throw new Error("This pull point is already fully withdrawn.");
+    }
+    if (input.actualQuantity > remainingPlanned) {
+      throw new Error(`Cannot withdraw more than remaining planned quantity (${remainingPlanned}).`);
+    }
+    if (!sample.chamberId) {
+      throw new Error("Sample chamber is missing; cannot update chamber capacity.");
+    }
+    if (!sample.studyDocId) throw new Error("Sample study reference is missing.");
 
-  batch.set(
-    doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
-    omitUndefined({
-      transactionId: txId,
+    const chamberRef = doc(getDb(), COLLECTIONS.chambers, sample.chamberId);
+    const chamberSnap = await tx.get(chamberRef);
+    if (!chamberSnap.exists()) throw new Error("Chamber not found for this sample.");
+
+    const studyRef = doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId);
+    const studySnap = await tx.get(studyRef);
+    if (!studySnap.exists()) throw new Error("Study not found.");
+    const study = { id: studySnap.id, ...studySnap.data() } as StabilityStudy;
+
+    const newWithdrawn = sample.withdrawnQuantity + input.actualQuantity;
+    const newAvailable = calcAvailableQuantity(
+      sample.totalQuantity,
+      newWithdrawn,
+      sample.disposedQuantity,
+      sample.returnedQuantity || 0
+    );
+    const newActual = pull.actualQuantity + input.actualQuantity;
+    const pullStatus = derivePullStatus(
+      pull.plannedDate,
+      newActual,
+      pull.plannedQuantity,
+      settings.withdrawalWindowDays
+    );
+    const newSampleStatus = sampleStatusFromQty({
+      ...sample,
+      withdrawnQuantity: newWithdrawn,
+      availableQuantity: newAvailable,
+    });
+    const studyPatch = studyTotalsAfterDelta(study, {
+      available: -input.actualQuantity,
+      withdrawn: input.actualQuantity,
+    });
+    const nextOpen = siblingPulls
+      .filter((p) => p.id !== pull.id && p.status !== "Withdrawn")
+      .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
+
+    withdrawalPayload = {
+      withdrawalId,
       sampleId: sample.sampleId,
       sampleDocId: sample.id,
       studyId: sample.studyId,
+      studyDocId: sample.studyDocId,
+      pullPointDocId: pull.id,
       productName: sample.productName,
       batchNumber: sample.batchNumber,
-      transactionType: "SAMPLE_WITHDRAWN" as TransactionType,
-      quantity: input.actualQuantity,
-      unit: sample.unit,
-      previousBalance: sample.availableQuantity,
-      newBalance: newAvailable,
-      fromLocation: sample.locationLabel,
-      reason: `Withdrawal ${pull.pullPoint}`,
+      studyType: sample.studyType,
+      storageCondition: sample.storageCondition,
+      chamberName: sample.chamberName,
+      locationLabel: sample.locationLabel,
+      pullPoint: pull.pullPoint,
+      plannedQuantity: pull.plannedQuantity,
+      actualQuantity: input.actualQuantity,
+      withdrawalDate: input.withdrawalDate,
+      withdrawnBy: input.withdrawnBy,
+      receivedBy: input.receivedBy,
+      scheduledDate: pull.plannedDate,
+      windowEndDate: pull.windowEndDate,
+      status: "Withdrawn",
       remarks: input.remarks,
-      performedBy: input.user.uid,
-      performedByName: input.user.displayName || input.user.email,
-      performedAt: stamp,
-    } as unknown as Record<string, unknown>)
-  );
+      createdBy: input.user.uid,
+      createdByName: input.user.displayName || input.user.email,
+      createdAt: stamp,
+    };
 
-  await batch.commit();
+    tx.set(withdrawalRef, omitUndefined(withdrawalPayload as unknown as Record<string, unknown>));
+    tx.update(pullRef, {
+      actualQuantity: newActual,
+      status: pullStatus,
+      withdrawalId,
+      completedDate: pullStatus === "Withdrawn" ? input.withdrawalDate : null,
+      updatedAt: stamp,
+    });
+    tx.update(sampleRef, {
+      withdrawnQuantity: newWithdrawn,
+      availableQuantity: newAvailable,
+      status: newSampleStatus,
+      nextPullDate: nextOpen?.plannedDate ?? null,
+      updatedAt: stamp,
+    });
+    tx.update(studyRef, {
+      ...studyPatch,
+      nextPullDate: nextOpen?.plannedDate ?? null,
+      updatedAt: stamp,
+    });
+    tx.update(chamberRef, {
+      usedCapacity: Math.max(0, Number(chamberSnap.data()?.usedCapacity || 0) - input.actualQuantity),
+      updatedAt: stamp,
+    });
+    tx.set(
+      inventoryTxRef,
+      omitUndefined({
+        transactionId: txId,
+        sampleId: sample.sampleId,
+        sampleDocId: sample.id,
+        studyId: sample.studyId,
+        productName: sample.productName,
+        batchNumber: sample.batchNumber,
+        transactionType: "SAMPLE_WITHDRAWN" as TransactionType,
+        quantity: input.actualQuantity,
+        unit: sample.unit,
+        previousBalance: sample.availableQuantity,
+        newBalance: newAvailable,
+        fromLocation: sample.locationLabel,
+        reason: `Withdrawal ${pull.pullPoint}`,
+        remarks: input.remarks,
+        performedBy: input.user.uid,
+        performedByName: input.user.displayName || input.user.email,
+        performedAt: stamp,
+      } as unknown as Record<string, unknown>)
+    );
+  });
+
+  if (!withdrawalPayload) throw new Error("Withdrawal did not complete.");
 
   await writeAuditLog({
     action: "Sample Withdrawn",
@@ -1222,115 +1259,123 @@ export async function disposeSample(input: {
     throw new Error("Remarks are required when reason is Other.");
   }
 
-  const sample = await getSample(input.sampleDocId);
-  if (!sample) throw new Error("Sample not found.");
-  if (sample.status === "Disposed") throw new Error("Sample is already fully disposed.");
-  if (sample.availableQuantity <= 0) throw new Error("No available quantity left to dispose.");
-  if (input.quantity > sample.availableQuantity) {
-    throw new Error(`Cannot dispose more than available quantity (${sample.availableQuantity}).`);
-  }
-  if (!sample.studyDocId) throw new Error("Sample study reference is missing.");
-
   const disposalId = await nextSequentialId("DSP");
   const txId = await nextSequentialId("TRX");
   const stamp = nowISO();
-  const newDisposed = sample.disposedQuantity + input.quantity;
-  const newAvailable = calcAvailableQuantity(
-    sample.totalQuantity,
-    sample.withdrawnQuantity,
-    newDisposed,
-    sample.returnedQuantity || 0
-  );
-  const newStatus = sampleStatusFromQty({
-    ...sample,
-    disposedQuantity: newDisposed,
-    availableQuantity: newAvailable,
-  });
-  const updatedSample: StabilitySample = {
-    ...sample,
-    disposedQuantity: newDisposed,
-    availableQuantity: newAvailable,
-    status: newStatus,
-  };
-  const studyPatch = await studyPatchAfterSampleChange(sample.studyDocId, updatedSample);
+  const sampleRef = doc(getDb(), COLLECTIONS.stabilitySamples, input.sampleDocId);
+  const disposalRef = doc(collection(getDb(), COLLECTIONS.sampleDisposals));
+  const inventoryTxRef = doc(collection(getDb(), COLLECTIONS.inventoryTransactions));
+  let result: { remainingAvailable: number; status: SampleStatus } | undefined;
 
-  const batch = writeBatch(getDb());
-  batch.set(
-    doc(collection(getDb(), COLLECTIONS.sampleDisposals)),
-    omitUndefined({
-      disposalId,
-      sampleId: sample.sampleId,
-      sampleDocId: sample.id,
-      studyId: sample.studyId,
-      productName: sample.productName,
-      batchNumber: sample.batchNumber,
-      quantity: input.quantity,
-      disposalDate: input.disposalDate,
-      reason: input.reason,
-      disposedBy: input.disposedBy.trim(),
-      remarks: input.remarks?.trim() || undefined,
-      createdBy: input.user.uid,
-      createdByName: input.user.displayName || input.user.email,
-      createdAt: stamp,
-    } as unknown as Record<string, unknown>)
-  );
+  await runTransaction(getDb(), async (tx) => {
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Sample not found.");
+    const sample = { id: sampleSnap.id, ...sampleSnap.data() } as StabilitySample;
+    if (sample.status === "Disposed") throw new Error("Sample is already fully disposed.");
+    if (sample.availableQuantity <= 0) throw new Error("No available quantity left to dispose.");
+    if (input.quantity > sample.availableQuantity) {
+      throw new Error(`Cannot dispose more than available quantity (${sample.availableQuantity}).`);
+    }
+    if (!sample.studyDocId) throw new Error("Sample study reference is missing.");
 
-  batch.update(doc(getDb(), COLLECTIONS.stabilitySamples, sample.id), {
-    disposedQuantity: newDisposed,
-    availableQuantity: newAvailable,
-    status: newStatus,
-    updatedAt: stamp,
-  });
-  batch.update(doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId), {
-    ...studyPatch,
-    updatedAt: stamp,
-  });
+    const studyRef = doc(getDb(), COLLECTIONS.stabilityStudies, sample.studyDocId);
+    const studySnap = await tx.get(studyRef);
+    if (!studySnap.exists()) throw new Error("Study not found.");
+    const study = { id: studySnap.id, ...studySnap.data() } as StabilityStudy;
 
-  if (sample.chamberId) {
-    const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
-    if (chamberSnap.exists()) {
-      batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
+    const chamberRef = sample.chamberId ? doc(getDb(), COLLECTIONS.chambers, sample.chamberId) : null;
+    const chamberSnap = chamberRef ? await tx.get(chamberRef) : null;
+
+    const newDisposed = sample.disposedQuantity + input.quantity;
+    const newAvailable = calcAvailableQuantity(
+      sample.totalQuantity,
+      sample.withdrawnQuantity,
+      newDisposed,
+      sample.returnedQuantity || 0
+    );
+    const newStatus = sampleStatusFromQty({
+      ...sample,
+      disposedQuantity: newDisposed,
+      availableQuantity: newAvailable,
+    });
+    const studyPatch = studyTotalsAfterDelta(study, {
+      available: -input.quantity,
+      disposed: input.quantity,
+    });
+
+    tx.set(
+      disposalRef,
+      omitUndefined({
+        disposalId,
+        sampleId: sample.sampleId,
+        sampleDocId: sample.id,
+        studyId: sample.studyId,
+        productName: sample.productName,
+        batchNumber: sample.batchNumber,
+        quantity: input.quantity,
+        disposalDate: input.disposalDate,
+        reason: input.reason,
+        disposedBy: input.disposedBy.trim(),
+        remarks: input.remarks?.trim() || undefined,
+        createdBy: input.user.uid,
+        createdByName: input.user.displayName || input.user.email,
+        createdAt: stamp,
+      } as unknown as Record<string, unknown>)
+    );
+    tx.update(sampleRef, {
+      disposedQuantity: newDisposed,
+      availableQuantity: newAvailable,
+      status: newStatus,
+      updatedAt: stamp,
+    });
+    tx.update(studyRef, {
+      ...studyPatch,
+      updatedAt: stamp,
+    });
+    if (chamberRef && chamberSnap?.exists()) {
+      tx.update(chamberRef, {
         usedCapacity: Math.max(0, Number(chamberSnap.data().usedCapacity || 0) - input.quantity),
         updatedAt: stamp,
       });
     }
-  }
+    tx.set(
+      inventoryTxRef,
+      omitUndefined({
+        transactionId: txId,
+        sampleId: sample.sampleId,
+        sampleDocId: sample.id,
+        studyId: sample.studyId,
+        productName: sample.productName,
+        batchNumber: sample.batchNumber,
+        transactionType: "SAMPLE_DISPOSED",
+        quantity: input.quantity,
+        unit: sample.unit,
+        previousBalance: sample.availableQuantity,
+        newBalance: newAvailable,
+        fromLocation: sample.locationLabel,
+        reason: input.reason,
+        remarks: input.remarks?.trim() || undefined,
+        performedBy: input.user.uid,
+        performedByName: input.user.displayName || input.user.email,
+        performedAt: stamp,
+      } as unknown as Record<string, unknown>)
+    );
+    result = { remainingAvailable: newAvailable, status: newStatus };
+  });
 
-  batch.set(
-    doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
-    omitUndefined({
-      transactionId: txId,
-      sampleId: sample.sampleId,
-      sampleDocId: sample.id,
-      studyId: sample.studyId,
-      productName: sample.productName,
-      batchNumber: sample.batchNumber,
-      transactionType: "SAMPLE_DISPOSED",
-      quantity: input.quantity,
-      unit: sample.unit,
-      previousBalance: sample.availableQuantity,
-      newBalance: newAvailable,
-      fromLocation: sample.locationLabel,
-      reason: input.reason,
-      remarks: input.remarks?.trim() || undefined,
-      performedBy: input.user.uid,
-      performedByName: input.user.displayName || input.user.email,
-      performedAt: stamp,
-    } as unknown as Record<string, unknown>)
-  );
+  if (!result) throw new Error("Disposal did not complete.");
 
-  await batch.commit();
   await writeAuditLog({
     action: "Sample Disposed",
     recordId: disposalId,
     recordType: "sampleDisposal",
-    newValue: { disposalId, quantity: input.quantity, reason: input.reason, remaining: newAvailable },
+    newValue: { disposalId, quantity: input.quantity, reason: input.reason, remaining: result.remainingAvailable },
     userId: input.user.uid,
     userName: input.user.displayName || input.user.email,
     userEmail: input.user.email,
   });
 
-  return { disposalId, remainingAvailable: newAvailable, status: newStatus };
+  return { disposalId, remainingAvailable: result.remainingAvailable, status: result.status };
 }
 
 export async function refreshAlerts() {

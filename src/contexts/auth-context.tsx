@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(firebaseUser);
         if (firebaseUser) {
           const p = await ensureProfile(firebaseUser, firebaseUser.displayName || "");
-          if (!p || !p.active) {
+          if (!p || p.active === false) {
             setProfile(null);
             await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
             setUser(null);
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "This account is not provisioned. Ask an Admin to create your user in User Management."
       );
     }
-    if (!p.active) {
+    if (p.active === false) {
       await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
       throw new Error("This account is inactive. Contact an Admin.");
     }
@@ -317,7 +317,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [profile]);
 
   const hasPermission = useCallback(
-    (permission: Permission) => Boolean(profile?.active) && can(profile, permission),
+    (permission: Permission) => profile?.active !== false && can(profile, permission),
     [profile]
   );
 

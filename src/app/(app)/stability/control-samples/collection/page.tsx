@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 import {
@@ -236,7 +237,12 @@ export default function ControlSampleCollectionPage() {
       <PageHeader
         title="Control Sample Collection"
         description="IPQA collects required quantity product-wise per Annexure-I. Initial / Middle / End stages are recorded separately and are not auto-merged."
-        actions={<Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
+            <Link href="/stability/control-samples/daily-collection"><Button variant="outline">Daily Collection Record</Button></Link>
+          </div>
+        }
       />
       {catalog.loading ? <LoadingSkeleton rows={8} /> : null}
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
