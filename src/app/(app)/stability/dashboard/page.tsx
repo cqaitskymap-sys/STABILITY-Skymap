@@ -28,7 +28,6 @@ import { formatDate, formatDateTime, roundPct } from "@/lib/utils";
 import { DashboardBriefing } from "@/components/ai/dashboard-briefing";
 import { getChamberUtilization, getDashboardStats, getRecentActivity } from "@/services/dashboard";
 import { listPullPoints } from "@/services/inventory";
-import { derivePullStatus } from "@/lib/utils";
 
 export default function StabilityDashboardPage() {
   const stats = useAsync(getDashboardStats, []);
@@ -37,7 +36,6 @@ export default function StabilityDashboardPage() {
   const upcoming = useAsync(async () => {
     const pulls = await listPullPoints();
     return pulls
-      .map((p) => ({ ...p, status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity) }))
       .filter((p) =>
         ["Upcoming", "Due Soon", "Due Today", "Due", "Within Window", "Overdue", "Partially Withdrawn"].includes(p.status)
       )

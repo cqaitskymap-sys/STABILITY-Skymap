@@ -235,6 +235,8 @@ export async function getSample(id: string) {
 }
 
 export async function listPullPoints(filters?: { studyDocId?: string; sampleDocId?: string }) {
+  const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
+  const windowDays = settings.withdrawalWindowDays ?? 7;
   const snap = await getDocs(collection(getDb(), COLLECTIONS.studyPullPoints));
   return snap.docs
     .map((d) => {
@@ -242,7 +244,7 @@ export async function listPullPoints(filters?: { studyDocId?: string; sampleDocI
       return {
         id: d.id,
         ...data,
-        status: derivePullStatus(data.plannedDate, data.actualQuantity, data.plannedQuantity),
+        status: derivePullStatus(data.plannedDate, data.actualQuantity, data.plannedQuantity, windowDays),
       } as StudyPullPoint;
     })
     .filter((p) => {
@@ -653,11 +655,6 @@ export async function createStudyAndCharge(input: {
     );
   }
 
-  batch.update(doc(getDb(), COLLECTIONS.chambers, input.chamberId), {
-    usedCapacity: Number(chamber.usedCapacity || 0) + input.totalQuantity,
-    updatedAt: stamp,
-  });
-
   if (input.receiptDocId) {
     batch.update(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId), {
       status: "Charged",
@@ -667,7 +664,35 @@ export async function createStudyAndCharge(input: {
     });
   }
 
-  await batch.commit();
+  const chamberRef = doc(getDb(), COLLECTIONS.chambers, input.chamberId);
+  await runTransaction(getDb(), async (tx) => {
+    const snap = await tx.get(chamberRef);
+    if (!snap.exists()) throw new Error("Selected chamber was not found.");
+    const live = snap.data();
+    if (live.status === "Inactive" || live.status === "Out of Service") {
+      throw new Error("Cannot allocate samples to an inactive chamber.");
+    }
+    const used = Number(live.usedCapacity || 0);
+    const cap = Number(live.capacity || 0);
+    if (used + input.totalQuantity > cap) {
+      throw new Error("Chamber capacity is insufficient for this charge quantity.");
+    }
+    tx.update(chamberRef, { usedCapacity: used + input.totalQuantity, updatedAt: stamp });
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    await runTransaction(getDb(), async (tx) => {
+      const snap = await tx.get(chamberRef);
+      if (!snap.exists()) return;
+      tx.update(chamberRef, {
+        usedCapacity: Math.max(0, Number(snap.data().usedCapacity || 0) - input.totalQuantity),
+        updatedAt: nowISO(),
+      });
+    }).catch(() => undefined);
+    throw err;
+  }
 
   if (input.receiptDocId) {
     try {
@@ -1038,22 +1063,6 @@ export async function moveSample(input: {
     });
   }
 
-  if (changingChamber) {
-    if (sample.chamberId) {
-      const fromSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, sample.chamberId));
-      if (fromSnap.exists()) {
-        batch.update(doc(getDb(), COLLECTIONS.chambers, sample.chamberId), {
-          usedCapacity: Math.max(0, Number(fromSnap.data().usedCapacity || 0) - qty),
-          updatedAt: stamp,
-        });
-      }
-    }
-    batch.update(doc(getDb(), COLLECTIONS.chambers, input.toChamberId), {
-      usedCapacity: Number(chamber.usedCapacity || 0) + qty,
-      updatedAt: stamp,
-    });
-  }
-
   batch.set(
     doc(collection(getDb(), COLLECTIONS.inventoryTransactions)),
     omitUndefined({
@@ -1075,17 +1084,61 @@ export async function moveSample(input: {
     } as unknown as Record<string, unknown>)
   );
 
-  await batch.commit();
-  await writeAuditLog({
-    action: "Sample Moved",
-    recordId: movementId,
-    recordType: "sampleMovement",
-    previousValue: { location: sample.locationLabel, chamber: sample.chamberName },
-    newValue: { location: input.toLocationLabel, chamber: input.toChamberName },
-    userId: input.user.uid,
-    userName: input.user.displayName || input.user.email,
-    userEmail: input.user.email,
-  });
+  if (changingChamber && qty > 0) {
+    const destRef = doc(getDb(), COLLECTIONS.chambers, input.toChamberId);
+    const fromRef = sample.chamberId ? doc(getDb(), COLLECTIONS.chambers, sample.chamberId) : null;
+    await runTransaction(getDb(), async (tx) => {
+      const destSnap = await tx.get(destRef);
+      if (!destSnap.exists()) throw new Error("Destination chamber not found.");
+      const dest = destSnap.data();
+      if (dest.status === "Inactive") throw new Error("Cannot move samples to an inactive chamber.");
+      const destUsed = Number(dest.usedCapacity || 0);
+      const destCap = Number(dest.capacity || 0);
+      if (destUsed + qty > destCap) {
+        throw new Error(
+          `Destination chamber capacity is insufficient (need ${qty}, free ${Math.max(0, destCap - destUsed)}).`
+        );
+      }
+      tx.update(destRef, { usedCapacity: destUsed + qty, updatedAt: stamp });
+      if (fromRef) {
+        const fromSnap = await tx.get(fromRef);
+        if (fromSnap.exists()) {
+          tx.update(fromRef, {
+            usedCapacity: Math.max(0, Number(fromSnap.data().usedCapacity || 0) - qty),
+            updatedAt: stamp,
+          });
+        }
+      }
+    });
+  }
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (changingChamber && qty > 0) {
+      const destRef = doc(getDb(), COLLECTIONS.chambers, input.toChamberId);
+      const fromRef = sample.chamberId ? doc(getDb(), COLLECTIONS.chambers, sample.chamberId) : null;
+      await runTransaction(getDb(), async (tx) => {
+        const destSnap = await tx.get(destRef);
+        if (destSnap.exists()) {
+          tx.update(destRef, {
+            usedCapacity: Math.max(0, Number(destSnap.data().usedCapacity || 0) - qty),
+            updatedAt: nowISO(),
+          });
+        }
+        if (fromRef) {
+          const fromSnap = await tx.get(fromRef);
+          if (fromSnap.exists()) {
+            tx.update(fromRef, {
+              usedCapacity: Number(fromSnap.data().usedCapacity || 0) + qty,
+              updatedAt: nowISO(),
+            });
+          }
+        }
+      }).catch(() => undefined);
+    }
+    throw err;
+  }
 
   return { movementId };
 }
@@ -1398,16 +1451,10 @@ export async function refreshAlerts() {
 
   const existing = await listAlerts();
   const CHUNK = 400;
-  for (let i = 0; i < existing.length; i += CHUNK) {
-    const batch = writeBatch(getDb());
-    existing.slice(i, i + CHUNK).forEach((a) => {
-      batch.delete(doc(getDb(), COLLECTIONS.inventoryAlerts, a.id));
-    });
-    await batch.commit();
-  }
-
   const alerts: Omit<InventoryAlert, "id">[] = [];
   const stamp = nowISO();
+  const alertKey = (a: Pick<InventoryAlert, "alertType" | "relatedId">) => `${a.alertType}::${a.relatedId || ""}`;
+  const existingByKey = new Map(existing.map((a) => [alertKey(a), a]));
 
   for (const p of pulls) {
     const remaining = Math.max(0, p.plannedQuantity - p.actualQuantity);
@@ -1532,9 +1579,43 @@ export async function refreshAlerts() {
     });
   }
 
-  for (let i = 0; i < alerts.length; i += CHUNK) {
+  const keepIds = new Set<string>();
+  const toCreate: Omit<InventoryAlert, "id">[] = [];
+  const toUpdate: InventoryAlert[] = [];
+  for (const next of alerts) {
+    const prev = existingByKey.get(alertKey(next));
+    if (prev) {
+      keepIds.add(prev.id);
+      toUpdate.push({
+        ...next,
+        id: prev.id,
+        acknowledged: prev.acknowledged,
+        createdAt: prev.createdAt,
+      });
+    } else {
+      toCreate.push(next);
+    }
+  }
+  const toDelete = existing.filter((a) => !keepIds.has(a.id));
+
+  for (let i = 0; i < toDelete.length; i += CHUNK) {
     const batch = writeBatch(getDb());
-    alerts.slice(i, i + CHUNK).forEach((a) => {
+    toDelete.slice(i, i + CHUNK).forEach((a) => {
+      batch.delete(doc(getDb(), COLLECTIONS.inventoryAlerts, a.id));
+    });
+    await batch.commit();
+  }
+  for (let i = 0; i < toUpdate.length; i += CHUNK) {
+    const batch = writeBatch(getDb());
+    toUpdate.slice(i, i + CHUNK).forEach((a) => {
+      const { id, ...data } = a;
+      batch.update(doc(getDb(), COLLECTIONS.inventoryAlerts, id), data);
+    });
+    await batch.commit();
+  }
+  for (let i = 0; i < toCreate.length; i += CHUNK) {
+    const batch = writeBatch(getDb());
+    toCreate.slice(i, i + CHUNK).forEach((a) => {
       batch.set(doc(collection(getDb(), COLLECTIONS.inventoryAlerts)), a);
     });
     await batch.commit();

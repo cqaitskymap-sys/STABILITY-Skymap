@@ -39,7 +39,7 @@ import {
   updateDailyCollectionDraft,
 } from "@/services/daily-collection";
 import { listStudies } from "@/services/inventory";
-import { listBatches, listMarkets, listPackagingMaterials, listPackSizes, listProducts, listUnits } from "@/services/masters";
+import { listBatches, listControlBatches, listControlProducts, listMarkets, listPackagingMaterials, listPackSizes, listProducts, listUnits } from "@/services/masters";
 import { getOrganizationSettings } from "@/services/organization";
 import { listUsers } from "@/services/users";
 import type { DailyCollectionInput, DailyCollectionRecord } from "@/types/daily-collection";
@@ -59,12 +59,14 @@ export default function DailyCollectionRecordPage() {
   const allowFutureDate = hasPermission("users.manage");
 
   const catalog = useAsync(async () => {
-    const [products, batches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users] =
+    const [products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users] =
       await Promise.all([
         listProducts(),
         listBatches(),
+        listControlProducts(),
+        listControlBatches(),
         listUnits(),
-        listMarkets().catch(() => []),
+        listMarkets(),
         listPackSizes().catch(() => []),
         listPackagingMaterials(),
         listControlSamples(),
@@ -74,7 +76,7 @@ export default function DailyCollectionRecordPage() {
         getOrganizationSettings(),
         allowCollectorSelect ? listUsers() : Promise.resolve([]),
       ]);
-    return { products, batches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users };
+    return { products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users };
   }, [allowCollectorSelect]);
 
   const [search, setSearch] = useState("");
@@ -85,7 +87,6 @@ export default function DailyCollectionRecordPage() {
   const [market, setMarket] = useState("");
   const [sampleType, setSampleType] = useState("");
   const [collectedBy, setCollectedBy] = useState("");
-  const [status, setStatus] = useState("");
   const [month, setMonth] = useState("");
   const [page, setPage] = useState(1);
   const [print, setPrint] = useState(false);
@@ -107,6 +108,8 @@ export default function DailyCollectionRecordPage() {
     () => ({
       products: catalog.data?.products || [],
       batches: catalog.data?.batches || [],
+      controlProducts: catalog.data?.controlProducts || [],
+      controlBatches: catalog.data?.controlBatches || [],
       units: catalog.data?.units || [],
       markets: catalog.data?.markets || [],
       packSizes: catalog.data?.packSizes || [],
@@ -118,6 +121,23 @@ export default function DailyCollectionRecordPage() {
     }),
     [catalog.data]
   );
+
+  const productFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    // Masters stay separate: dump the stability catalog only when the user
+    // explicitly filters to Stability Sample. "All types" is Control Sample
+    // masters plus products that already appear on this register.
+    if (sampleType === "Stability Sample") {
+      for (const p of catalog.data?.products || []) map.set(p.id, p.productName);
+    } else {
+      for (const p of catalog.data?.controlProducts || []) map.set(p.id, p.productName);
+    }
+    for (const r of rows) {
+      if (sampleType && r.sampleType !== sampleType) continue;
+      if (r.productId) map.set(r.productId, r.productName);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [catalog.data, rows, sampleType]);
 
   const months = useMemo(() => {
     const keys = Array.from(new Set(rows.map((r) => monthKey(r.date)).filter(Boolean)));
@@ -134,7 +154,6 @@ export default function DailyCollectionRecordPage() {
       if (market && r.market !== market) return false;
       if (sampleType && r.sampleType !== sampleType) return false;
       if (collectedBy && !r.collectedByName.toLowerCase().includes(collectedBy.toLowerCase())) return false;
-      if (status && r.status !== status) return false;
       if (month && monthKey(r.date) !== month) return false;
       if (q) {
         const hay = [r.serialDisplay, r.recordId, r.productName, r.batchNumber, r.market, r.packSize, r.collectedByName, r.remarks, r.sampleType]
@@ -153,11 +172,20 @@ export default function DailyCollectionRecordPage() {
       return b.serialNumber - a.serialNumber;
     });
     return next;
-  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows, sampleType, search, status]);
+  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows, sampleType, search]);
 
   const paged = paginate(filtered, page, 20);
   const companyName = catalog.data?.settings.companyName?.trim() || process.env.NEXT_PUBLIC_COMPANY_NAME || COMPANY_FALLBACK;
-  const markets = Array.from(new Set(rows.map((r) => r.market).filter(Boolean))).sort();
+  const markets = useMemo(() => {
+    const names = new Set<string>();
+    for (const m of catalog.data?.markets || []) {
+      if (m.status === "Active" && m.name.trim()) names.add(m.name.trim());
+    }
+    for (const r of rows) {
+      if (r.market?.trim()) names.add(r.market.trim());
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [catalog.data?.markets, rows]);
 
   function openCreate() {
     setEditing(null);
@@ -267,7 +295,7 @@ export default function DailyCollectionRecordPage() {
     <div>
       <PageHeader
         title="Daily Collection Record"
-        description="Digital register for daily collection of Control Samples and Stability Samples. This is not the Control Sample Register or Stability Inventory."
+        description="Digital register for daily collection of Control Samples and Stability Samples. Product and batch masters are separate for each sample type and are not linked."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
@@ -336,23 +364,19 @@ export default function DailyCollectionRecordPage() {
               <Input label="To date" type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
               <Select label="Product" value={productId} onChange={(e) => { setProductId(e.target.value); setPage(1); }}>
                 <option value="">All products</option>
-                {(catalog.data?.products || []).map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
+                {productFilterOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
               </Select>
               <Input label="Batch" value={batchFilter} onChange={(e) => { setBatchFilter(e.target.value); setPage(1); }} />
               <Select label="Market" value={market} onChange={(e) => { setMarket(e.target.value); setPage(1); }}>
                 <option value="">All markets</option>
                 {markets.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
-              <Select label="Sample Type" value={sampleType} onChange={(e) => { setSampleType(e.target.value); setPage(1); }}>
+              <Select label="Sample Type" value={sampleType} onChange={(e) => { setSampleType(e.target.value); setProductId(""); setPage(1); }}>
                 <option value="">All types</option>
                 <option value="Control Sample">Control Sample</option>
                 <option value="Stability Sample">Stability Sample</option>
               </Select>
               <Input label="Collected By" value={collectedBy} onChange={(e) => { setCollectedBy(e.target.value); setPage(1); }} />
-              <Select label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-                <option value="">All statuses</option>
-                {["Draft", "Submitted", "Reviewed", "Finalized", "Cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
-              </Select>
             </div>
             <div className="flex flex-wrap gap-2 border-t border-slate-100 px-4 py-3">
               <span className="self-center text-xs font-semibold uppercase tracking-wide text-slate-500">View register by month</span>

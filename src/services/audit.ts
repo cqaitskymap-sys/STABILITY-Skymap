@@ -57,14 +57,23 @@ export async function listAuditLogs(max = 200) {
 }
 
 export async function listAuditLogsForRecord(recordType: string, recordId: string, max = 50) {
-  const q = query(
-    collection(getDb(), COLLECTIONS.auditLogs),
-    where("recordType", "==", recordType),
-    where("recordId", "==", recordId),
-    limit(max)
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() } as AuditLog))
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  try {
+    const q = query(
+      collection(getDb(), COLLECTIONS.auditLogs),
+      where("recordType", "==", recordType),
+      where("recordId", "==", recordId),
+      limit(max)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as AuditLog))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "";
+    if (code !== "failed-precondition") throw error;
+    const fallback = await listAuditLogs(500);
+    return fallback
+      .filter((row) => row.recordType === recordType && row.recordId === recordId)
+      .slice(0, max);
+  }
 }

@@ -99,7 +99,9 @@ service cloud.firestore {
         && docId == 'bootstrap'
         && bootstrapOpen();
       allow create: if canManageUsers() && docId == 'organization';
-      allow update, delete: if canManageUsers();
+      // Bootstrap must stay once written so Admin self-provisioning cannot be re-opened.
+      allow update: if canManageUsers() && docId != 'bootstrap';
+      allow delete: if canManageUsers() && docId != 'bootstrap';
     }
 
     match /users/{userId} {
@@ -135,6 +137,14 @@ service cloud.firestore {
     match /batches/{docId} {
       allow read: if canReadInventory() || canManageMasters() || canControl();
       allow write: if canManageMasters();
+    }
+    match /controlSampleProducts/{docId} {
+      allow read: if canControl() || canManageMasters();
+      allow write: if hasPermission('control.perform') || canManageMasters();
+    }
+    match /controlSampleBatches/{docId} {
+      allow read: if canControl() || canManageMasters();
+      allow write: if hasPermission('control.perform') || canManageMasters();
     }
     match /studyTypes/{docId} {
       allow read: if canReadInventory() || canManageMasters();

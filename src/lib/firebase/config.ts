@@ -67,6 +67,8 @@ export const COLLECTIONS = {
   settings: "settings",
   products: "products",
   batches: "batches",
+  controlSampleProducts: "controlSampleProducts",
+  controlSampleBatches: "controlSampleBatches",
   studyTypes: "studyTypes",
   storageConditions: "storageConditions",
   pullPoints: "pullPoints",

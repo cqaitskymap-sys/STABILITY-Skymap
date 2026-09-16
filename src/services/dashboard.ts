@@ -1,6 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
-import { derivePullStatus, roundPct } from "@/lib/utils";
+import { roundPct } from "@/lib/utils";
 import type { Chamber, DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
 import { listPullPoints, listSamples, listStudies, listTransactions } from "@/services/inventory";
 import { listStudyTypes } from "@/services/masters";
@@ -25,10 +25,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const totalCapacity = activeChambers.reduce((s, c) => s + (c.capacity || 0), 0);
   const usedCapacity = activeChambers.reduce((s, c) => s + (c.usedCapacity || 0), 0);
 
-  const enrichedPulls = pulls.map((p) => ({
-    ...p,
-    status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
-  }));
+  const enrichedPulls = pulls;
 
   const fromMaster = studyTypeMasters
     .filter((t) => t.status === "Active")

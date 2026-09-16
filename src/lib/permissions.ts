@@ -18,7 +18,7 @@ export const MODULE_ACCESS: {
   {
     permission: "masters.manage",
     label: "Masters",
-    description: "Study types, conditions, chambers, locations, units, reasons",
+    description: "Stability products, batches, study types, chambers, locations, and units",
   },
   {
     permission: "studies.create",

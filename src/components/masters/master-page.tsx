@@ -17,6 +17,7 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
+import type { Permission } from "@/lib/permissions";
 import { friendlyError } from "@/lib/utils";
 import { createMaster, setMasterStatus, updateMaster } from "@/services/masters";
 import { writeAuditLog } from "@/services/audit";
@@ -48,6 +49,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
   mapRow,
   buildPayload,
   recordType,
+  managePermission = "masters.manage",
   validate,
   getCreateDefaults,
   getEditValues,
@@ -60,6 +62,7 @@ export function MasterPage<T extends { id: string; status?: string }>({
   mapRow: (item: T) => Record<string, string | number>;
   buildPayload: (values: Record<string, string>, isCreate: boolean) => Record<string, unknown>;
   recordType: string;
+  managePermission?: Permission | Permission[];
   /** Return an error message to block save, or null. */
   validate?: (input: {
     values: Record<string, string>;
@@ -79,7 +82,8 @@ export function MasterPage<T extends { id: string; status?: string }>({
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const canManage = hasPermission("masters.manage");
+  const managePermissions = Array.isArray(managePermission) ? managePermission : [managePermission];
+  const canManage = managePermissions.some((permission) => hasPermission(permission));
   const items = useMemo(() => data || [], [data]);
   const statusField = fields.find((f) => f.key === "status");
   const hasStatusField = Boolean(statusField);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import {
   DAILY_COLLECTION_REMARK_PRESETS,
@@ -19,6 +20,8 @@ export type DailyCollectionEntryMode = "create" | "edit" | "view" | "correct";
 export type DailyCollectionCatalog = {
   products: Product[];
   batches: Batch[];
+  controlProducts: Product[];
+  controlBatches: Batch[];
   units: Unit[];
   markets: Market[];
   packSizes: PackSize[];
@@ -103,28 +106,63 @@ export function DailyCollectionEntryForm({
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"draft" | "submit" | "correct" | null>(null);
 
+  const productCatalog = form.sampleType === "Control Sample" ? catalog.controlProducts : catalog.products;
+  const batchCatalog = form.sampleType === "Control Sample" ? catalog.controlBatches : catalog.batches;
+  const productMasterHref =
+    form.sampleType === "Control Sample" ? "/stability/control-samples/products" : "/masters/products";
+  const batchMasterHref =
+    form.sampleType === "Control Sample" ? "/stability/control-samples/batches" : "/masters/batches";
+
   const products = useMemo(() => {
-    const active = catalog.products.filter((p) => p.status === "Active" || p.id === form.productId);
+    const active = productCatalog.filter((p) => p.status === "Active" || p.id === form.productId);
+    const withCurrent =
+      form.productId && form.productName && !active.some((p) => p.id === form.productId)
+        ? [
+            {
+              id: form.productId,
+              productName: form.productName,
+              productCode: form.productCode,
+              status: "Active" as const,
+            } as Product,
+            ...active,
+          ]
+        : active;
     const q = productQuery.trim().toLowerCase();
-    if (!q) return active;
-    return active.filter((p) =>
+    if (!q) return withCurrent;
+    return withCurrent.filter((p) =>
       `${p.productName} ${p.productCode || ""} ${p.genericName || ""}`.toLowerCase().includes(q)
     );
-  }, [catalog.products, form.productId, productQuery]);
+  }, [form.productCode, form.productId, form.productName, productCatalog, productQuery]);
 
-  const batches = useMemo(
-    () => catalog.batches.filter((b) => b.productId === form.productId && (b.status === "Active" || b.id === form.batchId)),
-    [catalog.batches, form.batchId, form.productId]
-  );
+  const batches = useMemo(() => {
+    const matched = batchCatalog.filter(
+      (b) => b.productId === form.productId && (b.status === "Active" || b.id === form.batchId)
+    );
+    if (form.batchId && form.batchNumber && !matched.some((b) => b.id === form.batchId)) {
+      return [
+        {
+          id: form.batchId,
+          productId: form.productId,
+          productName: form.productName,
+          batchNumber: form.batchNumber,
+          batchSize: form.batchSize,
+          manufacturingDate: form.manufacturingDate,
+          expiryDate: form.expiryDate,
+          status: "Active" as const,
+        } as Batch,
+        ...matched,
+      ];
+    }
+    return matched;
+  }, [batchCatalog, form.batchId, form.batchNumber, form.batchSize, form.expiryDate, form.manufacturingDate, form.productId, form.productName]);
 
   const marketOptions = useMemo(
     () =>
       uniqueNames([
         ...catalog.markets.filter((m) => m.status === "Active" || m.id === form.marketId).map((m) => m.name),
-        ...catalog.products.map((p) => p.market),
         form.market,
       ]),
-    [catalog.markets, catalog.products, form.market, form.marketId]
+    [catalog.markets, form.market, form.marketId]
   );
 
   const packOptions = useMemo(
@@ -176,7 +214,7 @@ export function DailyCollectionEntryForm({
   }
 
   function onProduct(productId: string) {
-    const product = catalog.products.find((p) => p.id === productId);
+    const product = productCatalog.find((p) => p.id === productId);
     const marketMatch = catalog.markets.find(
       (m) => m.status === "Active" && m.name.trim().toLowerCase() === (product?.market || "").trim().toLowerCase()
     );
@@ -327,7 +365,30 @@ export function DailyCollectionEntryForm({
     <div className="grid gap-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Input label="Date" type="date" required value={form.date} max={allowFutureDate ? undefined : todayISO()} onChange={(e) => patch({ date: e.target.value })} disabled={readOnly} />
-        <Select label="Sample Type" required value={form.sampleType} onChange={(e) => patch({ sampleType: e.target.value as DailyCollectionInput["sampleType"] })} disabled={readOnly}>
+        <Select
+          label="Sample Type"
+          required
+          value={form.sampleType}
+          onChange={(e) =>
+            patch({
+              sampleType: e.target.value as DailyCollectionInput["sampleType"],
+              productId: "",
+              productName: "",
+              productCode: "",
+              batchId: "",
+              batchNumber: "",
+              batchSize: "",
+              manufacturingDate: "",
+              expiryDate: "",
+              controlSampleId: "",
+              controlSampleDocId: "",
+              controlCollectionId: "",
+              stabilityStudyId: "",
+              stabilitySampleId: "",
+            })
+          }
+          disabled={readOnly}
+        >
           {DAILY_COLLECTION_SAMPLE_TYPES.map((type) => (
             <option key={type} value={type}>{type}</option>
           ))}
@@ -346,13 +407,29 @@ export function DailyCollectionEntryForm({
               <option key={p.id} value={p.id}>{p.productName}{p.productCode ? ` (${p.productCode})` : ""}</option>
             ))}
           </Select>
+          {!productCatalog.length ? (
+            <p className="text-xs text-slate-500">
+              {form.sampleType === "Control Sample"
+                ? "Add products in Control Samples → Products. They are not shared with stability inventory."
+                : "Add products in Admin → Stability Products. They are not shared with control samples."}{" "}
+              <Link href={productMasterHref} className="font-medium underline">Open product master</Link>
+            </p>
+          ) : null}
         </div>
-        <Select label="Batch No." required value={form.batchId} onChange={(e) => onBatch(e.target.value)} disabled={readOnly || !form.productId}>
-          <option value="">{form.productId ? "Select batch" : "Select a product first"}</option>
-          {batches.map((b) => (
-            <option key={b.id} value={b.id}>{b.batchNumber}</option>
-          ))}
-        </Select>
+        <div className="grid gap-2">
+          <Select label="Batch No." required value={form.batchId} onChange={(e) => onBatch(e.target.value)} disabled={readOnly || !form.productId}>
+            <option value="">{form.productId ? "Select batch" : "Select a product first"}</option>
+            {batches.map((b) => (
+              <option key={b.id} value={b.id}>{b.batchNumber}</option>
+            ))}
+          </Select>
+          {form.productId && !batchCatalog.some((b) => b.productId === form.productId) ? (
+            <p className="text-xs text-slate-500">
+              No batches for this product.{" "}
+              <Link href={batchMasterHref} className="font-medium underline">Open batch master</Link>
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -363,16 +440,19 @@ export function DailyCollectionEntryForm({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {marketOptions.length ? (
-          <Select label="Market" required value={form.market} onChange={(e) => onMarket(e.target.value)} disabled={readOnly}>
-            <option value="">Select market</option>
-            {marketOptions.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </Select>
-        ) : (
-          <Input label="Market" required value={form.market} onChange={(e) => patch({ market: e.target.value, marketId: undefined })} disabled={readOnly} hint="Add selectable markets in Masters → Markets." />
-        )}
+        <Select
+          label="Market"
+          required
+          value={form.market}
+          onChange={(e) => onMarket(e.target.value)}
+          disabled={readOnly}
+          hint={!catalog.markets.some((m) => m.status === "Active") ? "Add markets in Admin → Markets." : undefined}
+        >
+          <option value="">Select market</option>
+          {marketOptions.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </Select>
         {packOptions.length ? (
           <Select label="Pack Size" required value={form.packSize} onChange={(e) => onPack(e.target.value)} disabled={readOnly}>
             <option value="">Select pack size</option>

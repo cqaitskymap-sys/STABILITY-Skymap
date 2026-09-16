@@ -8,14 +8,14 @@ import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, friendlyError, todayISO } from "@/lib/utils";
-import { listProducts, listUnits } from "@/services/masters";
+import { listControlProducts, listUnits } from "@/services/masters";
 import { createQuantityMasterRevision, listQuantityMasters } from "@/services/control-samples";
 
 export default function QuantityMasterPage() {
   const { profile, hasPermission } = useAuth();
   const can = hasPermission("control.perform") || hasPermission("masters.manage");
   const catalog = useAsync(async () => {
-    const [products, units, rows] = await Promise.all([listProducts(), listUnits(), listQuantityMasters()]);
+    const [products, units, rows] = await Promise.all([listControlProducts(), listUnits(), listQuantityMasters()]);
     return { products, units, rows };
   }, []);
   const [productId, setProductId] = useState("");
@@ -73,7 +73,7 @@ export default function QuantityMasterPage() {
     <div>
       <PageHeader
         title="Control Sample Quantity Master"
-        description="Annexure-I — product-wise required quantity. Revisions are history-preserving; old requirements are never overwritten."
+        description="Annexure-I — product-wise required quantity from the Control Sample Product Master. Revisions are history-preserving; old requirements are never overwritten. Stability inventory products are not used here."
         actions={<Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
       />
       {catalog.loading ? <LoadingSkeleton rows={6} /> : null}
@@ -88,6 +88,11 @@ export default function QuantityMasterPage() {
                 <option key={p.id} value={p.id}>{p.productName}</option>
               ))}
             </Select>
+            {!(catalog.data?.products || []).some((p) => p.status === "Active") ? (
+              <p className="text-xs text-slate-500">
+                Add products in Control Samples → Products. Quantity master does not use stability inventory products.
+              </p>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <Input label="Control sample quantity" type="number" required value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={!can} />
               <Select label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!can}>

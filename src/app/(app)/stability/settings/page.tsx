@@ -295,8 +295,8 @@ export default function StabilitySettingsPage() {
           <CardHeader title="Quick links" description="Common admin destinations." />
           <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-4">
             <QuickLink href="/stability/admin/users" icon={Users} label="Users" />
-            <QuickLink href="/masters/products" icon={Package} label="Products" />
-            <QuickLink href="/masters/batches" icon={Boxes} label="Batches" />
+            <QuickLink href="/masters/products" icon={Package} label="Stability Products" />
+            <QuickLink href="/masters/batches" icon={Boxes} label="Stability Batches" />
             <QuickLink href="/masters/study-types" icon={Beaker} label="Study Types" />
             <QuickLink href="/masters/chambers" icon={Warehouse} label="Chambers" />
             <QuickLink href="/stability/alerts" icon={AlertTriangle} label="Alerts" />

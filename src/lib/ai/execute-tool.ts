@@ -19,6 +19,8 @@ import {
   createMaster,
   listBatches,
   listChambers,
+  listControlBatches,
+  listControlProducts,
   listLocations,
   listProducts,
   listPullPoints,
@@ -210,6 +212,34 @@ async function listCatalog(kind: string, query?: string): Promise<ToolResult> {
         }));
       return ok({ kind, count: rows.length, records: rows });
     }
+    case "controlProducts": {
+      const rows = (await listControlProducts())
+        .filter((p) => includesQ(p, query))
+        .slice(0, 40)
+        .map((p) => ({
+          id: p.id,
+          productName: p.productName,
+          productCode: p.productCode || "",
+          strength: p.strength || "",
+          dosageForm: p.dosageForm || "",
+          status: p.status,
+        }));
+      return ok({ kind, count: rows.length, records: rows });
+    }
+    case "controlBatches": {
+      const rows = (await listControlBatches())
+        .filter((b) => includesQ(b, query))
+        .slice(0, 40)
+        .map((b) => ({
+          id: b.id,
+          productName: b.productName,
+          batchNumber: b.batchNumber,
+          manufacturingDate: b.manufacturingDate,
+          expiryDate: b.expiryDate,
+          status: b.status,
+        }));
+      return ok({ kind, count: rows.length, records: rows });
+    }
     case "studyTypes": {
       const rows = (await listStudyTypes())
         .filter((s) => includesQ(s, query))
@@ -286,7 +316,7 @@ async function listCatalog(kind: string, query?: string): Promise<ToolResult> {
       return ok({ kind, count: rows.length, records: rows });
     }
     case "duePulls": {
-      const open = ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"];
+      const open = ["Upcoming", "Due Soon", "Due Today", "Within Window", "Overdue", "Partially Withdrawn"];
       const rows = (await listStudyPulls())
         .filter((p) => open.includes(p.status))
         .filter((p) => includesQ(p, query))
@@ -722,7 +752,7 @@ async function withdraw(args: Record<string, unknown>, profile: AppUser, hasPerm
     const productName = str(args, "productName");
     const batchNumber = str(args, "batchNumber");
     const pullPoint = str(args, "pullPoint");
-    const open = ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"];
+    const open = ["Upcoming", "Due Soon", "Due Today", "Within Window", "Overdue", "Partially Withdrawn"];
     const pulls = (await listStudyPulls()).filter((p) => open.includes(p.status));
     const match = pick(
       pulls,

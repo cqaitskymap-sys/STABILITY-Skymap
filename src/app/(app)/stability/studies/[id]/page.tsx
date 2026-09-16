@@ -16,7 +16,7 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
-import { derivePullStatus, formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   getStudy,
   listPullPoints,
@@ -40,12 +40,7 @@ export default function StudyDetailPage() {
     ]);
     return {
       study,
-      pulls: pulls
-        .map((p) => ({
-          ...p,
-          status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
-        }))
-        .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
+      pulls: pulls.sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
       samples,
       transactions,
     };

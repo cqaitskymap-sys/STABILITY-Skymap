@@ -150,29 +150,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const unsub = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
       try {
-        setUser(firebaseUser);
+        if (!cancelled) setUser(firebaseUser);
         if (firebaseUser) {
           const p = await ensureProfile(firebaseUser, firebaseUser.displayName || "");
+          if (cancelled) return;
           if (!p || p.active === false) {
             setProfile(null);
             await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
-            setUser(null);
+            if (!cancelled) setUser(null);
           } else {
             setProfile(p);
           }
-        } else {
+        } else if (!cancelled) {
           setProfile(null);
         }
       } catch (error) {
         console.error("Failed to load user profile from Firestore:", error);
-        setProfile(null);
+        await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
+        if (!cancelled) {
+          setProfile(null);
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     });
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   const login = useCallback(async (

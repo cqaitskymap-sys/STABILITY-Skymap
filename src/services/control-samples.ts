@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteField, doc, getDoc, runTransaction, updateDoc } from "firebase/firestore";
 import { listDocs } from "@/lib/firebase/list-docs";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import {
@@ -333,54 +333,78 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
   if (row.status !== "Received" && row.status !== "Verification Pending") {
     throw new Error("QA must receive the sample before verification.");
   }
+  if (row.controlSampleDocId) throw new Error("This collection has already been verified.");
   const settings = controlOrg(await getOrganizationSettings());
   const stamp = nowISO();
-  const created = await createControlSample({
-    productId: row.productId,
-    productName: row.productName,
-    batchId: row.batchId,
-    batchNumber: row.batchNumber,
-    batchSize: row.batchSize,
-    manufacturingDate: row.manufacturingDate,
-    expiryDate: row.expiryDate,
-    quantity: row.actualQuantity,
-    unit: row.unit,
-    collectionDate: row.date,
-    collectionStage: row.collectionStage,
-    motherBatch: row.motherBatch,
-    conversionBatch: row.conversionBatch,
-    brand: row.brand,
-    conversionNoteRef: row.conversionNoteRef,
-    purpose: "Control sample",
-    destructionEligibleDate: destructionEligibleDate(row.expiryDate, settings.controlDestructionMonthsAfterExpiry),
-    nextObservationDate: nextObservationDate(row.date || todayISO(), settings.controlObservationIntervalMonths),
-    user,
+  const colRef = doc(getDb(), COLLECTIONS.controlSampleCollections, id);
+  await runTransaction(getDb(), async (tx) => {
+    const snap = await tx.get(colRef);
+    if (!snap.exists()) throw new Error("Collection record not found.");
+    const current = { id: snap.id, ...snap.data() } as ControlSampleCollection;
+    if (current.status !== "Received" && current.status !== "Verification Pending") {
+      throw new Error("QA must receive the sample before verification.");
+    }
+    if (current.controlSampleDocId) throw new Error("This collection has already been verified.");
+    tx.update(colRef, {
+      status: "Verified",
+      verifiedBy: user.displayName || user.email,
+      verifiedAt: stamp,
+      updatedAt: stamp,
+    });
   });
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleCollections, id), {
-    status: "Verified",
-    verifiedBy: user.displayName || user.email,
-    verifiedAt: stamp,
-    controlSampleDocId: created.id,
-    updatedAt: stamp,
-  });
-  await writeControlTx({
-    transactionId: await nextSequentialId("CTX"),
-    controlSampleId: created.controlSampleId,
-    controlSampleDocId: created.id,
-    productName: row.productName,
-    batchNumber: row.batchNumber,
-    transactionType: "CONTROL_SAMPLE_VERIFIED",
-    quantity: row.actualQuantity,
-    previousQuantity: created.availableQuantity,
-    newQuantity: created.availableQuantity,
-    reason: "QA verification and log book entry",
-    reference: row.collectionId,
-    performedBy: user.uid,
-    performedByName: user.displayName || user.email,
-    performedAt: stamp,
-  });
-  await audit({ action: "Verification", recordId: created.controlSampleId, newValue: { collectionId: row.collectionId }, user });
-  return created;
+  try {
+    const created = await createControlSample({
+      productId: row.productId,
+      productName: row.productName,
+      batchId: row.batchId,
+      batchNumber: row.batchNumber,
+      batchSize: row.batchSize,
+      manufacturingDate: row.manufacturingDate,
+      expiryDate: row.expiryDate,
+      quantity: row.actualQuantity,
+      unit: row.unit,
+      collectionDate: row.date,
+      collectionStage: row.collectionStage,
+      motherBatch: row.motherBatch,
+      conversionBatch: row.conversionBatch,
+      brand: row.brand,
+      conversionNoteRef: row.conversionNoteRef,
+      purpose: "Control sample",
+      destructionEligibleDate: destructionEligibleDate(row.expiryDate, settings.controlDestructionMonthsAfterExpiry),
+      nextObservationDate: nextObservationDate(row.date || todayISO(), settings.controlObservationIntervalMonths),
+      user,
+    });
+    await updateDoc(colRef, {
+      controlSampleDocId: created.id,
+      updatedAt: nowISO(),
+    });
+    await writeControlTx({
+      transactionId: await nextSequentialId("CTX"),
+      controlSampleId: created.controlSampleId,
+      controlSampleDocId: created.id,
+      productName: row.productName,
+      batchNumber: row.batchNumber,
+      transactionType: "CONTROL_SAMPLE_VERIFIED",
+      quantity: row.actualQuantity,
+      previousQuantity: created.availableQuantity,
+      newQuantity: created.availableQuantity,
+      reason: "QA verification and log book entry",
+      reference: row.collectionId,
+      performedBy: user.uid,
+      performedByName: user.displayName || user.email,
+      performedAt: stamp,
+    });
+    await audit({ action: "Verification", recordId: created.controlSampleId, newValue: { collectionId: row.collectionId }, user });
+    return created;
+  } catch (err) {
+    await updateDoc(colRef, {
+      status: row.status,
+      verifiedBy: deleteField(),
+      verifiedAt: deleteField(),
+      updatedAt: nowISO(),
+    }).catch(() => undefined);
+    throw err;
+  }
 }
 
 export async function createControlSample(
@@ -574,32 +598,40 @@ export async function createBox(input: {
   remarks?: string;
   user: AppUser;
 }) {
-  let boxNumber = input.boxNumber?.trim();
-  if (!boxNumber && input.categoryId) {
-    const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleBoxCategories, input.categoryId));
-    if (!snap.exists()) throw new Error("Box category not found.");
-    const cat = snap.data() as ControlSampleBoxCategory;
-    const next = (cat.currentSequence || 0) + 1;
-    boxNumber = `${cat.prefix}${String(next).padStart(3, "0")}`;
-    await updateDoc(doc(getDb(), COLLECTIONS.controlSampleBoxCategories, input.categoryId), { currentSequence: next, updatedAt: nowISO() });
+  const requestedNumber = input.boxNumber?.trim();
+  if (requestedNumber) {
+    const boxes = await listBoxes();
+    if (boxes.some((b) => b.status === "Active" && b.boxNumber === requestedNumber)) {
+      throw new Error("An active box with this number already exists.");
+    }
   }
-  if (!boxNumber) throw new Error("Box number is required.");
-  const boxes = await listBoxes();
-  if (boxes.some((b) => b.status === "Active" && b.boxNumber === boxNumber)) {
-    throw new Error("An active box with this number already exists.");
-  }
-  const payload: Omit<ControlSampleBox, "id"> = {
-    boxNumber,
-    category: input.category,
-    rackNumber: input.rackNumber,
-    partitionNumber: input.partitionNumber,
-    remarks: input.remarks,
-    status: "Active",
-    createdAt: nowISO(),
-  };
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.controlSampleBoxes), omitUndefined(payload as unknown as Record<string, unknown>));
-  await audit({ action: "Create", recordId: boxNumber, newValue: payload, user: input.user });
-  return { id: ref.id, ...payload };
+  const created = await runTransaction(getDb(), async (tx) => {
+    let boxNumber = requestedNumber;
+    if (!boxNumber && input.categoryId) {
+      const catRef = doc(getDb(), COLLECTIONS.controlSampleBoxCategories, input.categoryId);
+      const snap = await tx.get(catRef);
+      if (!snap.exists()) throw new Error("Box category not found.");
+      const cat = snap.data() as ControlSampleBoxCategory;
+      const next = (cat.currentSequence || 0) + 1;
+      boxNumber = `${cat.prefix}${String(next).padStart(3, "0")}`;
+      tx.update(catRef, { currentSequence: next, updatedAt: nowISO() });
+    }
+    if (!boxNumber) throw new Error("Box number is required.");
+    const boxRef = doc(collection(getDb(), COLLECTIONS.controlSampleBoxes));
+    const payload: Omit<ControlSampleBox, "id"> = {
+      boxNumber,
+      category: input.category,
+      rackNumber: input.rackNumber,
+      partitionNumber: input.partitionNumber,
+      remarks: input.remarks,
+      status: "Active",
+      createdAt: nowISO(),
+    };
+    tx.set(boxRef, omitUndefined(payload as unknown as Record<string, unknown>));
+    return { id: boxRef.id, payload };
+  });
+  await audit({ action: "Create", recordId: created.payload.boxNumber, newValue: created.payload, user: input.user });
+  return { id: created.id, ...created.payload };
 }
 
 export async function listObservationParameters() {
@@ -712,11 +744,11 @@ export async function reviewAbnormalObservation(id: string, input: { status: "QA
   if (row.result !== "Abnormal Observation" && row.status !== "QA Review" && row.status !== "Investigation Required") {
     throw new Error("Only abnormal observations require QA review.");
   }
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleObservations, id), {
+  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleObservations, id), omitUndefined({
     status: input.status,
     investigationRef: input.investigationRef,
     qaReview: input.qaReview,
-  });
+  }));
   await audit({ action: "Approval", recordId: row.observationId, newValue: input, user: input.user });
 }
 
@@ -789,81 +821,116 @@ export async function approveRequisition(id: string, user: AppUser, approved: bo
 }
 
 export async function issueApprovedRequisition(id: string, input: { quantity: number; issuedTo: string; user: AppUser }) {
-  const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id));
-  if (!snap.exists()) throw new Error("Requisition not found.");
-  const req = { id: snap.id, ...snap.data() } as ControlSampleRequisition;
   const settings = controlOrg(await getOrganizationSettings());
-  if (settings.controlRequireWithdrawalApproval && req.status !== "Approved") {
-    throw new Error("QA Manager approval is required before issue.");
-  }
-  if (!settings.controlRequireWithdrawalApproval && req.status !== "Approved" && req.status !== "Submitted") {
-    throw new Error("Requisition is not eligible for issue.");
-  }
   if (input.quantity <= 0) throw new Error("Issue quantity must be greater than zero.");
-  if (input.quantity > req.quantityRequired - req.quantityIssued) {
-    throw new Error("Cannot issue more than the approved requisition quantity.");
-  }
-  const row = await getControlSample(req.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
-  if (input.quantity > row.availableQuantity) {
-    throw new Error(`Cannot issue more than available quantity (${row.availableQuantity}).`);
-  }
-  const next = applyQty(row, { issuedQuantity: row.issuedQuantity + input.quantity });
-  await persistSample(row, next, {
-    type: "CONTROL_SAMPLE_ISSUED",
+  const stamp = nowISO();
+  const result = await runTransaction(getDb(), async (tx) => {
+    const reqRef = doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id);
+    const reqSnap = await tx.get(reqRef);
+    if (!reqSnap.exists()) throw new Error("Requisition not found.");
+    const req = { id: reqSnap.id, ...reqSnap.data() } as ControlSampleRequisition;
+    if (settings.controlRequireWithdrawalApproval && req.status !== "Approved") {
+      throw new Error("QA Manager approval is required before issue.");
+    }
+    if (!settings.controlRequireWithdrawalApproval && req.status !== "Approved" && req.status !== "Submitted") {
+      throw new Error("Requisition is not eligible for issue.");
+    }
+    if (input.quantity > req.quantityRequired - req.quantityIssued) {
+      throw new Error("Cannot issue more than the approved requisition quantity.");
+    }
+    const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, req.controlSampleDocId);
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
+    if (input.quantity > row.availableQuantity) {
+      throw new Error(`Cannot issue more than available quantity (${row.availableQuantity}).`);
+    }
+    const next = applyQty(row, { issuedQuantity: row.issuedQuantity + input.quantity });
+    const status = deriveControlInventoryStatus({ ...row, ...next });
+    const issued = req.quantityIssued + input.quantity;
+    tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    tx.update(reqRef, {
+      quantityIssued: issued,
+      issuedTo: input.issuedTo,
+      issuedBy: input.user.displayName || input.user.email,
+      issuedAt: stamp,
+      status: issued >= req.quantityRequired ? "Issued" : "Approved",
+      updatedAt: stamp,
+    });
+    return { req, row, next };
+  });
+  await writeControlTx({
+    transactionId: await nextSequentialId("CTX"),
+    controlSampleId: result.row.controlSampleId,
+    controlSampleDocId: result.row.id,
+    productName: result.row.productName,
+    batchNumber: result.row.batchNumber,
+    transactionType: "CONTROL_SAMPLE_ISSUED",
     quantity: input.quantity,
-    previous: row.availableQuantity,
-    next: next.availableQuantity,
-    reason: req.reason,
-    reference: req.requisitionNumber,
-    user: input.user,
+    previousQuantity: result.row.availableQuantity,
+    newQuantity: result.next.availableQuantity,
+    reason: result.req.reason,
+    reference: result.req.requisitionNumber,
+    performedBy: input.user.uid,
+    performedByName: input.user.displayName || input.user.email,
+    performedAt: stamp,
   });
-  const issued = req.quantityIssued + input.quantity;
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id), {
-    quantityIssued: issued,
-    issuedTo: input.issuedTo,
-    issuedBy: input.user.displayName || input.user.email,
-    issuedAt: nowISO(),
-    status: issued >= req.quantityRequired ? "Issued" : "Approved",
-    updatedAt: nowISO(),
-  });
-  await audit({ action: "Issue", recordId: req.requisitionNumber, newValue: { issued: input.quantity }, user: input.user });
+  await audit({ action: "Issue", recordId: result.req.requisitionNumber, newValue: { issued: input.quantity }, user: input.user });
 }
 
 export async function returnRequisition(id: string, input: { quantity: number; returnedBy: string; condition?: string; remarks?: string; user: AppUser }) {
-  const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id));
-  if (!snap.exists()) throw new Error("Requisition not found.");
-  const req = { id: snap.id, ...snap.data() } as ControlSampleRequisition;
-  const outstanding = Math.max(0, req.quantityIssued - req.quantityReturned);
   if (input.quantity <= 0) throw new Error("Return quantity must be greater than zero.");
-  if (input.quantity > outstanding) {
-    throw new Error(`Cannot return more than outstanding issued quantity (${outstanding}).`);
-  }
-  const row = await getControlSample(req.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
-  const next = applyQty(row, { returnedQuantity: row.returnedQuantity + input.quantity });
-  await persistSample(row, next, {
-    type: "CONTROL_SAMPLE_RETURNED",
+  const stamp = nowISO();
+  const result = await runTransaction(getDb(), async (tx) => {
+    const reqRef = doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id);
+    const reqSnap = await tx.get(reqRef);
+    if (!reqSnap.exists()) throw new Error("Requisition not found.");
+    const req = { id: reqSnap.id, ...reqSnap.data() } as ControlSampleRequisition;
+    const outstanding = Math.max(0, req.quantityIssued - req.quantityReturned);
+    if (input.quantity > outstanding) {
+      throw new Error(`Cannot return more than outstanding issued quantity (${outstanding}).`);
+    }
+    const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, req.controlSampleDocId);
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
+    const next = applyQty(row, { returnedQuantity: row.returnedQuantity + input.quantity });
+    const status = deriveControlInventoryStatus({ ...row, ...next });
+    const returned = req.quantityReturned + input.quantity;
+    tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    tx.update(
+      reqRef,
+      omitUndefined({
+        quantityReturned: returned,
+        returnedBy: input.returnedBy,
+        returnDate: todayISO(),
+        returnCheckedBy: input.user.displayName || input.user.email,
+        returnCondition: input.condition,
+        remarks: input.remarks || req.remarks,
+        status: returned >= req.quantityIssued ? "Returned" : "Partially Returned",
+        updatedAt: stamp,
+      })
+    );
+    return { req, row, next };
+  });
+  await writeControlTx({
+    transactionId: await nextSequentialId("CTX"),
+    controlSampleId: result.row.controlSampleId,
+    controlSampleDocId: result.row.id,
+    productName: result.row.productName,
+    batchNumber: result.row.batchNumber,
+    transactionType: "CONTROL_SAMPLE_RETURNED",
     quantity: input.quantity,
-    previous: row.availableQuantity,
-    next: next.availableQuantity,
+    previousQuantity: result.row.availableQuantity,
+    newQuantity: result.next.availableQuantity,
     reason: "Control sample return",
-    reference: req.requisitionNumber,
+    reference: result.req.requisitionNumber,
     remarks: input.remarks,
-    user: input.user,
+    performedBy: input.user.uid,
+    performedByName: input.user.displayName || input.user.email,
+    performedAt: stamp,
   });
-  const returned = req.quantityReturned + input.quantity;
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id), {
-    quantityReturned: returned,
-    returnedBy: input.returnedBy,
-    returnDate: todayISO(),
-    returnCheckedBy: input.user.displayName || input.user.email,
-    returnCondition: input.condition,
-    remarks: input.remarks || req.remarks,
-    status: returned >= req.quantityIssued ? "Returned" : "Partially Returned",
-    updatedAt: nowISO(),
-  });
-  await audit({ action: "Return", recordId: req.requisitionNumber, newValue: { returned: input.quantity }, user: input.user });
+  await audit({ action: "Return", recordId: result.req.requisitionNumber, newValue: { returned: input.quantity }, user: input.user });
 }
 
 /** Legacy helpers kept for existing records; new issues must use requisition approval. */
@@ -1107,23 +1174,49 @@ export async function completeDestructionChecklist(id: string, checklist: Contro
 }
 
 export async function verifyDestruction(id: string, user: AppUser, remarks?: string) {
-  const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleDestructions, id));
-  if (!snap.exists()) throw new Error("Destruction note not found.");
-  const note = { id: snap.id, ...snap.data() } as ControlSampleDestruction;
-  if (note.status !== "Destroyed Pending Verification") {
-    throw new Error("Verification is only allowed after destruction activity is recorded.");
-  }
-  const row = await getControlSample(note.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
-  const next = applyQty(row, { destroyedQuantity: destroyedQty(row) + note.quantity });
-  await persistSample(row, next, {
-    type: "CONTROL_SAMPLE_DESTROYED",
+  const stamp = nowISO();
+  const result = await runTransaction(getDb(), async (tx) => {
+    const noteRef = doc(getDb(), COLLECTIONS.controlSampleDestructions, id);
+    const noteSnap = await tx.get(noteRef);
+    if (!noteSnap.exists()) throw new Error("Destruction note not found.");
+    const note = { id: noteSnap.id, ...noteSnap.data() } as ControlSampleDestruction;
+    if (note.status !== "Destroyed Pending Verification") {
+      throw new Error("Verification is only allowed after destruction activity is recorded.");
+    }
+    const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, note.controlSampleDocId);
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
+    const next = applyQty(row, { destroyedQuantity: destroyedQty(row) + note.quantity });
+    const status = deriveControlInventoryStatus({ ...row, ...next });
+    tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    tx.update(
+      noteRef,
+      omitUndefined({
+        status: "Destroyed",
+        verifiedBy: user.displayName || user.email,
+        remarks: remarks || note.remarks,
+        updatedAt: stamp,
+      })
+    );
+    return { note, row, next };
+  });
+  const { note, row, next } = result;
+  await writeControlTx({
+    transactionId: await nextSequentialId("CTX"),
+    controlSampleId: row.controlSampleId,
+    controlSampleDocId: row.id,
+    productName: row.productName,
+    batchNumber: row.batchNumber,
+    transactionType: "CONTROL_SAMPLE_DESTROYED",
     quantity: note.quantity,
-    previous: row.availableQuantity,
-    next: next.availableQuantity,
+    previousQuantity: row.availableQuantity,
+    newQuantity: next.availableQuantity,
     reason: note.reason,
     reference: note.dcnNumber,
-    user,
+    performedBy: user.uid,
+    performedByName: user.displayName || user.email,
+    performedAt: stamp,
   });
   await writeControlTx({
     transactionId: await nextSequentialId("CTX"),
@@ -1139,13 +1232,7 @@ export async function verifyDestruction(id: string, user: AppUser, remarks?: str
     reference: note.dcnNumber,
     performedBy: user.uid,
     performedByName: user.displayName || user.email,
-    performedAt: nowISO(),
-  });
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleDestructions, id), {
-    status: "Destroyed",
-    verifiedBy: user.displayName || user.email,
-    remarks: remarks || note.remarks,
-    updatedAt: nowISO(),
+    performedAt: stamp,
   });
   const destroyedOn = note.destroyedOn || todayISO();
   await addDoc(collection(getDb(), COLLECTIONS.controlSampleDestructionLogs), {

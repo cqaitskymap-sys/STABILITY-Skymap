@@ -106,20 +106,29 @@ export async function listPackSizes() {
   return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
+async function listBatchesIn(collectionName: string, productId?: string) {
+  if (productId) {
+    const q = query(collection(getDb(), collectionName), where("productId", "==", productId));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Batch));
+  }
+  return listCollection<Batch>(collectionName);
+}
+
 export async function listProducts() {
   return listCollection<Product>(COLLECTIONS.products);
 }
 
 export async function listBatches(productId?: string) {
-  if (productId) {
-    const q = query(
-      collection(getDb(), COLLECTIONS.batches),
-      where("productId", "==", productId)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Batch));
-  }
-  return listCollection<Batch>(COLLECTIONS.batches);
+  return listBatchesIn(COLLECTIONS.batches, productId);
+}
+
+export async function listControlProducts() {
+  return listCollection<Product>(COLLECTIONS.controlSampleProducts);
+}
+
+export async function listControlBatches(productId?: string) {
+  return listBatchesIn(COLLECTIONS.controlSampleBatches, productId);
 }
 
 export async function createMaster<T extends Record<string, unknown>>(

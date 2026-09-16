@@ -26,7 +26,9 @@ import {
   pullDueUrgency,
   toCsv,
 } from "@/lib/utils";
+import { DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { getChamberUtilization } from "@/services/dashboard";
+import { getOrganizationSettings } from "@/services/organization";
 import {
   listDisposals,
   listMovements,
@@ -144,6 +146,7 @@ export default function ReportsPage() {
       transactions,
       pulls,
       chambers,
+      settings,
     ] = await Promise.all([
       settledValue(listSamples(), "samples", []),
       settledValue(listStudies(), "studies", []),
@@ -154,6 +157,7 @@ export default function ReportsPage() {
       settledValue(listTransactions(), "transactions", []),
       settledValue(listPullPoints(), "pulls", []),
       settledValue(getChamberUtilization(), "chambers", []),
+      settledValue(getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS), "settings", DEFAULT_ORG_SETTINGS),
     ]);
     return {
       samples,
@@ -165,6 +169,7 @@ export default function ReportsPage() {
       transactions,
       pulls,
       chambers,
+      settings,
     };
   }, []);
 
@@ -180,7 +185,9 @@ export default function ReportsPage() {
       transactions,
       pulls,
       chambers,
+      settings,
     } = bundle.data;
+    const windowDays = settings.withdrawalWindowDays ?? 7;
 
     switch (report) {
       case "current-inventory":
@@ -368,9 +375,9 @@ export default function ReportsPage() {
       case "due-overdue":
         return pulls
           .map((p) => {
-            const status = derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity);
+            const status = derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity, windowDays);
             const remaining = Math.max(0, p.plannedQuantity - p.actualQuantity);
-            const urgency = remaining > 0 ? pullDueUrgency(p.plannedDate) : null;
+            const urgency = remaining > 0 ? pullDueUrgency(p.plannedDate, windowDays) : null;
             const displayStatus =
               status === "Partially Withdrawn" && urgency
                 ? `${status} (${urgency})`
@@ -384,7 +391,7 @@ export default function ReportsPage() {
             };
           })
           .filter((p) =>
-            ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"].includes(p.status)
+            ["Upcoming", "Due Soon", "Due Today", "Due", "Within Window", "Overdue", "Partially Withdrawn"].includes(p.status)
           )
           .sort((a, b) => {
             const byUrgency =

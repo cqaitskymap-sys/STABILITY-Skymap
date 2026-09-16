@@ -1,9 +1,15 @@
 "use client";
 
-import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import Link from "next/link";
+import { forwardRef, useEffect, useState, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { cn, shouldUppercaseInput } from "@/lib/utils";
 import { AlertTriangle, Eye, EyeOff, Inbox, Loader2, type LucideIcon } from "lucide-react";
+
+const subscribeClient = () => () => {};
+export function useClientMounted() {
+  return useSyncExternalStore(subscribeClient, () => true, () => false);
+}
 
 export function Button({
   className,
@@ -12,11 +18,13 @@ export function Button({
   loading,
   children,
   disabled,
+  href,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
+  href?: string;
 }) {
   const variants = {
     primary:
@@ -31,17 +39,22 @@ export function Button({
     md: "min-h-11 h-11 px-4 text-sm sm:min-h-10 sm:h-10",
     lg: "min-h-12 h-12 px-5 text-sm sm:min-h-11 sm:h-11",
   };
+  const classes = cn(
+    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold tracking-tight transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:translate-y-px",
+    variants[variant],
+    sizes[size],
+    className
+  );
+  if (href) {
+    return (
+      <Link href={href} className={cn(classes, (disabled || loading) && "pointer-events-none opacity-50")} aria-disabled={disabled || loading}>
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {children}
+      </Link>
+    );
+  }
   return (
-    <button
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-semibold tracking-tight transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:translate-y-px",
-        variants[variant],
-        sizes[size],
-        className
-      )}
-      disabled={disabled || loading}
-      {...props}
-    >
+    <button className={classes} disabled={disabled || loading} {...props}>
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
       {children}
     </button>
@@ -411,6 +424,7 @@ export function Modal({
   onClose: () => void;
   size?: "sm" | "md" | "lg" | "xl";
 }) {
+  const mounted = useClientMounted();
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -425,7 +439,7 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const widths = {
     sm: "sm:max-w-md",
@@ -468,7 +482,6 @@ export function Modal({
     </div>
   );
 
-  if (typeof document === "undefined") return null;
   return createPortal(dialog, document.body);
 }
 

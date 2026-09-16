@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AssistantPanel } from "@/components/ai/assistant-panel";
-import { LoadingSkeleton } from "@/components/ui";
+import { LoadingSkeleton, useClientMounted } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { resolveAppModule } from "@/lib/modules";
 import { listAlerts } from "@/services/inventory";
@@ -33,8 +33,8 @@ const TITLE_MAP: Record<string, string> = {
   "/stability/alerts": "Alerts",
   "/stability/reports": "Reports",
   "/stability/settings": "Settings",
-  "/masters/products": "Product Master",
-  "/masters/batches": "Batch Master",
+  "/masters/products": "Stability Product Master",
+  "/masters/batches": "Stability Batch Master",
   "/masters/study-types": "Study Type Master",
   "/masters/storage-conditions": "Storage Condition Master",
   "/masters/pull-points": "Pull Point Master",
@@ -43,7 +43,20 @@ const TITLE_MAP: Record<string, string> = {
   "/masters/units": "Unit Master",
   "/masters/markets": "Market Master",
   "/masters/pack-sizes": "Pack Size Master",
+  "/stability/control-samples/collection": "Collection / Inward",
   "/stability/control-samples/daily-collection": "Daily Collection Record",
+  "/stability/control-samples/register": "Control Sample Register",
+  "/stability/control-samples/observation": "Periodic Observation",
+  "/stability/control-samples/withdrawal": "Withdrawal / Requisition",
+  "/stability/control-samples/locations": "Location & Boxes",
+  "/stability/control-samples/destruction-due": "Destruction Due",
+  "/stability/control-samples/destruction/new": "Destruction",
+  "/stability/control-samples/destruction-log": "Destruction Log",
+  "/stability/control-samples/products": "Control Sample Product Master",
+  "/stability/control-samples/batches": "Control Sample Batch Master",
+  "/stability/control-samples/quantity-master": "Quantity Master",
+  "/stability/control-samples/transactions": "Control Sample Transactions",
+  "/stability/control-samples/reports": "Control Sample Reports",
 };
 
 function resolveTitle(pathname: string) {
@@ -58,9 +71,10 @@ function resolveTitle(pathname: string) {
 }
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const ready = useClientMounted() && !loading && !!user && !!profile;
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
@@ -70,22 +84,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !profile) return;
     listAlerts()
       .then((alerts) => setAlertCount(alerts.filter((a) => !a.acknowledged).length))
       .catch(() => setAlertCount(0));
-  }, [user, pathname]);
-
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/80 p-5 shadow-sm backdrop-blur">
-          <div className="mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r from-teal-400 to-teal-600" />
-          <LoadingSkeleton rows={5} />
-        </div>
-      </div>
-    );
-  }
+  }, [user, profile, pathname]);
 
   const title = resolveTitle(pathname);
   const currentModule = resolveAppModule(pathname);
@@ -112,20 +115,35 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      {!isHome ? <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} /> : null}
-      <div className={cn("min-w-0 transition-all", isHome ? "" : collapsed ? "lg:pl-[76px]" : "lg:pl-72")}>
-        <Header
-          title={title}
-          breadcrumbs={crumbs}
-          onMenuClick={() => setOpen(true)}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((v) => !v)}
-          alertCount={alertCount}
-          hideNav={isHome}
-        />
-        <main className="animate-fade-up px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6 lg:px-8">{children}</main>
+      {ready ? null : (
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/80 p-5 shadow-sm backdrop-blur">
+            <div className="mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r from-teal-400 to-teal-600" />
+            <LoadingSkeleton rows={5} />
+          </div>
+        </div>
+      )}
+      {ready && !isHome ? <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} /> : null}
+      <div
+        className={cn("min-w-0 transition-all", ready && !isHome ? (collapsed ? "lg:pl-[76px]" : "lg:pl-72") : "")}
+        hidden={!ready}
+      >
+        {ready ? (
+          <Header
+            title={title}
+            breadcrumbs={crumbs}
+            onMenuClick={() => setOpen(true)}
+            collapsed={collapsed}
+            onToggleCollapse={() => setCollapsed((v) => !v)}
+            alertCount={alertCount}
+            hideNav={isHome}
+          />
+        ) : null}
+        <main className="animate-fade-up px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6 lg:px-8">
+          {children}
+        </main>
       </div>
-      {isHome ? null : <AssistantPanel />}
+      {ready && !isHome ? <AssistantPanel /> : null}
       <Toaster
         richColors
         position="top-center"

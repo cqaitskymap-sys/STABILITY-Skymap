@@ -2,17 +2,18 @@
 
 import { MasterPage } from "@/components/masters/master-page";
 import { COLLECTIONS } from "@/lib/firebase/config";
-import { listProducts } from "@/services/masters";
+import { listControlProducts } from "@/services/masters";
 import type { Product } from "@/types";
 
-export default function ProductsPage() {
+export default function ControlSampleProductsPage() {
   return (
     <MasterPage<Product>
-      title="Product Master"
-      description="Maintain products used only for stability studies, charging, and inventory. Control samples have a separate product master."
-      collectionName={COLLECTIONS.products}
-      recordType="product"
-      loader={listProducts}
+      title="Control Sample Product Master"
+      description="Products used only for control sample collection, register, and quantity master. These are not shared with stability inventory."
+      collectionName={COLLECTIONS.controlSampleProducts}
+      recordType="controlSampleProduct"
+      managePermission={["control.perform", "masters.manage"]}
+      loader={listControlProducts}
       fields={[
         { key: "productName", label: "Product Name", required: true },
         { key: "productCode", label: "Product Code" },

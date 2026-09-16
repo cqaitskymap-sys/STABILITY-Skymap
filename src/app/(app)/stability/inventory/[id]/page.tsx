@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { derivePullStatus, formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { getSample, listPullPoints, listTransactionsBySample } from "@/services/inventory";
 
 export default function SampleDetailPage() {
@@ -49,12 +49,7 @@ export default function SampleDetailPage() {
     ]);
     return {
       sample,
-      pulls: pulls
-        .map((p) => ({
-          ...p,
-          status: derivePullStatus(p.plannedDate, p.actualQuantity, p.plannedQuantity),
-        }))
-        .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
+      pulls: pulls.sort((a, b) => a.plannedDate.localeCompare(b.plannedDate)),
       transactions: transactions.slice(0, 20),
     };
   }, [sampleId]);

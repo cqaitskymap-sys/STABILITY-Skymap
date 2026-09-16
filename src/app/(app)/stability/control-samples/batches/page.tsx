@@ -4,11 +4,11 @@ import { MasterPage } from "@/components/masters/master-page";
 import { Button, EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui";
 import { COLLECTIONS } from "@/lib/firebase/config";
 import { useAsync } from "@/hooks/useAsync";
-import { listBatches, listProducts } from "@/services/masters";
+import { listControlBatches, listControlProducts } from "@/services/masters";
 import type { Batch } from "@/types";
 
-export default function BatchesPage() {
-  const products = useAsync(listProducts, []);
+export default function ControlSampleBatchesPage() {
+  const products = useAsync(listControlProducts, []);
 
   if (products.loading) return <LoadingSkeleton rows={6} />;
   if (products.error) return <ErrorState message={products.error} onRetry={products.reload} />;
@@ -17,10 +17,10 @@ export default function BatchesPage() {
   if (!activeProducts.length) {
     return (
       <EmptyState
-        title="Add a product first"
-        description="Batches belong to a stability product. Create an active stability product before adding batches."
+        title="Add a control sample product first"
+        description="Control sample batches belong to a control sample product. They are not linked to stability inventory products."
         action={
-          <Button href="/masters/products">Go to Products</Button>
+          <Button href="/stability/control-samples/products">Go to Control Sample Products</Button>
         }
       />
     );
@@ -28,11 +28,12 @@ export default function BatchesPage() {
 
   return (
     <MasterPage<Batch>
-      title="Batch Master"
-      description="Maintain product batches used only for stability study charging. Control samples have a separate batch master."
-      collectionName={COLLECTIONS.batches}
-      recordType="batch"
-      loader={listBatches}
+      title="Control Sample Batch Master"
+      description="Batches used only for control sample collection. These are not shared with stability inventory."
+      collectionName={COLLECTIONS.controlSampleBatches}
+      recordType="controlSampleBatch"
+      managePermission={["control.perform", "masters.manage"]}
+      loader={listControlBatches}
       fields={[
         {
           key: "productId",

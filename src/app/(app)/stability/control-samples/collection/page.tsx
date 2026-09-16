@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
@@ -20,13 +20,9 @@ import {
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { COLLECTION_STAGES } from "@/lib/control-samples";
-import { DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { formatDate, friendlyError, todayISO } from "@/lib/utils";
-import { listBatches, listProducts, listUnits } from "@/services/masters";
-import { getOrganizationSettings } from "@/services/organization";
+import { listControlBatches, listControlProducts, listUnits } from "@/services/masters";
 import {
-  collectionStagesForBatch,
   createCollection,
   getActiveQuantityMaster,
   listCollections,
@@ -37,36 +33,28 @@ import {
   updateCollectionDraft,
   verifyAndLogCollection,
 } from "@/services/control-samples";
-import type { CollectionStage } from "@/types/control-samples";
 
 export default function ControlSampleCollectionPage() {
   const { profile, hasPermission } = useAuth();
   const canCollect = hasPermission("control.collect") || hasPermission("control.perform");
   const canReceive = hasPermission("control.perform");
   const catalog = useAsync(async () => {
-    const [products, batches, units, rows, settings] = await Promise.all([
-      listProducts(),
-      listBatches(),
+    const [products, batches, units, rows] = await Promise.all([
+      listControlProducts(),
+      listControlBatches(),
       listUnits(),
       listCollections(),
-      getOrganizationSettings(),
     ]);
-    return { products, batches, units, rows, settings };
+    return { products, batches, units, rows };
   }, []);
 
   const [productId, setProductId] = useState("");
   const [batchId, setBatchId] = useState("");
-  const [stage, setStage] = useState<CollectionStage>("Initial");
   const [actualQty, setActualQty] = useState("");
   const [unit, setUnit] = useState("");
-  const [collectionTime, setCollectionTime] = useState("");
+  const [collectionDate, setCollectionDate] = useState(todayISO());
   const [appearance, setAppearance] = useState(true);
   const [coding, setCoding] = useState(true);
-  const [batchKind, setBatchKind] = useState<"Standard" | "Mother Batch" | "Conversion Batch">("Standard");
-  const [motherBatch, setMotherBatch] = useState("");
-  const [conversionBatch, setConversionBatch] = useState("");
-  const [brand, setBrand] = useState("");
-  const [conversionNoteRef, setConversionNoteRef] = useState("");
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
@@ -80,18 +68,8 @@ export default function ControlSampleCollectionPage() {
   const selectedProduct = products.find((p) => p.id === productId);
   const selectedBatch = batches.find((b) => b.id === batchId);
   const qtyMaster = useAsync(async () => (productId ? getActiveQuantityMaster(productId) : null), [productId]);
-  const settings = catalog.data?.settings || DEFAULT_ORG_SETTINGS;
-  const requiredQty = useMemo(() => {
-    if (batchKind === "Conversion Batch") {
-      return qtyMaster.data?.conversionBatchQuantity ?? settings.controlConversionBatchQuantity;
-    }
-    return qtyMaster.data?.quantity ?? 0;
-  }, [batchKind, qtyMaster.data, settings.controlConversionBatchQuantity]);
-  const requiredUnit = batchKind === "Conversion Batch"
-    ? (qtyMaster.data?.conversionBatchUnit || "pack")
-    : (qtyMaster.data?.unit || unit);
-
-  const stageStatus = selectedBatch ? collectionStagesForBatch(catalog.data?.rows || [], selectedBatch.id) : null;
+  const requiredQty = qtyMaster.data?.quantity ?? 0;
+  const requiredUnit = qtyMaster.data?.unit || unit;
 
   function loadDraft(id: string) {
     const row = (catalog.data?.rows || []).find((r) => r.id === id);
@@ -99,17 +77,11 @@ export default function ControlSampleCollectionPage() {
     setEditingId(row.id);
     setProductId(row.productId);
     setBatchId(row.batchId);
-    setStage(row.collectionStage);
     setActualQty(String(row.actualQuantity));
     setUnit(row.unit);
-    setCollectionTime(row.collectionTime || "");
+    setCollectionDate(row.date || todayISO());
     setAppearance(row.physicalAppearanceCheck);
     setCoding(row.codingDetailsCheck);
-    setBatchKind(row.batchKind || "Standard");
-    setMotherBatch(row.motherBatch || "");
-    setConversionBatch(row.conversionBatch || "");
-    setBrand(row.brand || "");
-    setConversionNoteRef(row.conversionNoteRef || "");
     setRemarks(row.remarks || "");
   }
 
@@ -123,10 +95,15 @@ export default function ControlSampleCollectionPage() {
       toast.error("Actual quantity collected must be greater than zero.");
       return;
     }
+    if (!collectionDate) {
+      toast.error("Collection date is required.");
+      return;
+    }
     setSaving(true);
     try {
       if (editingId) {
         await updateCollectionDraft(editingId, {
+          date: collectionDate,
           productId: selectedProduct.id,
           productName: selectedProduct.productName,
           batchId: selectedBatch.id,
@@ -137,15 +114,10 @@ export default function ControlSampleCollectionPage() {
           requiredQuantity: requiredQty,
           actualQuantity: qty,
           unit: unit || requiredUnit || "UNIT",
-          collectionStage: stage,
-          collectionTime: collectionTime || undefined,
+          collectionStage: "Initial",
           physicalAppearanceCheck: appearance,
           codingDetailsCheck: coding,
-          batchKind,
-          motherBatch: motherBatch || undefined,
-          conversionBatch: conversionBatch || undefined,
-          brand: brand || undefined,
-          conversionNoteRef: conversionNoteRef || undefined,
+          batchKind: "Standard",
           remarks: remarks || undefined,
         }, profile);
         if (finalize) await finalizeCollection(editingId, profile);
@@ -157,7 +129,7 @@ export default function ControlSampleCollectionPage() {
         return;
       }
       await createCollection({
-        date: todayISO(),
+        date: collectionDate,
         productId: selectedProduct.id,
         productName: selectedProduct.productName,
         batchId: selectedBatch.id,
@@ -168,16 +140,11 @@ export default function ControlSampleCollectionPage() {
         requiredQuantity: requiredQty,
         actualQuantity: qty,
         unit: unit || requiredUnit || "UNIT",
-        collectionStage: stage,
-        collectionTime: collectionTime || undefined,
+        collectionStage: "Initial",
         collectedBy: profile.displayName || profile.email,
         physicalAppearanceCheck: appearance,
         codingDetailsCheck: coding,
-        batchKind,
-        motherBatch: motherBatch || undefined,
-        conversionBatch: conversionBatch || undefined,
-        brand: brand || undefined,
-        conversionNoteRef: conversionNoteRef || undefined,
+        batchKind: "Standard",
         remarks: remarks || undefined,
         user: profile,
         finalize,
@@ -236,11 +203,11 @@ export default function ControlSampleCollectionPage() {
     <div>
       <PageHeader
         title="Control Sample Collection"
-        description="IPQA collects required quantity product-wise per Annexure-I. Initial / Middle / End stages are recorded separately and are not auto-merged."
+        description="IPQA collects required quantity product-wise per Annexure-I. Product and batch come from the Control Sample masters, not from stability inventory."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
-            <Link href="/stability/control-samples/daily-collection"><Button variant="outline">Daily Collection Record</Button></Link>
+            <Button href="/stability/control-samples/daily-collection" variant="outline">Daily Collection Record</Button>
           </div>
         }
       />
@@ -255,31 +222,22 @@ export default function ControlSampleCollectionPage() {
                 <option value="">Select product</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
               </Select>
-              <Select label="Batch" required value={batchId} onChange={(e) => setBatchId(e.target.value)} disabled={!canCollect}>
-                <option value="">Select batch</option>
-                {batches.map((b) => <option key={b.id} value={b.id}>{b.batchNumber}</option>)}
-              </Select>
-              {stageStatus ? (
+              {!products.length ? (
                 <p className="text-xs text-slate-500">
-                  Stages recorded for this batch: Initial {stageStatus.Initial ? "✓" : "—"} · Middle {stageStatus.Middle ? "✓" : "—"} · End {stageStatus.End ? "✓" : "—"}.
-                  {stageStatus.complete ? " Required stages are complete." : " Batch is not marked fully represented until configured stages are completed."}
+                  No control sample products yet. Add them in{" "}
+                  <Link href="/stability/control-samples/products" className="font-medium underline">Control Samples → Products</Link>
+                  . They are not shared with stability inventory.
                 </p>
               ) : null}
-              <Select label="Collection stage" value={stage} onChange={(e) => setStage(e.target.value as CollectionStage)} disabled={!canCollect}>
-                {COLLECTION_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+              <Select label="Batch" required value={batchId} onChange={(e) => setBatchId(e.target.value)} disabled={!canCollect || !productId}>
+                <option value="">{productId ? "Select batch" : "Select a product first"}</option>
+                {batches.map((b) => <option key={b.id} value={b.id}>{b.batchNumber}</option>)}
               </Select>
-              <Select label="Batch kind" value={batchKind} onChange={(e) => setBatchKind(e.target.value as typeof batchKind)} disabled={!canCollect}>
-                <option value="Standard">Standard</option>
-                <option value="Mother Batch">Mother Batch</option>
-                <option value="Conversion Batch">Conversion Batch</option>
-              </Select>
-              {batchKind !== "Standard" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input label="Mother batch" value={motherBatch} onChange={(e) => setMotherBatch(e.target.value)} disabled={!canCollect} />
-                  <Input label="Conversion batch" value={conversionBatch} onChange={(e) => setConversionBatch(e.target.value)} disabled={!canCollect} />
-                  <Input label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} disabled={!canCollect} />
-                  <Input label="Conversion note reference" value={conversionNoteRef} onChange={(e) => setConversionNoteRef(e.target.value)} disabled={!canCollect} />
-                </div>
+              {productId && !batches.length ? (
+                <p className="text-xs text-slate-500">
+                  No control sample batches for this product.{" "}
+                  <Link href="/stability/control-samples/batches" className="font-medium underline">Add a batch</Link>
+                </p>
               ) : null}
               <p className="text-sm text-slate-600">
                 Required quantity (Annexure-I{qtyMaster.data ? ` rev ${qtyMaster.data.revisionNumber}` : " — not configured"}): <strong>{requiredQty || "—"} {requiredUnit}</strong>
@@ -292,7 +250,7 @@ export default function ControlSampleCollectionPage() {
                     <option key={u.id} value={u.abbreviation || u.name}>{u.abbreviation || u.name}</option>
                   ))}
                 </Select>
-                <Input label="Collection time" type="time" value={collectionTime} onChange={(e) => setCollectionTime(e.target.value)} disabled={!canCollect} />
+                <Input label="Collection date" type="date" required value={collectionDate} onChange={(e) => setCollectionDate(e.target.value)} disabled={!canCollect} />
               </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={appearance} onChange={(e) => setAppearance(e.target.checked)} disabled={!canCollect} /> Physical appearance checked</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={coding} onChange={(e) => setCoding(e.target.checked)} disabled={!canCollect} /> Coding details checked</label>
@@ -301,7 +259,7 @@ export default function ControlSampleCollectionPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => void save(false)} loading={saving}>{editingId ? "Save draft" : "Save draft"}</Button>
                   <Button onClick={() => void save(true)} loading={saving}>{editingId ? "Finalize draft" : "Record collected"}</Button>
-                  {editingId ? <Button variant="ghost" onClick={() => { setEditingId(""); setActualQty(""); setRemarks(""); }}>Cancel edit</Button> : null}
+                  {editingId ? <Button variant="ghost" onClick={() => { setEditingId(""); setActualQty(""); setRemarks(""); setCollectionDate(todayISO()); }}>Cancel edit</Button> : null}
                 </div>
               ) : null}
             </div>
@@ -329,10 +287,9 @@ export default function ControlSampleCollectionPage() {
               empty={<EmptyState title="No collections" description="Collection is not a stability charging step." />}
               columns={[
                 { key: "collectionId", header: "Collection ID" },
-                { key: "date", header: "Date" },
+                { key: "date", header: "Collection Date" },
                 { key: "product", header: "Product" },
                 { key: "batch", header: "Batch" },
-                { key: "stage", header: "Stage" },
                 { key: "qty", header: "Qty" },
                 { key: "status", header: "Status" },
                 { key: "actions", header: "Action" },
@@ -343,7 +300,6 @@ export default function ControlSampleCollectionPage() {
                 date: formatDate(r.date),
                 product: r.productName,
                 batch: r.batchNumber,
-                stage: r.collectionStage,
                 qty: `${r.actualQuantity} ${r.unit}`,
                 status: <StatusBadge status={r.status} />,
                 actions: (

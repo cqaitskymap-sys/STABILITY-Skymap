@@ -81,7 +81,7 @@ export type InventoryAiContext = {
   }[];
 };
 
-const OPEN_PULL = ["Upcoming", "Due Soon", "Due Today", "Overdue", "Partially Withdrawn"];
+const OPEN_PULL = ["Upcoming", "Due Soon", "Due Today", "Within Window", "Overdue", "Partially Withdrawn"];
 const CACHE_MS = 45_000;
 
 let cache: { at: number; data: InventoryAiContext } | null = null;
