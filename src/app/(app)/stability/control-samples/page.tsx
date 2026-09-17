@@ -15,7 +15,7 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, formatFullDate } from "@/lib/utils";
 import { getControlDashboard } from "@/services/control-samples";
 
 export default function ControlSampleDashboardPage() {
@@ -79,7 +79,7 @@ export default function ControlSampleDashboardPage() {
                     <tbody className="divide-y divide-slate-100">
                       {data.recentCollections.map((r) => (
                         <tr key={r.id}>
-                          <td className="px-4 py-2">{formatDate(r.date)}</td>
+                          <td className="px-4 py-2">{formatFullDate(r.date)}</td>
                           <td className="px-4 py-2">{r.productName}</td>
                           <td className="px-4 py-2">{r.batchNumber}</td>
                           <td className="px-4 py-2">{r.actualQuantity} {r.unit}</td>

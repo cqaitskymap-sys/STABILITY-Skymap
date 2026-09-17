@@ -62,8 +62,8 @@ export const skymapTools = {
     inputSchema: z.object({
       productName: z.string().describe("Exact or unique product name"),
       batchNumber: z.string(),
-      manufacturingDate: z.string().describe("YYYY-MM-DD"),
-      expiryDate: z.string().describe("YYYY-MM-DD"),
+      manufacturingDate: z.string().describe("Manufacturing month as YYYY-MM or YYYY-MM-DD"),
+      expiryDate: z.string().describe("Expiry month as YYYY-MM or YYYY-MM-DD (valid through month-end)"),
       status: statusSchema,
     }),
   }),

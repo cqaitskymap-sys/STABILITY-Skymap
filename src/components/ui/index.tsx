@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { forwardRef, useEffect, useState, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
-import { cn, shouldUppercaseInput } from "@/lib/utils";
+import { cn, fromMonthInput, shouldUppercaseInput, toMonthInput } from "@/lib/utils";
 import { AlertTriangle, Eye, EyeOff, Inbox, Loader2, type LucideIcon } from "lucide-react";
 
 const subscribeClient = () => () => {};
@@ -71,13 +71,19 @@ export const Input = forwardRef<
     error?: string;
     hint?: string;
     uppercase?: boolean;
+    /** Keep day + month + year. Only Control Sample Collection date uses this. */
+    fullDate?: boolean;
+    /** Month pickers store YYYY-MM-01 by default; use "end" for To/End filters. */
+    monthBound?: "start" | "end";
   }
->(function Input({ className, label, error, hint, id, type, onChange, uppercase: uppercaseProp, ...props }, ref) {
+>(function Input({ className, label, error, hint, id, type, onChange, uppercase: uppercaseProp, fullDate, monthBound = "start", value, defaultValue, min, max, ...props }, ref) {
     const inputId = id || props.name;
     const [passwordVisible, setPasswordVisible] = useState(false);
     const isPassword = type === "password";
-    const inputType = isPassword ? (passwordVisible ? "text" : "password") : type;
-    const uppercase = uppercaseProp ?? shouldUppercaseInput(type);
+    const useMonthPicker = type === "date" && !fullDate;
+    const inputType = isPassword ? (passwordVisible ? "text" : "password") : useMonthPicker ? "month" : type;
+    const uppercase = uppercaseProp ?? shouldUppercaseInput(useMonthPicker ? "month" : type);
+    const monthValue = (raw: unknown) => (raw == null || raw === "" ? "" : toMonthInput(String(raw)));
 
     return (
       <label className="block space-y-1.5">
@@ -91,7 +97,12 @@ export const Input = forwardRef<
           <input
             ref={ref}
             id={inputId}
+            {...props}
             type={inputType}
+            value={useMonthPicker && value !== undefined ? monthValue(value) : value}
+            defaultValue={useMonthPicker && defaultValue !== undefined ? monthValue(defaultValue) : defaultValue}
+            min={useMonthPicker && min ? monthValue(min) : min}
+            max={useMonthPicker && max ? monthValue(max) : max}
             autoCapitalize={uppercase ? "characters" : "off"}
             autoCorrect={uppercase ? undefined : "off"}
             spellCheck={uppercase ? undefined : false}
@@ -103,9 +114,9 @@ export const Input = forwardRef<
             )}
             onChange={(e) => {
               if (uppercase) e.target.value = e.target.value.toUpperCase();
+              if (useMonthPicker) e.target.value = fromMonthInput(e.target.value, monthBound);
               onChange?.(e);
             }}
-            {...props}
             data-no-uppercase={uppercase ? undefined : ""}
           />
           {isPassword ? (

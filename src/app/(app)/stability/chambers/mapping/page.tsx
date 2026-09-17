@@ -6,7 +6,7 @@ import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, Status
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { addDaysISO } from "@/lib/sop";
-import { formatDate, friendlyError, todayISO } from "@/lib/utils";
+import { effectiveDueDate, formatDate, friendlyError, todayISO } from "@/lib/utils";
 import { listChambers } from "@/services/masters";
 import { createMappingRecord, listTemperatureMappings } from "@/services/chamber-ops";
 
@@ -26,8 +26,11 @@ export default function MappingPage() {
   const [saving, setSaving] = useState(false);
   const chamber = (chambers.data || []).find((c) => c.id === chamberId);
   const today = todayISO();
-  const dueSoon = (rows.data || []).filter((r) => r.nextDueDate >= today && r.nextDueDate <= addDaysISO(today, 30)).length;
-  const overdue = (rows.data || []).filter((r) => r.nextDueDate < today).length;
+  const dueSoon = (rows.data || []).filter((r) => {
+    const due = effectiveDueDate(r.nextDueDate) || r.nextDueDate;
+    return due >= today && due <= addDaysISO(today, 30);
+  }).length;
+  const overdue = (rows.data || []).filter((r) => (effectiveDueDate(r.nextDueDate) || r.nextDueDate) < today).length;
 
   async function save() {
     if (!profile || !can || !chamber) return toast.error("Select a chamber.");
@@ -71,7 +74,7 @@ export default function MappingPage() {
               {(chambers.data || []).map((c) => <option key={c.id} value={c.id}>{c.chamberId}</option>)}
             </Select>
             <Input label="Mapping date" type="date" value={mappingDate} onChange={(e) => setMappingDate(e.target.value)} disabled={!can} />
-            <Input label="Next due date" type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} disabled={!can} />
+            <Input label="Next due date" type="date" monthBound="end" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} disabled={!can} />
             <Input label="Protocol number" value={protocolNumber} onChange={(e) => setProtocolNumber(e.target.value)} disabled={!can} />
             <Input label="Report number" value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} disabled={!can} />
             <Input label="Performed by" value={performedBy} onChange={(e) => setPerformedBy(e.target.value)} disabled={!can} />

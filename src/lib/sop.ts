@@ -1,5 +1,6 @@
-import { addDays, differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
-import type { OrganizationSettings, PullPointStatus, SampleOrientation } from "@/types";
+import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from "date-fns";
+import type { OrganizationSettings, SampleOrientation } from "@/types";
+import { effectiveDueDate } from "@/lib/utils";
 
 export const DEFAULT_ORG_SETTINGS: OrganizationSettings = {
   companyName: "",
@@ -100,7 +101,7 @@ export function daysFromToday(iso: string) {
 }
 
 export function addDaysISO(iso: string, days: number) {
-  return addDays(parseDate(iso), days).toISOString().slice(0, 10);
+  return format(addDays(parseDate(iso), days), "yyyy-MM-dd");
 }
 
 /** Available = Initial − Withdrawn + Returned − Disposed */
@@ -118,6 +119,39 @@ export function splitOrientation(total: number, invertedPercent = 25) {
   const invertedQuantity = Math.round((total * pct) / 100);
   const uprightQuantity = Math.max(0, total - invertedQuantity);
   return { uprightQuantity, invertedQuantity, invertedPercent: pct };
+}
+
+export function splitPullsByOrientation<T extends { quantity: number }>(
+  pulls: T[],
+  uprightQuantity: number,
+  totalQuantity: number
+) {
+  const total = Math.max(0, Number(totalQuantity) || 0);
+  const uprightTarget = Math.max(0, Math.min(Number(uprightQuantity) || 0, total));
+  if (!pulls.length || total <= 0 || uprightTarget <= 0) {
+    return {
+      uprightPulls: pulls.map((p) => ({ ...p, quantity: 0 })),
+      invertedPulls: pulls.map((p) => ({ ...p })),
+    };
+  }
+
+  const raw = pulls.map((p) => (Number(p.quantity) * uprightTarget) / total);
+  const floors = raw.map((n) => Math.floor(n));
+  let leftover = uprightTarget - floors.reduce((sum, n) => sum + n, 0);
+  const order = raw
+    .map((n, i) => ({ i, frac: n - floors[i], room: Math.max(0, Number(pulls[i].quantity) - floors[i]) }))
+    .sort((a, b) => b.frac - a.frac);
+  const qty = floors.slice();
+  for (const item of order) {
+    if (leftover <= 0) break;
+    const add = Math.min(leftover, item.room);
+    qty[item.i] += add;
+    leftover -= add;
+  }
+
+  const uprightPulls = pulls.map((p, i) => ({ ...p, quantity: qty[i] }));
+  const invertedPulls = pulls.map((p, i) => ({ ...p, quantity: Math.max(0, Number(p.quantity) - qty[i]) }));
+  return { uprightPulls, invertedPulls };
 }
 
 export function isChargingBeyondWindow(releaseDate: string | undefined, chargingDate: string, windowDays: number) {
@@ -185,26 +219,10 @@ export function meanKineticTemperature(celsiusReadings: number[]) {
   return mktKelvin - 273.15;
 }
 
-export function derivePullStatus(
-  plannedDate: string,
-  actualQuantity: number,
-  plannedQuantity: number,
-  windowDays = 7
-): PullPointStatus {
-  if (actualQuantity > 0 && actualQuantity >= plannedQuantity) return "Withdrawn";
-  if (actualQuantity > 0 && actualQuantity < plannedQuantity) return "Partially Withdrawn";
-  if (!plannedDate) return "Upcoming";
-  const days = daysFromToday(plannedDate);
-  if (Number.isNaN(days)) return "Upcoming";
-  if (days > 7) return "Upcoming";
-  if (days > 0) return "Due Soon";
-  if (days === 0) return "Due Today";
-  if (Math.abs(days) <= windowDays) return "Within Window";
-  return "Overdue";
-}
+export { derivePullStatus } from "@/lib/utils";
 
 export function pullWindowEnd(plannedDate: string, windowDays = 7) {
-  return addDaysISO(plannedDate, windowDays);
+  return addDaysISO(effectiveDueDate(plannedDate) || plannedDate, windowDays);
 }
 
 export function orientationLabel(value?: SampleOrientation | null) {

@@ -8,7 +8,7 @@ import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, friendlyError } from "@/lib/utils";
+import { formatDate, formatFullDate, friendlyError } from "@/lib/utils";
 import { adjustControlSample, listBoxes, listControlSamples, listRacks, storeControlSample } from "@/services/control-samples";
 
 export default function ControlSampleRegisterPage() {
@@ -25,10 +25,8 @@ export default function ControlSampleRegisterPage() {
   const [stampId, setStampId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [storageArea, setStorageArea] = useState("Control Sample Room");
-  const [rackNumber, setRackNumber] = useState("");
-  const [partitionNumber, setPartitionNumber] = useState("");
+  const [rackId, setRackId] = useState("");
   const [boxNumber, setBoxNumber] = useState("");
-  const [position, setPosition] = useState("");
   const [saving, setSaving] = useState(false);
   const [adjustId, setAdjustId] = useState("");
   const [adjustDelta, setAdjustDelta] = useState("");
@@ -46,13 +44,21 @@ export default function ControlSampleRegisterPage() {
 
   async function store() {
     if (!profile || !can || !storeId) return;
-    if (!storageArea.trim() || !rackNumber.trim() || !boxNumber.trim()) {
+    const rack = (catalog.data?.racks || []).find((r) => r.id === rackId);
+    if (!storageArea.trim() || !rack || !boxNumber.trim()) {
       toast.error("Storage area, rack, and box are required.");
       return;
     }
     setSaving(true);
     try {
-      await storeControlSample({ id: storeId, storageArea, rackNumber, partitionNumber: partitionNumber || undefined, boxNumber, position: position || undefined, user: profile });
+      await storeControlSample({
+        id: storeId,
+        storageArea,
+        rackNumber: rack.rackNumber,
+        partitionNumber: rack.partitionNumber,
+        boxNumber,
+        user: profile,
+      });
       toast.success("Sample stored. Location movement was recorded.");
       await catalog.reload();
     } catch (err) {
@@ -99,7 +105,7 @@ export default function ControlSampleRegisterPage() {
             { label: "Batch", value: stamp.batchNumber },
             { label: "Control Sample ID", value: stamp.controlSampleId },
             { label: "Quantity", value: `${stamp.availableQuantity} ${stamp.unit}` },
-            { label: "Date", value: formatDate(stamp.collectionDate || stamp.createdAt) },
+            { label: "Date", value: formatFullDate(stamp.collectionDate || stamp.createdAt) },
             { label: "Storage area", value: stamp.storageArea },
             { label: "Location", value: stamp.locationLabel },
             { label: "Box number", value: stamp.boxNumber },
@@ -117,20 +123,18 @@ export default function ControlSampleRegisterPage() {
               ))}
             </Select>
             <Input label="Storage area" value={storageArea} onChange={(e) => setStorageArea(e.target.value)} disabled={!can} />
-            <Select label="Rack no." value={rackNumber} onChange={(e) => setRackNumber(e.target.value)} disabled={!can}>
+            <Select label="Rack no." value={rackId} onChange={(e) => setRackId(e.target.value)} disabled={!can}>
               <option value="">Select rack</option>
               {(catalog.data?.racks || []).filter((r) => r.status === "Active").map((r) => (
-                <option key={r.id} value={r.rackNumber}>{r.rackNumber}{r.partitionNumber ? ` / ${r.partitionNumber}` : ""}</option>
+                <option key={r.id} value={r.id}>{r.rackNumber}{r.partitionNumber ? ` / ${r.partitionNumber}` : ""}</option>
               ))}
             </Select>
-            <Input label="Partition / column" value={partitionNumber} onChange={(e) => setPartitionNumber(e.target.value)} disabled={!can} />
             <Select label="Box no." value={boxNumber} onChange={(e) => setBoxNumber(e.target.value)} disabled={!can}>
               <option value="">Select box</option>
               {(catalog.data?.boxes || []).filter((b) => b.status === "Active").map((b) => (
                 <option key={b.id} value={b.boxNumber}>{b.boxNumber}</option>
               ))}
             </Select>
-            <Input label="Position" value={position} onChange={(e) => setPosition(e.target.value)} disabled={!can} />
           </div>
           <div className="px-4 pb-4">{can ? <Button onClick={() => void store()} loading={saving}>Store / move</Button> : null}</div>
         </Card>
@@ -178,7 +182,7 @@ export default function ControlSampleRegisterPage() {
             ]}
             rows={rows.map((r) => ({
               id: r.controlSampleId,
-              date: formatDate(r.collectionDate || r.createdAt),
+              date: formatFullDate(r.collectionDate || r.createdAt),
               product: r.productName,
               batch: r.batchNumber,
               mfg: formatDate(r.manufacturingDate),

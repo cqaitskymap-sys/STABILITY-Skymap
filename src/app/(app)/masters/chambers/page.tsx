@@ -75,8 +75,8 @@ export default function ChambersPage() {
         { key: "relativeHumidity", label: "Set RH" },
         { key: "temperatureChannels", label: "Temperature channels", type: "number" },
         { key: "humidityChannels", label: "Humidity channels", type: "number" },
-        { key: "calibrationDueDate", label: "Calibration due", type: "date" },
-        { key: "mappingDueDate", label: "Mapping due", type: "date" },
+        { key: "calibrationDueDate", label: "Calibration due", type: "date", monthBound: "end" },
+        { key: "mappingDueDate", label: "Mapping due", type: "date", monthBound: "end" },
         { key: "capacity", label: "Capacity", type: "number", required: true },
         {
           key: "status",

@@ -76,7 +76,7 @@ export default function MaintenancePage() {
             <Textarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={!can} />
             <Textarea label="Observation" value={observation} onChange={(e) => setObservation(e.target.value)} disabled={!can} />
             <Textarea label="Corrective action" value={correctiveAction} onChange={(e) => setCorrectiveAction(e.target.value)} disabled={!can} />
-            <Input label="Next due date" type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} disabled={!can} />
+            <Input label="Next due date" type="date" monthBound="end" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} disabled={!can} />
             {can ? <Button onClick={() => void save()} loading={saving}>Save record</Button> : null}
           </div>
         </Card>

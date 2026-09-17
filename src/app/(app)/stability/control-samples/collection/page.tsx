@@ -20,7 +20,7 @@ import {
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, friendlyError, todayISO } from "@/lib/utils";
+import { formatFullDate, friendlyError, todayISO } from "@/lib/utils";
 import { listControlBatches, listControlProducts, listUnits } from "@/services/masters";
 import {
   createCollection,
@@ -250,7 +250,7 @@ export default function ControlSampleCollectionPage() {
                     <option key={u.id} value={u.abbreviation || u.name}>{u.abbreviation || u.name}</option>
                   ))}
                 </Select>
-                <Input label="Collection date" type="date" required value={collectionDate} onChange={(e) => setCollectionDate(e.target.value)} disabled={!canCollect} />
+                <Input label="Collection date" type="date" fullDate required value={collectionDate} onChange={(e) => setCollectionDate(e.target.value)} disabled={!canCollect} />
               </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={appearance} onChange={(e) => setAppearance(e.target.checked)} disabled={!canCollect} /> Physical appearance checked</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={coding} onChange={(e) => setCoding(e.target.checked)} disabled={!canCollect} /> Coding details checked</label>
@@ -297,7 +297,7 @@ export default function ControlSampleCollectionPage() {
               rows={rows.map((r) => ({
                 id: r.id,
                 collectionId: r.collectionId,
-                date: formatDate(r.date),
+                date: formatFullDate(r.date),
                 product: r.productName,
                 batch: r.batchNumber,
                 qty: `${r.actualQuantity} ${r.unit}`,

@@ -192,8 +192,8 @@ export default function SampleInwardPage() {
                 ))}
               </Select>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Input label="Mfg Date" value={selectedBatch?.manufacturingDate || ""} readOnly />
-                <Input label="Expiry Date" value={selectedBatch?.expiryDate || ""} readOnly />
+                <Input label="Mfg Date" value={selectedBatch ? formatDate(selectedBatch.manufacturingDate) : ""} readOnly />
+                <Input label="Expiry Date" value={selectedBatch ? formatDate(selectedBatch.expiryDate) : ""} readOnly />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input

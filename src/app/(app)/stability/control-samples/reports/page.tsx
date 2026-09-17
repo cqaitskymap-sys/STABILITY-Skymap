@@ -7,7 +7,7 @@ import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleto
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { CONTROL_SAMPLE_ANNEXURES, isDestructionEligible, isRetentionReviewDue } from "@/lib/control-samples";
-import { downloadBlob, toCsv } from "@/lib/utils";
+import { downloadBlob, formatDate, formatFullDate, toCsv } from "@/lib/utils";
 import {
   listBoxes,
   listCollections,
@@ -101,7 +101,7 @@ export default function ControlSampleReportsPage() {
         }));
       case "daily-collection":
         return data.data.collections.filter((r) => inRange(r.date) && match(r.productName)).map((r) => ({
-          Date: r.date, Product: r.productName, Batch: r.batchNumber, Qty: r.actualQuantity, Stage: r.collectionStage, Status: r.status, CollectedBy: r.collectedBy,
+          Date: formatFullDate(r.date), Product: r.productName, Batch: r.batchNumber, Qty: r.actualQuantity, Stage: r.collectionStage, Status: r.status, CollectedBy: r.collectedBy,
         }));
       case "product-wise":
         return Object.values(data.data.samples.reduce<Record<string, { Product: string; Samples: number; Available: number }>>((acc, s) => {
@@ -128,7 +128,7 @@ export default function ControlSampleReportsPage() {
         }));
       case "observation":
         return data.data.observations.filter((o) => inRange(o.observationDate) && match(o.productName)).map((o) => ({
-          ID: o.observationId, Date: o.observationDate, Product: o.productName, Batch: o.batchNumber, Result: o.result, Status: o.status, Observer: o.observer,
+          ID: o.observationId, Date: formatDate(o.observationDate), Product: o.productName, Batch: o.batchNumber, Result: o.result, Status: o.status, Observer: o.observer,
         }));
       case "withdrawal":
         return data.data.requisitions.filter((r) => inRange(r.date) && match(r.productName)).map((r) => ({
@@ -136,11 +136,11 @@ export default function ControlSampleReportsPage() {
         }));
       case "return":
         return data.data.requisitions.filter((r) => r.quantityReturned > 0 && inRange(r.returnDate) && match(r.productName)).map((r) => ({
-          Number: r.requisitionNumber, Product: r.productName, Returned: r.quantityReturned, ReturnedBy: r.returnedBy || "", Date: r.returnDate || "",
+          Number: r.requisitionNumber, Product: r.productName, Returned: r.quantityReturned, ReturnedBy: r.returnedBy || "", Date: formatDate(r.returnDate),
         }));
       case "destruction-due":
         return data.data.samples.filter((s) => isDestructionEligible(s, cfg) || s.destructionHold).filter((s) => match(s.productName)).map((s) => ({
-          Product: s.productName, Batch: s.batchNumber, Expiry: s.expiryDate, Eligible: s.destructionEligibleDate || "", Qty: s.availableQuantity, Hold: s.destructionHold ? "Yes" : "No",
+          Product: s.productName, Batch: s.batchNumber, Expiry: formatDate(s.expiryDate), Eligible: formatDate(s.destructionEligibleDate), Qty: s.availableQuantity, Hold: s.destructionHold ? "Yes" : "No",
         }));
       case "destruction":
         return data.data.destructions.filter((d) => inRange(d.date) && match(d.productName)).map((d) => ({
@@ -148,7 +148,7 @@ export default function ControlSampleReportsPage() {
         }));
       case "destruction-log":
         return data.data.logs.filter((d) => inRange(d.destructionDate) && match(d.productName)).map((d) => ({
-          DCN: d.dcnNumber, Product: d.productName, Batch: d.batchNumber, Qty: d.quantity, Date: d.destructionDate, Retention: isRetentionReviewDue(d.destructionDate) ? "Record Retention Review" : "Within retention",
+          DCN: d.dcnNumber, Product: d.productName, Batch: d.batchNumber, Qty: d.quantity, Date: formatDate(d.destructionDate), Retention: isRetentionReviewDue(d.destructionDate) ? "Record Retention Review" : "Within retention",
         }));
       case "transactions":
         return data.data.txs.filter((t) => inRange(t.performedAt) && match(`${t.productName} ${t.transactionType}`)).map((t) => ({
@@ -190,7 +190,7 @@ export default function ControlSampleReportsPage() {
             {REPORTS.map((r) => <option key={r.key} value={r.key}>{r.title}</option>)}
           </Select>
           <Input label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <Input label="To" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input label="To" type="date" monthBound="end" value={to} onChange={(e) => setTo(e.target.value)} />
           <Input label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2 px-4 pb-4 print:hidden">

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Card, PageHeader } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
+import { effectiveDueDate, todayISO } from "@/lib/utils";
 import { getOrganizationSettings } from "@/services/organization";
 import { listChambers } from "@/services/masters";
 import {
@@ -49,11 +50,11 @@ export default function ChamberDashboardPage() {
   }, []);
 
   const hardware = org.data?.hardwareIntegrationEnabled;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   const activeAlarms = (ops.data?.alarms || []).filter((a) => a.status === "Active").length;
   const openExcursions = (ops.data?.excursions || []).filter((e) => e.status !== "Closed").length;
-  const calDue = (ops.data?.calibration || []).filter((c) => c.dueDate <= today && c.status !== "Valid").length;
-  const mapDue = (ops.data?.mapping || []).filter((m) => m.nextDueDate <= today).length;
+  const calDue = (ops.data?.calibration || []).filter((c) => (effectiveDueDate(c.dueDate) || c.dueDate) <= today && c.status !== "Valid").length;
+  const mapDue = (ops.data?.mapping || []).filter((m) => (effectiveDueDate(m.nextDueDate) || m.nextDueDate) <= today).length;
 
   return (
     <div>

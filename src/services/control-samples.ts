@@ -9,9 +9,10 @@ import {
   destroyedQty,
   destructionEligibleDate,
   initialQty,
+  isDestructionOverdue,
   nextObservationDate,
 } from "@/lib/control-samples";
-import { nowISO, todayISO } from "@/lib/utils";
+import { effectiveDueDate, nowISO, todayISO } from "@/lib/utils";
 import { nextDcnNumber, nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
 import { getOrganizationSettings } from "@/services/organization";
@@ -1125,7 +1126,9 @@ export async function createDestructionNote(input: {
 }
 
 function isEligibleNow(row: ControlSample, settings: ReturnType<typeof controlOrg>) {
-  const eligible = row.destructionEligibleDate || destructionEligibleDate(row.expiryDate, settings.controlDestructionMonthsAfterExpiry);
+  const eligible = effectiveDueDate(
+    row.destructionEligibleDate || destructionEligibleDate(row.expiryDate, settings.controlDestructionMonthsAfterExpiry)
+  );
   return Boolean(eligible && eligible <= todayISO() && row.availableQuantity > 0);
 }
 
@@ -1284,8 +1287,10 @@ export async function getControlDashboard() {
     return Boolean(s.nextObservationDate && s.nextObservationDate <= todayISO());
   });
   const dueDestroy = samples.filter((s) => isEligibleNow(s, cfg) && !s.destructionHold);
-  const monthStart = `${todayISO().slice(0, 7)}-01`;
-  const overdueDestroy = dueDestroy.filter((s) => (s.destructionEligibleDate || "") < monthStart);
+  const overdueDestroy = dueDestroy.filter((s) => {
+    const eligible = s.destructionEligibleDate || destructionEligibleDate(s.expiryDate, cfg.controlDestructionMonthsAfterExpiry);
+    return isDestructionOverdue(eligible);
+  });
   const holds = samples.filter((s) => s.destructionHold);
   return {
     total: samples.length,

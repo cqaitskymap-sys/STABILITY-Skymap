@@ -4,7 +4,6 @@ import {
   addMonths,
   differenceInCalendarDays,
   format,
-  isToday,
   isValid,
   parseISO,
   startOfDay,
@@ -37,20 +36,76 @@ export function shouldUppercaseInput(type?: string) {
   return !SKIP_UPPERCASE_INPUT_TYPES.has((type || "text").toLowerCase());
 }
 
-export function formatDate(value?: string | Date | null, pattern = "dd/MM/yyyy") {
+function parseAppDate(value: string | Date) {
+  if (value instanceof Date) return value;
+  const s = value.trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return parseISO(`${s}-01T00:00:00`);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return parseISO(`${s}T00:00:00`);
+  return parseISO(s);
+}
+
+/** Display dates as month/year unless a full-day pattern is passed. */
+export function formatDate(value?: string | Date | null, pattern = "MM/yyyy") {
   if (!value) return "—";
-  const date = typeof value === "string" ? parseISO(value) : value;
+  const date = parseAppDate(value);
   if (!isValid(date)) return "—";
   return format(date, pattern);
+}
+
+/** Control Sample Collection date — the only date that keeps the day. */
+export function formatFullDate(value?: string | Date | null) {
+  return formatDate(value, "dd/MM/yyyy");
 }
 
 export function formatDateTime(value?: string | Date | null) {
   return formatDate(value, "dd/MM/yyyy HH:mm");
 }
 
+export function toMonthInput(value?: string | Date | null) {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const s = value.trim();
+    if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
+  }
+  const date = parseAppDate(value);
+  if (!isValid(date)) return "";
+  return format(date, "yyyy-MM");
+}
+
+export function endOfMonthISO(value: string) {
+  const month = toMonthInput(value);
+  if (!month) return "";
+  const [year, monthIndex] = month.split("-").map(Number);
+  const last = new Date(year, monthIndex, 0).getDate();
+  return `${month}-${String(last).padStart(2, "0")}`;
+}
+
+export function fromMonthInput(value: string, bound: "start" | "end" = "start") {
+  const month = toMonthInput(value);
+  if (!month) return "";
+  return bound === "end" ? endOfMonthISO(month) : `${month}-01`;
+}
+
 export function toISODate(value: string | Date) {
-  const date = typeof value === "string" ? parseISO(value.length === 10 ? `${value}T00:00:00` : value) : value;
+  const date = parseAppDate(value);
+  if (!isValid(date)) return "";
   return format(date, "yyyy-MM-dd");
+}
+
+/** Month-picker start-bound dates (`YYYY-MM-01`) stay valid through month-end. */
+export function effectiveDueDate(value?: string | Date | null) {
+  if (!value) return "";
+  const iso = typeof value === "string" ? value.trim() : toISODate(value);
+  if (!iso) return "";
+  const day = iso.length >= 10 ? iso.slice(0, 10) : "";
+  if (/^\d{4}-\d{2}-01$/.test(day)) return endOfMonthISO(day);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  return endOfMonthISO(iso) || day;
+}
+
+export function isPastDue(value?: string | Date | null, today = todayISO()) {
+  const due = effectiveDueDate(value);
+  return Boolean(due && due < today);
 }
 
 export function todayISO() {
@@ -62,7 +117,8 @@ export function nowISO() {
 }
 
 export function addMonthsToDate(isoDate: string, months: number) {
-  const base = parseISO(`${isoDate}T00:00:00`);
+  const base = parseAppDate(isoDate);
+  if (!isValid(base)) return "";
   return format(addMonths(base, months), "yyyy-MM-dd");
 }
 
@@ -93,42 +149,51 @@ export function derivePullStatus(
 ): PullPointStatus {
   if (actualQuantity > 0 && actualQuantity >= plannedQuantity) return "Withdrawn";
   if (actualQuantity > 0 && actualQuantity < plannedQuantity) return "Partially Withdrawn";
-
   if (!plannedDate) return "Upcoming";
+
+  const dueEnd = effectiveDueDate(plannedDate);
+  if (!dueEnd) return "Upcoming";
+  const dueMonth = dueEnd.slice(0, 7);
+  const nowMonth = format(new Date(), "yyyy-MM");
+  if (nowMonth < dueMonth) {
+    const nextMonth = format(addMonths(startOfDay(new Date()), 1), "yyyy-MM");
+    return nextMonth === dueMonth ? "Due Soon" : "Upcoming";
+  }
+  if (nowMonth === dueMonth) return "Due";
   try {
     const today = startOfDay(new Date());
-    const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
-    const days = differenceInCalendarDays(due, today);
-    if (Number.isNaN(days)) return "Upcoming";
-    if (days > 7) return "Upcoming";
-    if (days > 0) return "Due Soon";
-    if (days === 0) return "Due Today";
-    if (Math.abs(days) <= windowDays) return "Within Window";
+    const end = startOfDay(parseISO(`${dueEnd}T00:00:00`));
+    const daysPast = differenceInCalendarDays(today, end);
+    if (Number.isNaN(daysPast)) return "Upcoming";
+    if (daysPast <= windowDays) return "Within Window";
     return "Overdue";
   } catch {
     return "Upcoming";
   }
 }
 
-/** Date-only urgency for open pulls (including partially withdrawn remaining qty). */
+/** Month-aware urgency for open pulls (including partially withdrawn remaining qty). */
 export function pullDueUrgency(
   plannedDate: string,
   windowDays = 7
 ): "Overdue" | "Due Today" | "Due Soon" | null {
   if (!plannedDate) return null;
+  const dueEnd = effectiveDueDate(plannedDate);
+  if (!dueEnd) return null;
+  const dueMonth = dueEnd.slice(0, 7);
+  const nowMonth = format(new Date(), "yyyy-MM");
+  if (nowMonth < dueMonth) {
+    const nextMonth = format(addMonths(startOfDay(new Date()), 1), "yyyy-MM");
+    return nextMonth === dueMonth ? "Due Soon" : null;
+  }
+  if (nowMonth === dueMonth) return "Due Today";
   try {
     const today = startOfDay(new Date());
-    const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
-    const days = differenceInCalendarDays(due, today);
-    if (Number.isNaN(days)) return null;
-    if (days < 0) {
-      // Align with derivePullStatus: past due but still inside the withdrawal window is not overdue.
-      if (Math.abs(days) <= windowDays) return null;
-      return "Overdue";
-    }
-    if (isToday(due) || days === 0) return "Due Today";
-    if (days <= 7) return "Due Soon";
-    return null;
+    const end = startOfDay(parseISO(`${dueEnd}T00:00:00`));
+    const daysPast = differenceInCalendarDays(today, end);
+    if (Number.isNaN(daysPast)) return null;
+    if (daysPast <= windowDays) return null;
+    return "Overdue";
   } catch {
     return null;
   }

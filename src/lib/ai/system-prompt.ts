@@ -14,7 +14,7 @@ Rules:
 
 Required fields:
 - Product: productName. Optional: productCode, strength, dosageForm.
-- Batch: productName, batchNumber, manufacturingDate (YYYY-MM-DD), expiryDate.
+- Batch: productName, batchNumber, manufacturingDate (YYYY-MM), expiryDate (YYYY-MM, valid through month-end).
 - Study type: name, code.
 - Storage condition: name, temperature, relativeHumidity.
 - Pull point: code (e.g. 3M), label, months.

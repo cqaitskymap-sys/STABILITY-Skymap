@@ -1,5 +1,5 @@
 import { addMonths, format, isValid, parseISO, startOfDay } from "date-fns";
-import { todayISO } from "@/lib/utils";
+import { effectiveDueDate, todayISO } from "@/lib/utils";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import type { ControlSample, OrganizationSettings } from "@/types";
 
@@ -94,7 +94,9 @@ export function destroyedQty(row: Pick<ControlSample, "disposedQuantity" | "dest
 }
 
 export function destructionEligibleDate(expiryDate: string, monthsAfterExpiry = 12) {
-  const parsed = parseISO(expiryDate.length === 10 ? `${expiryDate}T00:00:00` : expiryDate);
+  const end = effectiveDueDate(expiryDate);
+  if (!end) return "";
+  const parsed = parseISO(`${end}T00:00:00`);
   if (!isValid(parsed)) return "";
   return format(addMonths(startOfDay(parsed), monthsAfterExpiry), "yyyy-MM-dd");
 }
@@ -115,13 +117,16 @@ export function isObservationWindowOpen(row: Pick<ControlSample, "expiryDate">, 
 export function isDestructionEligible(row: Pick<ControlSample, "expiryDate" | "destructionEligibleDate" | "availableQuantity" | "destructionHold" | "status">, settings?: OrganizationSettings | null) {
   if (row.destructionHold || row.status === "Destroyed" || row.status === "Disposed") return false;
   if ((row.availableQuantity || 0) <= 0) return false;
-  const eligible = row.destructionEligibleDate || (row.expiryDate ? destructionEligibleDate(row.expiryDate, controlOrg(settings).controlDestructionMonthsAfterExpiry) : "");
+  const eligible = effectiveDueDate(
+    row.destructionEligibleDate || (row.expiryDate ? destructionEligibleDate(row.expiryDate, controlOrg(settings).controlDestructionMonthsAfterExpiry) : "")
+  );
   return Boolean(eligible && eligible <= todayISO());
 }
 
 export function isDestructionOverdue(eligibleDate?: string) {
   if (!eligibleDate) return false;
-  return eligibleDate < todayISO();
+  const due = effectiveDueDate(eligibleDate);
+  return Boolean(due && due < todayISO());
 }
 
 export function isRetentionReviewDue(destroyedOn?: string, years = 2) {
@@ -137,7 +142,8 @@ export function deriveControlInventoryStatus(row: ControlSample): ControlSample[
   const available = row.availableQuantity || 0;
   if (available === 0 && destroyedQty(row) > 0) return "Destroyed";
   if (available === 0) return "Depleted";
-  if (row.destructionEligibleDate && row.destructionEligibleDate <= todayISO()) return "Destruction Eligible";
+  const eligibleEnd = effectiveDueDate(row.destructionEligibleDate);
+  if (eligibleEnd && eligibleEnd <= todayISO()) return "Destruction Eligible";
   if ((row.issuedQuantity || 0) > (row.returnedQuantity || 0)) return "Partially Issued";
   if (row.rackNumber || row.boxNumber) return "Stored";
   return row.status === "Stored" ? "Stored" : "Available";

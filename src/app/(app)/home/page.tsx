@@ -45,7 +45,7 @@ export default function ModuleHomePage() {
     <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-5xl flex-col justify-center py-4 sm:py-8">
       <div className="mb-8 text-center sm:mb-12">
         <div className="mb-5 flex justify-center">
-          <SkymapLogo className="h-14 w-auto max-w-[200px] sm:h-16" />
+          <SkymapLogo priority className="h-14 w-auto max-w-[200px] sm:h-16" />
         </div>
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-700">Quality Assurance</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">

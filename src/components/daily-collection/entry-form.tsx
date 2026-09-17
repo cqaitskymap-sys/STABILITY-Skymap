@@ -364,7 +364,7 @@ export function DailyCollectionEntryForm({
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Input label="Date" type="date" required value={form.date} max={allowFutureDate ? undefined : todayISO()} onChange={(e) => patch({ date: e.target.value })} disabled={readOnly} />
+        <Input label="Date" type="date" fullDate required value={form.date} max={allowFutureDate ? undefined : todayISO()} onChange={(e) => patch({ date: e.target.value })} disabled={readOnly} />
         <Select
           label="Sample Type"
           required
@@ -435,7 +435,7 @@ export function DailyCollectionEntryForm({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Input label="Batch Size" value={form.batchSize || ""} onChange={(e) => patch({ batchSize: e.target.value })} disabled={readOnly} />
         <Input label="Mfg. Date" type="date" required value={form.manufacturingDate} onChange={(e) => patch({ manufacturingDate: e.target.value })} disabled={readOnly} />
-        <Input label="Expiry Date" type="date" required value={form.expiryDate} onChange={(e) => patch({ expiryDate: e.target.value })} disabled={readOnly} />
+        <Input label="Expiry Date" type="date" required monthBound="end" value={form.expiryDate} onChange={(e) => patch({ expiryDate: e.target.value })} disabled={readOnly} />
         <Input label="Product Code" value={form.productCode || ""} disabled hint="Copied from Product Master at the time of entry." />
       </div>
 

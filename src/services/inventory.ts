@@ -23,7 +23,7 @@ import {
 } from "@/lib/utils";
 import { nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
-import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow, pullWindowEnd, splitOrientation } from "@/lib/sop";
+import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow, pullWindowEnd, splitOrientation, splitPullsByOrientation } from "@/lib/sop";
 import { getOrganizationSettings } from "@/services/organization";
 import { createAnalysisRequestFromWithdrawal } from "@/services/analysis";
 import type {
@@ -511,18 +511,15 @@ export async function createStudyAndCharge(input: {
     pulls: { code: string; months: number; quantity: number }[];
   }[] = [];
   if (orientation.invertedQuantity > 0 && orientation.uprightQuantity > 0) {
-    const ratio = orientation.uprightQuantity / input.totalQuantity;
-    const uprightPulls = input.pullAllocations.map((p) => ({
-      ...p,
-      quantity: Math.round(p.quantity * ratio),
-    }));
+    const { uprightPulls, invertedPulls: derivedInverted } = splitPullsByOrientation(
+      input.pullAllocations,
+      orientation.uprightQuantity,
+      input.totalQuantity
+    );
     const invertedPulls =
       input.invertedPullAllocations && input.invertedPullAllocations.length
         ? input.invertedPullAllocations
-        : input.pullAllocations.map((p, i) => ({
-            ...p,
-            quantity: Math.max(0, p.quantity - uprightPulls[i].quantity),
-          }));
+        : derivedInverted;
     lots.push({
       qty: orientation.uprightQuantity,
       reserved: input.reservedQuantity,
@@ -843,9 +840,10 @@ export async function withdrawSample(input: {
       available: -input.actualQuantity,
       withdrawn: input.actualQuantity,
     });
-    const nextOpen = siblingPulls
-      .filter((p) => p.id !== pull.id && p.status !== "Withdrawn")
-      .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
+    const nextOpen = [
+      ...(pullStatus !== "Withdrawn" ? [pull] : []),
+      ...siblingPulls.filter((p) => p.id !== pull.id && p.status !== "Withdrawn"),
+    ].sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
 
     withdrawalPayload = {
       withdrawalId,

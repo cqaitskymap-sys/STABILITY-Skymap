@@ -1,6 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
-import { roundPct } from "@/lib/utils";
+import { effectiveDueDate, roundPct, todayISO } from "@/lib/utils";
 import type { Chamber, DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
 import { listPullPoints, listSamples, listStudies, listTransactions } from "@/services/inventory";
 import { listStudyTypes } from "@/services/masters";
@@ -71,7 +71,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const excursions = extras[4].status === "fulfilled" ? extras[4].value : [];
   const calibration = extras[5].status === "fulfilled" ? extras[5].value : [];
   const mappings = extras[6].status === "fulfilled" ? extras[6].value : [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
 
   return {
     totalActiveStudies: activeStudies.length,
@@ -88,8 +88,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     pendingReconciliation: samples.filter((s) => s.status === "Under Reconciliation").length,
     activeChamberAlarms: alarms.filter((a) => a.status === "Active").length,
     chamberExcursions: excursions.filter((e) => e.status !== "Closed").length,
-    calibrationDue: calibration.filter((c) => c.dueDate <= today).length,
-    mappingDue: mappings.filter((m) => m.nextDueDate <= today).length,
+    calibrationDue: calibration.filter((c) => (effectiveDueDate(c.dueDate) || c.dueDate) <= today).length,
+    mappingDue: mappings.filter((m) => (effectiveDueDate(m.nextDueDate) || m.nextDueDate) <= today).length,
     cleaningDue: 0,
     analysisPending: analysis.filter((a) => a.status !== "Completed" && a.status !== "Cancelled").length,
     studyTypeOverview,

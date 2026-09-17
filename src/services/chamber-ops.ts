@@ -1,7 +1,8 @@
 import { addDoc, collection, doc, updateDoc } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import { listDocs } from "@/lib/firebase/list-docs";
-import { nowISO } from "@/lib/utils";
+import { effectiveDueDate, nowISO, todayISO } from "@/lib/utils";
+import { addDaysISO } from "@/lib/sop";
 import { nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
 import type {
@@ -212,11 +213,10 @@ export async function createCleaningRecord(input: Omit<ChamberCleaningRecord, "i
 }
 
 function calibrationStatus(dueDate: string): CalibrationStatus {
-  const today = nowISO().slice(0, 10);
-  if (dueDate < today) return "Expired";
-  const soon = new Date();
-  soon.setDate(soon.getDate() + 30);
-  if (dueDate <= soon.toISOString().slice(0, 10)) return "Due Soon";
+  const today = todayISO();
+  const due = effectiveDueDate(dueDate) || dueDate;
+  if (due < today) return "Expired";
+  if (due <= addDaysISO(today, 30)) return "Due Soon";
   return "Valid";
 }
 

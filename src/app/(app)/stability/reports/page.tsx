@@ -577,6 +577,7 @@ export default function ReportsPage() {
                 <Input
                   label="To"
                   type="date"
+                  monthBound="end"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                 />

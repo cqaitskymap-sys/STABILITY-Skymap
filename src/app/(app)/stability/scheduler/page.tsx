@@ -15,11 +15,11 @@ import {
 } from "@/components/ui";
 import { PrintDocument } from "@/components/print/print-document";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, toCsv, downloadBlob } from "@/lib/utils";
+import { formatDate, toCsv, downloadBlob, toMonthInput } from "@/lib/utils";
 import { listPullPoints } from "@/services/inventory";
 
 export default function MonthlyPlannerPage() {
-  const month = new Date().toISOString().slice(0, 7);
+  const month = toMonthInput(new Date()) || formatDate(new Date(), "yyyy-MM");
   const [selectedMonth, setSelectedMonth] = useState(month);
   const [view, setView] = useState<"list" | "calendar" | "print">("list");
   const pulls = useAsync(listPullPoints, []);
@@ -134,22 +134,38 @@ export default function MonthlyPlannerPage() {
         </Card>
       ) : null}
       {view === "calendar" && rows.length ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
-          {Array.from({ length: daysInMonth }, (_, i) => {
-            const day = String(i + 1).padStart(2, "0");
-            const iso = `${selectedMonth}-${day}`;
-            const dayRows = rows.filter((r) => r.plannedDate === iso);
-            return (
-              <Card key={iso} className="min-h-24 p-2">
-                <p className="text-xs font-semibold text-slate-500">{day}</p>
-                {dayRows.map((r) => (
-                  <Link key={r.id} href={`/stability/withdrawals?pull=${r.id}`} className="mt-1 block truncate text-[11px] text-teal-800">
-                    {r.productName} {r.pullPoint}
-                  </Link>
-                ))}
-              </Card>
-            );
-          })}
+        <div className="space-y-3">
+          <Card className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due this month</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {rows.map((r) => (
+                <Link key={r.id} href={`/stability/withdrawals?pull=${r.id}`} className="rounded-lg bg-teal-50 px-2 py-1 text-xs text-teal-800">
+                  {r.productName} {r.pullPoint}
+                </Link>
+              ))}
+            </div>
+          </Card>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = String(i + 1).padStart(2, "0");
+              const iso = `${selectedMonth}-${day}`;
+              const dayRows = rows.filter((r) => {
+                const planned = (r.plannedDate || "").slice(0, 10);
+                if (/^\d{4}-\d{2}-01$/.test(planned)) return false;
+                return planned === iso;
+              });
+              return (
+                <Card key={iso} className="min-h-24 p-2">
+                  <p className="text-xs font-semibold text-slate-500">{day}</p>
+                  {dayRows.map((r) => (
+                    <Link key={r.id} href={`/stability/withdrawals?pull=${r.id}`} className="mt-1 block truncate text-[11px] text-teal-800">
+                      {r.productName} {r.pullPoint}
+                    </Link>
+                  ))}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       ) : null}
       {view === "print" && rows.length ? (

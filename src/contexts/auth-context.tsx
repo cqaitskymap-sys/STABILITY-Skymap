@@ -121,10 +121,10 @@ async function ensureProfile(user: User, displayName: string): Promise<AppUser |
   const bootstrapOpen = await isBootstrapOpen();
   if (!bootstrapOpen) return null;
 
+  if (!configuredEmp && !configuredEmail) return null;
   const allowed =
     (configuredEmp && employeeId === configuredEmp) ||
-    (configuredEmail && authEmail === configuredEmail) ||
-    (!configuredEmp && !configuredEmail && Boolean(authEmail));
+    (configuredEmail && authEmail === configuredEmail);
   if (!allowed) return null;
 
   const now = nowISO();
@@ -261,10 +261,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: authEmail,
           displayName: name,
           role,
-          moduleAccess: moduleAccess && moduleAccess.length > 0 ? moduleAccess : undefined,
           active: true,
           createdAt: now,
           updatedAt: now,
+          ...(moduleAccess && moduleAccess.length > 0 ? { moduleAccess } : {}),
         };
 
         try {

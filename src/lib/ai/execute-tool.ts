@@ -1,6 +1,6 @@
 import type { Permission } from "@/lib/permissions";
 import { COLLECTIONS } from "@/lib/firebase/config";
-import { friendlyError, todayISO } from "@/lib/utils";
+import { friendlyError, fromMonthInput, todayISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
 import { invalidateInventoryContext } from "@/lib/ai/inventory-context";
 import {
@@ -378,8 +378,8 @@ async function createBatch(args: Record<string, unknown>, profile: AppUser, hasP
   if (blocked) return blocked;
   const productName = str(args, "productName");
   const batchNumber = str(args, "batchNumber");
-  const manufacturingDate = str(args, "manufacturingDate");
-  const expiryDate = str(args, "expiryDate");
+  const manufacturingDate = fromMonthInput(str(args, "manufacturingDate"));
+  const expiryDate = fromMonthInput(str(args, "expiryDate"), "end");
   if (!productName || !batchNumber || !manufacturingDate || !expiryDate) {
     return fail("Product name, batch number, manufacturing date, and expiry date are required.");
   }

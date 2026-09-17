@@ -90,7 +90,7 @@ export default function DestructionDuePage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
             <Button variant="outline" onClick={() => downloadBlob(`destruction-due-${todayISO()}.csv`, toCsv(rows.map((r) => ({
-              Product: r.productName, Batch: r.batchNumber, Expiry: r.expiryDate, Eligible: r.destructionEligibleDate || "", Qty: r.availableQuantity, Hold: r.destructionHold ? "Yes" : "No", Status: r.status,
+              Product: r.productName, Batch: r.batchNumber, Expiry: formatDate(r.expiryDate), Eligible: formatDate(r.destructionEligibleDate), Qty: r.availableQuantity, Hold: r.destructionHold ? "Yes" : "No", Status: r.status,
             }))))}>Export CSV</Button>
             <Button onClick={() => setPrint(true)}>Print</Button>
           </div>

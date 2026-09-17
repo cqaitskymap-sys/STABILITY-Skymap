@@ -65,7 +65,7 @@ export default function CalibrationPage() {
             <Input label="Instrument" value={instrument} onChange={(e) => setInstrument(e.target.value)} disabled={!can} />
             <Input label="Instrument ID" value={instrumentId} onChange={(e) => setInstrumentId(e.target.value)} disabled={!can} />
             <Input label="Calibration date" type="date" value={calibrationDate} onChange={(e) => setCalibrationDate(e.target.value)} disabled={!can} />
-            <Input label="Due date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!can} />
+            <Input label="Due date" type="date" monthBound="end" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!can} />
             <Input label="Vendor" value={vendor} onChange={(e) => setVendor(e.target.value)} disabled={!can} />
             <Input label="Certificate No." value={certificateNo} onChange={(e) => setCertificateNo(e.target.value)} disabled={!can} />
             <Textarea label="Result" value={result} onChange={(e) => setResult(e.target.value)} disabled={!can} />

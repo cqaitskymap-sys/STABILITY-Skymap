@@ -358,6 +358,7 @@ export default function NewStabilityStudyPage() {
                   label="Expiry Date"
                   type="date"
                   required
+                  monthBound="end"
                   value={form.expiryDate}
                   error={errors.expiryDate}
                   onChange={(e) => updateField("expiryDate", e.target.value)}

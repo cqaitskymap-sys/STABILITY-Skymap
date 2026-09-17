@@ -8,7 +8,7 @@ import { PrintDocument } from "@/components/print/print-document";
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { friendlyError } from "@/lib/utils";
+import { formatDate, friendlyError } from "@/lib/utils";
 import { createBox, createRack, listBoxes, listBoxCategories, listControlSamples, listRacks, saveBoxCategory } from "@/services/control-samples";
 
 export default function LocationsPage() {
@@ -98,8 +98,8 @@ export default function LocationsPage() {
                   <td className="px-2 py-1">{i + 1}</td>
                   <td className="px-2 py-1">{s.productName}</td>
                   <td className="px-2 py-1">{s.batchNumber}</td>
-                  <td className="px-2 py-1">{s.manufacturingDate}</td>
-                  <td className="px-2 py-1">{s.expiryDate}</td>
+                  <td className="px-2 py-1">{formatDate(s.manufacturingDate)}</td>
+                  <td className="px-2 py-1">{formatDate(s.expiryDate)}</td>
                   <td className="px-2 py-1">{s.availableQuantity} {s.unit}</td>
                   <td className="px-2 py-1">{s.remarks}</td>
                 </tr>

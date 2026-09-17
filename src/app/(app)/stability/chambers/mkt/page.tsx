@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document";
 import { useAsync } from "@/hooks/useAsync";
+import { formatDate } from "@/lib/utils";
 import { meanKineticTemperature } from "@/lib/sop";
 import { listChambers } from "@/services/masters";
 import { getOrganizationSettings } from "@/services/organization";
@@ -54,7 +55,7 @@ export default function MktPage() {
             {(chambers.data || []).map((c) => <option key={c.id} value={c.id}>{c.chamberId}</option>)}
           </Select>
           <Input label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          <Input label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <Input label="End date" type="date" monthBound="end" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
       </Card>
       {!temps.length ? (
@@ -64,8 +65,8 @@ export default function MktPage() {
           <PrintFieldGrid
             rows={[
               { label: "Chamber", value: chamber?.chamberName || chamber?.chamberId },
-              { label: "Start", value: startDate },
-              { label: "End", value: endDate },
+              { label: "Start", value: formatDate(startDate) },
+              { label: "End", value: formatDate(endDate) },
               { label: "Data points", value: temps.length },
               { label: "Lowest temperature", value: Math.min(...temps).toFixed(2) },
               { label: "Highest temperature", value: Math.max(...temps).toFixed(2) },

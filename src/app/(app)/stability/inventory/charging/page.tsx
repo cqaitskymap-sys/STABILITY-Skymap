@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, PackagePlus, RefreshCw } from "lucide-react";
 import {
@@ -87,7 +87,8 @@ function SampleChargingPageInner() {
   const [appliedReceiptId, setAppliedReceiptId] = useState("");
 
   const receipt = (masters.data?.receipts || []).find((r) => r.id === receiptFromUrl) || null;
-  if (receipt && appliedReceiptId !== receipt.id) {
+  useEffect(() => {
+    if (!receipt || appliedReceiptId === receipt.id) return;
     setAppliedReceiptId(receipt.id);
     if (receipt.status === "COA Received - Ready for Charging") {
       setForm((prev) => ({
@@ -101,7 +102,7 @@ function SampleChargingPageInner() {
         unit: receipt.unit,
       }));
     }
-  }
+  }, [receipt, appliedReceiptId]);
   const receiptNotReady = Boolean(receipt && receipt.status !== "COA Received - Ready for Charging");
 
   const activeProducts = useMemo(
@@ -408,6 +409,7 @@ function SampleChargingPageInner() {
                 label="Expiry Date"
                 type="date"
                 required
+                monthBound="end"
                 value={form.expiryDate}
                 error={errors.expiryDate}
                 onChange={(e) => updateField("expiryDate", e.target.value)}

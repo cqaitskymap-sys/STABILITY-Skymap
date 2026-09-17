@@ -36,6 +36,10 @@ export type FieldDef = {
   disabled?: boolean;
   /** When false, skip auto-uppercase (names, remarks). Default: uppercase IDs/codes. */
   uppercase?: boolean;
+  /** Keep day + month + year. */
+  fullDate?: boolean;
+  /** Month pickers store YYYY-MM-01 by default; use "end" for expiry / due dates. */
+  monthBound?: "start" | "end";
   /** Extra field updates applied when this field changes. */
   syncOnChange?: (value: string) => Record<string, string>;
 };
@@ -537,6 +541,8 @@ export function MasterPage<T extends { id: string; status?: string }>({
                     value={values[f.key] || ""}
                     readOnly={f.readOnly}
                     disabled={f.disabled}
+                    fullDate={f.fullDate}
+                    monthBound={f.monthBound}
                     onChange={(e) => applyFieldChange(f, e.target.value)}
                   />
                 );

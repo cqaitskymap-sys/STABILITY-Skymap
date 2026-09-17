@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, paginate, todayISO } from "@/lib/utils";
+import { effectiveDueDate, formatDate, paginate, todayISO } from "@/lib/utils";
 import { listPullPoints } from "@/services/inventory";
 import { listChambers } from "@/services/masters";
 import type { PullPointStatus, StudyPullPoint } from "@/types";
@@ -44,7 +44,7 @@ type WindowFilter = "all" | "today" | "7" | "30" | "overdue";
 
 function daysUntil(plannedDate: string) {
   const today = startOfDay(new Date());
-  const due = startOfDay(parseISO(`${plannedDate}T00:00:00`));
+  const due = startOfDay(parseISO(`${effectiveDueDate(plannedDate) || plannedDate}T00:00:00`));
   return differenceInCalendarDays(due, today);
 }
 
@@ -54,7 +54,8 @@ function dueHint(plannedDate: string, status: PullPointStatus) {
     const n = Math.abs(days);
     return `${n} day${n === 1 ? "" : "s"} overdue`;
   }
-  if (days === 0 || status === "Due Today") return "Due today";
+  if (status === "Due" || status === "Due Today") return days === 0 ? "Due today" : "Due this month";
+  if (days === 0) return "Due today";
   if (days === 1) return "Due tomorrow";
   return `In ${days} days`;
 }
@@ -63,10 +64,11 @@ function matchesWindow(pull: StudyPullPoint, window: WindowFilter) {
   if (window === "all") return true;
   if (window === "overdue") return pull.status === "Overdue" || daysUntil(pull.plannedDate) < 0;
   const days = daysUntil(pull.plannedDate);
-  // Include overdue in near-term windows so critical pulls stay visible.
-  if (window === "today") return days <= 0 || pull.status === "Due Today" || pull.status === "Overdue";
-  if (window === "7") return days <= 7;
-  if (window === "30") return days <= 30;
+  if (window === "today") {
+    return pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue" || days <= 0;
+  }
+  if (window === "7") return days <= 7 || pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue";
+  if (window === "30") return days <= 30 || pull.status === "Due Soon" || pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue";
   return true;
 }
 
@@ -75,6 +77,7 @@ function statusPriority(status: PullPointStatus) {
     case "Overdue":
       return 0;
     case "Due Today":
+    case "Due":
       return 1;
     case "Due Soon":
       return 2;

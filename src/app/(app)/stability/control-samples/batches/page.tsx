@@ -4,6 +4,7 @@ import { MasterPage } from "@/components/masters/master-page";
 import { Button, EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui";
 import { COLLECTIONS } from "@/lib/firebase/config";
 import { useAsync } from "@/hooks/useAsync";
+import { formatDate } from "@/lib/utils";
 import { listControlBatches, listControlProducts } from "@/services/masters";
 import type { Batch } from "@/types";
 
@@ -44,7 +45,7 @@ export default function ControlSampleBatchesPage() {
         },
         { key: "batchNumber", label: "Batch Number", required: true },
         { key: "manufacturingDate", label: "Manufacturing Date", type: "date", required: true },
-        { key: "expiryDate", label: "Expiry Date", type: "date", required: true },
+        { key: "expiryDate", label: "Expiry Date", type: "date", required: true, monthBound: "end" },
         { key: "releaseDate", label: "Release Date", type: "date" },
         { key: "batchSize", label: "Batch Size" },
         {
@@ -61,8 +62,8 @@ export default function ControlSampleBatchesPage() {
       mapRow={(item) => ({
         Product: item.productName,
         Batch: item.batchNumber,
-        Mfg: item.manufacturingDate,
-        Expiry: item.expiryDate,
+        Mfg: formatDate(item.manufacturingDate),
+        Expiry: formatDate(item.expiryDate),
         Status: item.status,
       })}
       buildPayload={(values) => {
