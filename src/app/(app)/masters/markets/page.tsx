@@ -15,7 +15,7 @@ export default function MarketsPage() {
       loader={listMarkets}
       fields={[
         { key: "name", label: "Market Name", required: true, placeholder: "e.g. India, Export" },
-        { key: "code", label: "Code", required: true, placeholder: "e.g. IN, EXP" },
+        { key: "code", label: "Code", placeholder: "e.g. IN, EXP" },
         {
           key: "status",
           label: "Status",
@@ -29,26 +29,30 @@ export default function MarketsPage() {
       ]}
       mapRow={(item) => ({
         Market: item.name,
-        Code: item.code,
+        Code: item.code || "—",
         Status: item.status,
       })}
       getCreateDefaults={() => ({ status: "Active" })}
       validate={({ values, items, editing }) => {
         const name = values.name.trim();
-        const code = values.code.trim();
+        const code = (values.code || "").trim();
         if (!name) return "Market name is required.";
-        if (!code) return "Code is required.";
         if (items.some((item) => item.id !== editing?.id && item.name.trim().toLowerCase() === name.toLowerCase())) {
           return "A market with this name already exists.";
         }
-        if (items.some((item) => item.id !== editing?.id && item.code.trim().toLowerCase() === code.toLowerCase())) {
+        if (
+          code &&
+          items.some(
+            (item) => item.id !== editing?.id && (item.code || "").trim().toLowerCase() === code.toLowerCase()
+          )
+        ) {
           return "A market with this code already exists.";
         }
         return null;
       }}
       buildPayload={(values) => ({
         name: values.name.trim(),
-        code: values.code.trim(),
+        code: (values.code || "").trim() || undefined,
         status: values.status,
       })}
     />

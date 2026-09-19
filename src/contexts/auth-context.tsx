@@ -29,7 +29,7 @@ import {
   isValidEmployeeId,
   normalizeEmployeeId,
 } from "@/lib/auth-identity";
-import { COLLECTIONS, getDb, getFirebaseApp, getFirebaseAuth } from "@/lib/firebase/config";
+import { COLLECTIONS, getDb, getFirebaseApp, getFirebaseAuth, isIndexedDbClosingError } from "@/lib/firebase/config";
 import { can, type Permission } from "@/lib/permissions";
 import { nowISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
@@ -168,6 +168,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
         }
       } catch (error) {
+        if (isIndexedDbClosingError(error)) {
+          console.warn("Firebase IndexedDB was interrupted; retrying profile load.");
+          if (!cancelled && firebaseUser) {
+            try {
+              const retry = await ensureProfile(firebaseUser, firebaseUser.displayName || "");
+              if (!cancelled && retry && retry.active !== false) {
+                setProfile(retry);
+                return;
+              }
+            } catch {
+              /* fall through to loading=false without signing out */
+            }
+          }
+          return;
+        }
         console.error("Failed to load user profile from Firestore:", error);
         await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
         if (!cancelled) {

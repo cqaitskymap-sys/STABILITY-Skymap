@@ -102,6 +102,8 @@ export interface ControlSampleCollection {
   batchSize?: string;
   manufacturingDate: string;
   expiryDate: string;
+  marketId?: string;
+  market?: string;
   requiredQuantity: number;
   actualQuantity: number;
   unit: string;

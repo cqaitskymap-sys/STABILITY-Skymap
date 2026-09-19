@@ -20,8 +20,8 @@ import {
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatFullDate, friendlyError, todayISO } from "@/lib/utils";
-import { listControlBatches, listControlProducts, listUnits } from "@/services/masters";
+import { formatDate, formatFullDate, friendlyError, todayISO } from "@/lib/utils";
+import { listControlBatches, listControlProducts, listMarkets, listUnits } from "@/services/masters";
 import {
   createCollection,
   getActiveQuantityMaster,
@@ -39,17 +39,22 @@ export default function ControlSampleCollectionPage() {
   const canCollect = hasPermission("control.collect") || hasPermission("control.perform");
   const canReceive = hasPermission("control.perform");
   const catalog = useAsync(async () => {
-    const [products, batches, units, rows] = await Promise.all([
+    const [products, batches, units, markets, rows] = await Promise.all([
       listControlProducts(),
       listControlBatches(),
       listUnits(),
+      listMarkets(),
       listCollections(),
     ]);
-    return { products, batches, units, rows };
+    return { products, batches, units, markets, rows };
   }, []);
 
   const [productId, setProductId] = useState("");
   const [batchId, setBatchId] = useState("");
+  const [manufacturingDate, setManufacturingDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [marketId, setMarketId] = useState("");
+  const [market, setMarket] = useState("");
   const [actualQty, setActualQty] = useState("");
   const [unit, setUnit] = useState("");
   const [collectionDate, setCollectionDate] = useState(todayISO());
@@ -70,6 +75,35 @@ export default function ControlSampleCollectionPage() {
   const qtyMaster = useAsync(async () => (productId ? getActiveQuantityMaster(productId) : null), [productId]);
   const requiredQty = qtyMaster.data?.quantity ?? 0;
   const requiredUnit = qtyMaster.data?.unit || unit;
+  const markets = (catalog.data?.markets || []).filter((m) => m.status === "Active" || m.id === marketId);
+
+  function applyProduct(nextProductId: string) {
+    const product = products.find((p) => p.id === nextProductId);
+    const marketMatch = (catalog.data?.markets || []).find(
+      (m) => m.status === "Active" && m.name.trim().toLowerCase() === (product?.market || "").trim().toLowerCase()
+    );
+    setProductId(nextProductId);
+    setBatchId("");
+    setManufacturingDate("");
+    setExpiryDate("");
+    if (product?.market) {
+      setMarket(product.market);
+      setMarketId(marketMatch?.id || "");
+    }
+  }
+
+  function applyBatch(nextBatchId: string) {
+    const batch = batches.find((b) => b.id === nextBatchId);
+    setBatchId(nextBatchId);
+    setManufacturingDate(batch?.manufacturingDate || "");
+    setExpiryDate(batch?.expiryDate || "");
+  }
+
+  function applyMarket(name: string) {
+    const match = (catalog.data?.markets || []).find((m) => m.name === name);
+    setMarket(name);
+    setMarketId(match?.id || "");
+  }
 
   function loadDraft(id: string) {
     const row = (catalog.data?.rows || []).find((r) => r.id === id);
@@ -77,6 +111,10 @@ export default function ControlSampleCollectionPage() {
     setEditingId(row.id);
     setProductId(row.productId);
     setBatchId(row.batchId);
+    setManufacturingDate(row.manufacturingDate || "");
+    setExpiryDate(row.expiryDate || "");
+    setMarketId(row.marketId || "");
+    setMarket(row.market || "");
     setActualQty(String(row.actualQuantity));
     setUnit(row.unit);
     setCollectionDate(row.date || todayISO());
@@ -95,6 +133,22 @@ export default function ControlSampleCollectionPage() {
       toast.error("Actual quantity collected must be greater than zero.");
       return;
     }
+    if (!manufacturingDate) {
+      toast.error("Manufacturing date is required.");
+      return;
+    }
+    if (!expiryDate) {
+      toast.error("Expiry date is required.");
+      return;
+    }
+    if (manufacturingDate > expiryDate) {
+      toast.error("Manufacturing date must be on or before expiry date.");
+      return;
+    }
+    if (!market.trim()) {
+      toast.error("Market is required.");
+      return;
+    }
     if (!collectionDate) {
       toast.error("Collection date is required.");
       return;
@@ -109,8 +163,10 @@ export default function ControlSampleCollectionPage() {
           batchId: selectedBatch.id,
           batchNumber: selectedBatch.batchNumber,
           batchSize: selectedBatch.batchSize,
-          manufacturingDate: selectedBatch.manufacturingDate,
-          expiryDate: selectedBatch.expiryDate,
+          manufacturingDate,
+          expiryDate,
+          marketId: marketId || undefined,
+          market: market.trim(),
           requiredQuantity: requiredQty,
           actualQuantity: qty,
           unit: unit || requiredUnit || "UNIT",
@@ -135,8 +191,10 @@ export default function ControlSampleCollectionPage() {
         batchId: selectedBatch.id,
         batchNumber: selectedBatch.batchNumber,
         batchSize: selectedBatch.batchSize,
-        manufacturingDate: selectedBatch.manufacturingDate,
-        expiryDate: selectedBatch.expiryDate,
+        manufacturingDate,
+        expiryDate,
+        marketId: marketId || undefined,
+        market: market.trim(),
         requiredQuantity: requiredQty,
         actualQuantity: qty,
         unit: unit || requiredUnit || "UNIT",
@@ -218,7 +276,7 @@ export default function ControlSampleCollectionPage() {
           <Card>
             <CardHeader title={editingId ? "Edit draft collection" : "Record collection"} />
             <div className="grid gap-3 p-4">
-              <Select label="Product" required value={productId} onChange={(e) => { setProductId(e.target.value); setBatchId(""); }} disabled={!canCollect}>
+              <Select label="Product" required value={productId} onChange={(e) => applyProduct(e.target.value)} disabled={!canCollect}>
                 <option value="">Select product</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
               </Select>
@@ -229,7 +287,7 @@ export default function ControlSampleCollectionPage() {
                   . They are not shared with stability inventory.
                 </p>
               ) : null}
-              <Select label="Batch" required value={batchId} onChange={(e) => setBatchId(e.target.value)} disabled={!canCollect || !productId}>
+              <Select label="Batch" required value={batchId} onChange={(e) => applyBatch(e.target.value)} disabled={!canCollect || !productId}>
                 <option value="">{productId ? "Select batch" : "Select a product first"}</option>
                 {batches.map((b) => <option key={b.id} value={b.id}>{b.batchNumber}</option>)}
               </Select>
@@ -237,6 +295,29 @@ export default function ControlSampleCollectionPage() {
                 <p className="text-xs text-slate-500">
                   No control sample batches for this product.{" "}
                   <Link href="/stability/control-samples/batches" className="font-medium underline">Add a batch</Link>
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input label="Mfg. Date" type="date" required value={manufacturingDate} onChange={(e) => setManufacturingDate(e.target.value)} disabled={!canCollect} />
+                <Input label="Expiry Date" type="date" required monthBound="end" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} disabled={!canCollect} />
+                <Select
+                  label="Market"
+                  required
+                  value={market}
+                  onChange={(e) => applyMarket(e.target.value)}
+                  disabled={!canCollect}
+                  hint={!markets.length ? "Add markets in Admin → Markets." : undefined}
+                >
+                  <option value="">Select market</option>
+                  {markets.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  {market && !markets.some((m) => m.name === market) ? <option value={market}>{market}</option> : null}
+                </Select>
+              </div>
+              {!markets.length ? (
+                <p className="text-xs text-slate-500">
+                  No markets yet. Add them in{" "}
+                  <Link href="/masters/markets" className="font-medium underline">Masters → Markets</Link>
+                  .
                 </p>
               ) : null}
               <p className="text-sm text-slate-600">
@@ -290,6 +371,9 @@ export default function ControlSampleCollectionPage() {
                 { key: "date", header: "Collection Date" },
                 { key: "product", header: "Product" },
                 { key: "batch", header: "Batch" },
+                { key: "mfg", header: "Mfg" },
+                { key: "exp", header: "Expiry" },
+                { key: "market", header: "Market" },
                 { key: "qty", header: "Qty" },
                 { key: "status", header: "Status" },
                 { key: "actions", header: "Action" },
@@ -300,6 +384,9 @@ export default function ControlSampleCollectionPage() {
                 date: formatFullDate(r.date),
                 product: r.productName,
                 batch: r.batchNumber,
+                mfg: formatDate(r.manufacturingDate),
+                exp: formatDate(r.expiryDate),
+                market: r.market || "—",
                 qty: `${r.actualQuantity} ${r.unit}`,
                 status: <StatusBadge status={r.status} />,
                 actions: (

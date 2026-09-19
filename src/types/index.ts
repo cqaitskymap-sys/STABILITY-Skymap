@@ -293,7 +293,7 @@ export interface Unit {
 export interface Market {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   status: MasterStatus;
   createdAt: string;
   updatedAt: string;
@@ -691,6 +691,7 @@ export interface ControlSample {
   batchSize?: string;
   manufacturingDate: string;
   expiryDate: string;
+  market?: string;
   packSize?: string;
   collectionDate?: string;
   collectionStage?: string;

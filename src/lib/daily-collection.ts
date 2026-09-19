@@ -132,7 +132,7 @@ export function monthLabel(key: string) {
 }
 
 export function registerTitle() {
-  return "DAILY COLLECTION RECORD OF CONTROL AND STABILITY SAMPLE";
+  return "DAILY COLLECTION RECORD OF CONTROL SAMPLE";
 }
 
 export function toDailyCollectionInput(row: DailyCollectionRecord): DailyCollectionInput {

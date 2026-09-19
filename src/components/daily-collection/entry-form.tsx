@@ -299,6 +299,8 @@ export function DailyCollectionEntryForm({
       batchSize: form.batchSize || row?.batchSize || "",
       manufacturingDate: form.manufacturingDate || row?.manufacturingDate || "",
       expiryDate: form.expiryDate || row?.expiryDate || "",
+      market: form.market || row?.market || "",
+      marketId: form.marketId || row?.marketId,
     });
   }
 

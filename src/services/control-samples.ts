@@ -362,6 +362,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
       batchSize: row.batchSize,
       manufacturingDate: row.manufacturingDate,
       expiryDate: row.expiryDate,
+      market: row.market,
       quantity: row.actualQuantity,
       unit: row.unit,
       collectionDate: row.date,

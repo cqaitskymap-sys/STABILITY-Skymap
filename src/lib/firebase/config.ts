@@ -30,36 +30,64 @@ function assertConfig() {
   }
 }
 
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-let storage: FirebaseStorage | undefined;
+type FirebaseGlobals = {
+  app?: FirebaseApp;
+  auth?: Auth;
+  db?: Firestore;
+  storage?: FirebaseStorage;
+  idbGuard?: boolean;
+};
+
+const firebaseGlobals = globalThis as typeof globalThis & { __skymapFirebase?: FirebaseGlobals };
+
+function store(): FirebaseGlobals {
+  if (!firebaseGlobals.__skymapFirebase) firebaseGlobals.__skymapFirebase = {};
+  return firebaseGlobals.__skymapFirebase;
+}
+
+export function isIndexedDbClosingError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err || "");
+  return /database is closing\/hidden|database connection is closing/i.test(message);
+}
+
+function installIndexedDbClosingGuard() {
+  if (typeof window === "undefined") return;
+  const s = store();
+  if (s.idbGuard) return;
+  s.idbGuard = true;
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isIndexedDbClosingError(event.reason)) {
+      event.preventDefault();
+    }
+  });
+}
 
 export function getFirebaseApp() {
-  if (typeof window === "undefined") {
+  const s = store();
+  if (!s.app) {
     assertConfig();
-    return getApps().length ? getApp() : initializeApp(firebaseConfig);
+    s.app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   }
-  if (!app) {
-    assertConfig();
-    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  }
-  return app;
+  installIndexedDbClosingGuard();
+  return s.app;
 }
 
 export function getFirebaseAuth() {
-  if (!auth) auth = getAuth(getFirebaseApp());
-  return auth;
+  const s = store();
+  if (!s.auth) s.auth = getAuth(getFirebaseApp());
+  return s.auth;
 }
 
 export function getDb() {
-  if (!db) db = getFirestore(getFirebaseApp());
-  return db;
+  const s = store();
+  if (!s.db) s.db = getFirestore(getFirebaseApp());
+  return s.db;
 }
 
 export function getFirebaseStorage() {
-  if (!storage) storage = getStorage(getFirebaseApp());
-  return storage;
+  const s = store();
+  if (!s.storage) s.storage = getStorage(getFirebaseApp());
+  return s.storage;
 }
 
 export const COLLECTIONS = {
