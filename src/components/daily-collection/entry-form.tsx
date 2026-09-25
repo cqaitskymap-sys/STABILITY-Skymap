@@ -4,15 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import {
-  DAILY_COLLECTION_REMARK_PRESETS,
   DAILY_COLLECTION_SAMPLE_TYPES,
+  dailyCollectionSampleTypeLabel,
   DUPLICATE_WARNING,
   findDuplicateRecords,
   toDailyCollectionInput,
   validateDailyCollectionInput,
 } from "@/lib/daily-collection";
 import { todayISO } from "@/lib/utils";
-import type { AppUser, Batch, ControlSample, ControlSampleCollection, Market, PackagingMaterial, PackSize, Product, StabilityStudy, Unit } from "@/types";
+import type { AppUser, Batch, Market, PackagingMaterial, PackSize, Product, StabilityStudy, Unit } from "@/types";
 import type { DailyCollectionInput, DailyCollectionRecord } from "@/types/daily-collection";
 
 export type DailyCollectionEntryMode = "create" | "edit" | "view" | "correct";
@@ -26,9 +26,7 @@ export type DailyCollectionCatalog = {
   markets: Market[];
   packSizes: PackSize[];
   packaging: PackagingMaterial[];
-  controlSamples: ControlSample[];
   studies: StabilityStudy[];
-  collections: ControlSampleCollection[];
   users: AppUser[];
 };
 
@@ -99,8 +97,6 @@ export function DailyCollectionEntryForm({
     initial ? toDailyCollectionInput(initial) : emptyForm(profile)
   );
   const [qty, setQty] = useState(initial ? String(initial.quantityCollected) : "");
-  const [productQuery, setProductQuery] = useState("");
-  const [collectorQuery, setCollectorQuery] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
   const [error, setError] = useState("");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
@@ -127,12 +123,8 @@ export function DailyCollectionEntryForm({
             ...active,
           ]
         : active;
-    const q = productQuery.trim().toLowerCase();
-    if (!q) return withCurrent;
-    return withCurrent.filter((p) =>
-      `${p.productName} ${p.productCode || ""} ${p.genericName || ""}`.toLowerCase().includes(q)
-    );
-  }, [form.productCode, form.productId, form.productName, productCatalog, productQuery]);
+    return withCurrent;
+  }, [form.productCode, form.productId, form.productName, productCatalog]);
 
   const batches = useMemo(() => {
     const matched = batchCatalog.filter(
@@ -175,22 +167,6 @@ export function DailyCollectionEntryForm({
     [catalog.packSizes, catalog.packaging, form.packSize, form.packSizeId]
   );
 
-  const matchingControls = useMemo(
-    () =>
-      catalog.controlSamples.filter(
-        (s) => (!form.productId || s.productId === form.productId) && (!form.batchId || s.batchId === form.batchId)
-      ),
-    [catalog.controlSamples, form.batchId, form.productId]
-  );
-
-  const matchingCollections = useMemo(
-    () =>
-      catalog.collections.filter(
-        (s) => (!form.productId || s.productId === form.productId) && (!form.batchId || s.batchId === form.batchId)
-      ),
-    [catalog.collections, form.batchId, form.productId]
-  );
-
   const matchingStudies = useMemo(
     () =>
       catalog.studies.filter(
@@ -199,14 +175,10 @@ export function DailyCollectionEntryForm({
     [catalog.studies, form.batchId, form.productId]
   );
 
-  const collectors = useMemo(() => {
-    const q = collectorQuery.trim().toLowerCase();
-    return catalog.users.filter((u) => {
-      if (!u.active && u.uid !== form.collectedByUserId) return false;
-      if (!q) return true;
-      return `${u.displayName} ${u.employeeId} ${u.email}`.toLowerCase().includes(q);
-    });
-  }, [catalog.users, collectorQuery, form.collectedByUserId]);
+  const collectors = useMemo(
+    () => catalog.users.filter((u) => u.active || u.uid === form.collectedByUserId),
+    [catalog.users, form.collectedByUserId]
+  );
 
   function patch(next: Partial<DailyCollectionInput>) {
     setForm((prev) => ({ ...prev, ...next }));
@@ -269,38 +241,6 @@ export function DailyCollectionEntryForm({
       collectedByUserId: user.uid,
       collectedByName: user.displayName || user.email,
       collectedByEmployeeCode: user.employeeId,
-    });
-  }
-
-  function onControlSample(id: string) {
-    const sample = catalog.controlSamples.find((s) => s.id === id);
-    patch({
-      controlSampleDocId: id || undefined,
-      controlSampleId: sample?.controlSampleId,
-      productId: form.productId || sample?.productId || "",
-      productName: form.productName || sample?.productName || "",
-      batchId: form.batchId || sample?.batchId || "",
-      batchNumber: form.batchNumber || sample?.batchNumber || "",
-      batchSize: form.batchSize || sample?.batchSize || "",
-      manufacturingDate: form.manufacturingDate || sample?.manufacturingDate || "",
-      expiryDate: form.expiryDate || sample?.expiryDate || "",
-      packSize: form.packSize || sample?.packSize || "",
-    });
-  }
-
-  function onCollection(id: string) {
-    const row = catalog.collections.find((s) => s.id === id);
-    patch({
-      controlCollectionId: id || undefined,
-      productId: form.productId || row?.productId || "",
-      productName: form.productName || row?.productName || "",
-      batchId: form.batchId || row?.batchId || "",
-      batchNumber: form.batchNumber || row?.batchNumber || "",
-      batchSize: form.batchSize || row?.batchSize || "",
-      manufacturingDate: form.manufacturingDate || row?.manufacturingDate || "",
-      expiryDate: form.expiryDate || row?.expiryDate || "",
-      market: form.market || row?.market || "",
-      marketId: form.marketId || row?.marketId,
     });
   }
 
@@ -392,7 +332,7 @@ export function DailyCollectionEntryForm({
           disabled={readOnly}
         >
           {DAILY_COLLECTION_SAMPLE_TYPES.map((type) => (
-            <option key={type} value={type}>{type}</option>
+            <option key={type} value={type}>{dailyCollectionSampleTypeLabel(type)}</option>
           ))}
         </Select>
         {form.date < todayISO() ? (
@@ -402,7 +342,6 @@ export function DailyCollectionEntryForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Input label="Find product" value={productQuery} onChange={(e) => setProductQuery(e.target.value)} disabled={readOnly} placeholder="Search name or code" uppercase={false} />
           <Select label="Product Name" required value={form.productId} onChange={(e) => onProduct(e.target.value)} disabled={readOnly}>
             <option value="">Select product</option>
             {products.map((p) => (
@@ -412,8 +351,8 @@ export function DailyCollectionEntryForm({
           {!productCatalog.length ? (
             <p className="text-xs text-slate-500">
               {form.sampleType === "Control Sample"
-                ? "Add products in Control Samples → Products. They are not shared with stability inventory."
-                : "Add products in Admin → Stability Products. They are not shared with control samples."}{" "}
+                ? "Add products in Controlled Sample → Products. They are not shared with stability inventory."
+                : "Add products in Admin → Stability Products. They are not shared with controlled samples."}{" "}
               <Link href={productMasterHref} className="font-medium underline">Open product master</Link>
             </p>
           ) : null}
@@ -434,11 +373,10 @@ export function DailyCollectionEntryForm({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Input label="Batch Size" value={form.batchSize || ""} onChange={(e) => patch({ batchSize: e.target.value })} disabled={readOnly} />
         <Input label="Mfg. Date" type="date" required value={form.manufacturingDate} onChange={(e) => patch({ manufacturingDate: e.target.value })} disabled={readOnly} />
         <Input label="Expiry Date" type="date" required monthBound="end" value={form.expiryDate} onChange={(e) => patch({ expiryDate: e.target.value })} disabled={readOnly} />
-        <Input label="Product Code" value={form.productCode || ""} disabled hint="Copied from Product Master at the time of entry." />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -476,7 +414,6 @@ export function DailyCollectionEntryForm({
 
       {allowCollectorSelect ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Input label="Find employee" value={collectorQuery} onChange={(e) => setCollectorQuery(e.target.value)} disabled={readOnly} placeholder="Search name or employee ID" uppercase={false} />
           <Select label="Collected By" required value={form.collectedByUserId} onChange={(e) => onCollector(e.target.value)} disabled={readOnly}>
             {collectors.map((u) => (
               <option key={u.uid} value={u.uid}>{u.displayName}{u.employeeId ? ` (${u.employeeId})` : ""}</option>
@@ -487,42 +424,16 @@ export function DailyCollectionEntryForm({
         <Input label="Collected By" value={`${form.collectedByName}${form.collectedByEmployeeCode ? ` (${form.collectedByEmployeeCode})` : ""}`} disabled hint="Collected By is the signed-in employee. Impersonation is not allowed." />
       )}
 
-      <div>
-        <Textarea label="Remarks" value={form.remarks || ""} onChange={(e) => patch({ remarks: e.target.value })} disabled={readOnly} />
-        {!readOnly ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {DAILY_COLLECTION_REMARK_PRESETS.map((preset) => (
-              <Button key={preset} type="button" size="sm" variant="outline" onClick={() => patch({ remarks: preset === "Other" ? "" : preset })}>
-                {preset}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <Textarea label="Remarks" value={form.remarks || ""} onChange={(e) => patch({ remarks: e.target.value })} disabled={readOnly} />
 
-      {form.sampleType === "Control Sample" ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Select label="Link Control Sample (optional)" value={form.controlSampleDocId || ""} onChange={(e) => onControlSample(e.target.value)} disabled={readOnly}>
-            <option value="">Not linked</option>
-            {matchingControls.map((s) => (
-              <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} / {s.batchNumber}</option>
-            ))}
-          </Select>
-          <Select label="Link Control Collection (optional)" value={form.controlCollectionId || ""} onChange={(e) => onCollection(e.target.value)} disabled={readOnly}>
-            <option value="">Not linked</option>
-            {matchingCollections.map((s) => (
-              <option key={s.id} value={s.id}>{s.collectionId} — {s.productName} / {s.batchNumber}</option>
-            ))}
-          </Select>
-        </div>
-      ) : (
+      {form.sampleType !== "Control Sample" ? (
         <Select label="Link Stability Study (optional)" value={form.stabilityStudyId || ""} onChange={(e) => onStudy(e.target.value)} disabled={readOnly} hint="This register does not create a new stability study.">
           <option value="">Not linked</option>
           {matchingStudies.map((s) => (
             <option key={s.id} value={s.id}>{s.studyId} — {s.productName} / {s.batchNumber}</option>
           ))}
         </Select>
-      )}
+      ) : null}
 
       {mode === "correct" ? (
         <Textarea label="Correction reason" required value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} hint="Finalized values are not overwritten silently. Old and new values are audited." />

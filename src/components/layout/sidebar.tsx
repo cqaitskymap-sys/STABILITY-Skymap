@@ -63,7 +63,7 @@ function isNavActive(pathname: string, href: string, allHrefs: string[]) {
 }
 
 const MODULE_SUBTITLE: Record<AppModuleId, string> = {
-  "control-samples": "Control Samples",
+  "control-samples": "Controlled Sample",
   stability: "Stability Inventory",
   admin: "Admin",
 };
@@ -115,16 +115,16 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "Control Samples",
+    label: "Controlled Sample",
     module: "control-samples",
     items: [
       { label: "Dashboard", href: "/stability/control-samples", icon: LayoutDashboard, permission: ["control.perform", "control.collect", "inventory.view"] },
       { label: "Collection / Inward", href: "/stability/control-samples/collection", icon: Inbox, permission: ["control.collect", "control.perform"] },
       { label: "Daily Collection Record", href: "/stability/control-samples/daily-collection", icon: ClipboardCheck, permission: ["control.collect", "control.perform"] },
-      { label: "Control Sample Register", href: "/stability/control-samples/register", icon: Shield, permission: ["control.perform", "control.collect", "inventory.view"] },
+      { label: "Controlled Sample Register", href: "/stability/control-samples/register", icon: Shield, permission: ["control.perform", "control.collect", "inventory.view"] },
       { label: "Periodic Observation", href: "/stability/control-samples/observation", icon: ClipboardCheck, permission: "control.perform" },
       { label: "Withdrawal / Requisition", href: "/stability/control-samples/withdrawal", icon: PackageMinus, permission: ["control.perform", "approve.records"] },
-      { label: "Location & Boxes", href: "/stability/control-samples/locations", icon: MapPin, permission: "control.perform" },
+      { label: "Storage", href: "/stability/control-samples/locations", icon: MapPin, permission: "control.perform" },
       { label: "Destruction Due", href: "/stability/control-samples/destruction-due", icon: AlertTriangle, permission: ["control.perform", "disposal.perform"] },
       { label: "Destruction", href: "/stability/control-samples/destruction/new", icon: Trash2, permission: ["control.perform", "disposal.perform", "approve.records"] },
       { label: "Destruction Log", href: "/stability/control-samples/destruction-log", icon: ScrollText, permission: ["control.perform", "disposal.perform"] },
@@ -200,7 +200,7 @@ export function Sidebar({
     Admin: true,
     "Stability Studies": true,
     "Sample Management": true,
-    "Control Samples": true,
+    "Controlled Sample": true,
     Scheduler: true,
     "Stability Chamber": false,
     Reports: true,

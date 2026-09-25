@@ -6,7 +6,9 @@ export const DAILY_COLLECTION_SAMPLE_TYPES: DailyCollectionSampleType[] = [
   "Stability Sample",
 ];
 
-export const DAILY_COLLECTION_REMARK_PRESETS = ["Control", "Stability", "Other"] as const;
+export function dailyCollectionSampleTypeLabel(type: string) {
+  return type === "Control Sample" ? "Controlled Sample" : type;
+}
 
 export const DUPLICATE_WARNING =
   "Similar collection record already exists for this Product + Batch + Date.";
@@ -132,7 +134,7 @@ export function monthLabel(key: string) {
 }
 
 export function registerTitle() {
-  return "DAILY COLLECTION RECORD OF CONTROL SAMPLE";
+  return "DAILY COLLECTION RECORD OF CONTROLLED SAMPLE";
 }
 
 export function toDailyCollectionInput(row: DailyCollectionRecord): DailyCollectionInput {

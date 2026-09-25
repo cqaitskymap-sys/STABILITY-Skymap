@@ -13,8 +13,8 @@ export type AppModule = {
 export const APP_MODULES: AppModule[] = [
   {
     id: "control-samples",
-    title: "Control Samples",
-    description: "Collection, register, observation, withdrawal, and destruction of control samples.",
+    title: "Controlled Sample",
+    description: "Collection, register, observation, withdrawal, and destruction of controlled samples.",
     href: "/stability/control-samples",
     permissions: ["control.perform", "control.collect", "inventory.view"],
   },

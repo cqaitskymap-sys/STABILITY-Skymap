@@ -15,9 +15,7 @@ import {
   Modal,
   PageHeader,
   Pager,
-  SearchInput,
   Select,
-  StatusBadge,
   Textarea,
 } from "@/components/ui";
 import { PrintDocument } from "@/components/print/print-document";
@@ -27,7 +25,6 @@ import { useAsync } from "@/hooks/useAsync";
 import { formatQuantity, monthKey, monthLabel, registerTitle } from "@/lib/daily-collection";
 import { downloadBlob, formatDate, formatDateTime, formatFullDate, paginate, toCsv, todayISO } from "@/lib/utils";
 import { listAuditLogsForRecord } from "@/services/audit";
-import { listCollections, listControlSamples } from "@/services/control-samples";
 import {
   cancelDailyCollectionRecord,
   correctDailyCollectionRecord,
@@ -59,7 +56,7 @@ export default function DailyCollectionRecordPage() {
   const allowFutureDate = hasPermission("users.manage");
 
   const catalog = useAsync(async () => {
-    const [products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users] =
+    const [products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, studies, rows, settings, users] =
       await Promise.all([
         listProducts(),
         listBatches(),
@@ -69,17 +66,14 @@ export default function DailyCollectionRecordPage() {
         listMarkets(),
         listPackSizes().catch(() => []),
         listPackagingMaterials(),
-        listControlSamples(),
         listStudies(),
-        listCollections(),
         listDailyCollectionRecords().catch(() => []),
         getOrganizationSettings(),
         allowCollectorSelect ? listUsers() : Promise.resolve([]),
       ]);
-    return { products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, controlSamples, studies, collections, rows, settings, users };
+    return { products, batches, controlProducts, controlBatches, units, markets, packSizes, packaging, studies, rows, settings, users };
   }, [allowCollectorSelect]);
 
-  const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [productId, setProductId] = useState("");
@@ -114,9 +108,7 @@ export default function DailyCollectionRecordPage() {
       markets: catalog.data?.markets || [],
       packSizes: catalog.data?.packSizes || [],
       packaging: catalog.data?.packaging || [],
-      controlSamples: catalog.data?.controlSamples || [],
       studies: catalog.data?.studies || [],
-      collections: catalog.data?.collections || [],
       users: catalog.data?.users || [],
     }),
     [catalog.data]
@@ -125,7 +117,7 @@ export default function DailyCollectionRecordPage() {
   const productFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
     // Masters stay separate: dump the stability catalog only when the user
-    // explicitly filters to Stability Sample. "All types" is Control Sample
+    // explicitly filters to Stability Sample. "All types" is Controlled Sample
     // masters plus products that already appear on this register.
     if (sampleType === "Stability Sample") {
       for (const p of catalog.data?.products || []) map.set(p.id, p.productName);
@@ -145,7 +137,6 @@ export default function DailyCollectionRecordPage() {
   }, [rows]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const next = rows.filter((r) => {
       if (dateFrom && r.date < dateFrom) return false;
       if (dateTo && r.date > dateTo) return false;
@@ -155,12 +146,6 @@ export default function DailyCollectionRecordPage() {
       if (sampleType && r.sampleType !== sampleType) return false;
       if (collectedBy && !r.collectedByName.toLowerCase().includes(collectedBy.toLowerCase())) return false;
       if (month && monthKey(r.date) !== month) return false;
-      if (q) {
-        const hay = [r.serialDisplay, r.recordId, r.productName, r.batchNumber, r.market, r.packSize, r.collectedByName, r.remarks, r.sampleType]
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
     next.sort((a, b) => {
@@ -172,7 +157,7 @@ export default function DailyCollectionRecordPage() {
       return b.serialNumber - a.serialNumber;
     });
     return next;
-  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows, sampleType, search]);
+  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows, sampleType]);
 
   const paged = paginate(filtered, page, 20);
   const companyName = catalog.data?.settings.companyName?.trim() || process.env.NEXT_PUBLIC_COMPANY_NAME || COMPANY_FALLBACK;
@@ -273,8 +258,6 @@ export default function DailyCollectionRecordPage() {
       Unit: r.quantityUnit,
       "Collected By": r.collectedByName,
       Remarks: r.remarks || "",
-      "Sample Type": r.sampleType,
-      Status: r.status,
     }));
   }
 
@@ -295,7 +278,7 @@ export default function DailyCollectionRecordPage() {
     <div>
       <PageHeader
         title="Daily Collection Record"
-        description="Digital register for daily collection of Control Samples and Stability Samples. Product and batch masters are separate for each sample type and are not linked."
+        description="Digital register for daily collection of Controlled Samples and Stability Samples. Product and batch masters are separate for each sample type and are not linked."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
@@ -317,6 +300,7 @@ export default function DailyCollectionRecordPage() {
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
 
       {print ? (
+        <div className="mb-6">
         <PrintDocument
           title={registerTitle()}
           documentNumber="Annexure-II"
@@ -353,13 +337,14 @@ export default function DailyCollectionRecordPage() {
             </table>
           </div>
         </PrintDocument>
+        <Button className="mt-3 print:hidden" variant="outline" onClick={() => setPrint(false)}>Close print preview</Button>
+        </div>
       ) : null}
 
       {!catalog.loading && !catalog.error ? (
         <>
           <Card className="mb-4">
             <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-              <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search register..." />
               <Input label="From date" type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} />
               <Input label="To date" type="date" monthBound="end" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
               <Select label="Product" value={productId} onChange={(e) => { setProductId(e.target.value); setPage(1); }}>
@@ -373,7 +358,7 @@ export default function DailyCollectionRecordPage() {
               </Select>
               <Select label="Sample Type" value={sampleType} onChange={(e) => { setSampleType(e.target.value); setProductId(""); setPage(1); }}>
                 <option value="">All types</option>
-                <option value="Control Sample">Control Sample</option>
+                <option value="Control Sample">Controlled Sample</option>
                 <option value="Stability Sample">Stability Sample</option>
               </Select>
               <Input label="Collected By" value={collectedBy} onChange={(e) => { setCollectedBy(e.target.value); setPage(1); }} />
@@ -405,7 +390,7 @@ export default function DailyCollectionRecordPage() {
                   <table className="min-w-[1280px] border-collapse text-sm">
                     <thead>
                       <tr className="bg-slate-200/80 text-left text-[11px] uppercase tracking-wide text-slate-700">
-                        {["S. No.", "Date", "Product Name", "Batch No.", "Batch Size", "Mfg. Date", "Expiry Date", "Market", "Pack Size", "Qty Collected", "Collected By", "Remarks", "Type", "Status", "Actions"].map((h) => (
+                        {["S. No.", "Date", "Product Name", "Batch No.", "Batch Size", "Mfg. Date", "Expiry Date", "Market", "Pack Size", "Qty Collected", "Collected By", "Remarks", "Actions"].map((h) => (
                           <th key={h} className="border border-slate-400 px-2 py-2 font-semibold">{h}</th>
                         ))}
                       </tr>
@@ -425,8 +410,6 @@ export default function DailyCollectionRecordPage() {
                           <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{formatQuantity(r.quantityCollected, r.quantityUnit)}</td>
                           <td className="border border-slate-300 px-2 py-2">{r.collectedByName}</td>
                           <td className="border border-slate-300 px-2 py-2">{r.remarks || "—"}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.sampleType}</td>
-                          <td className="border border-slate-300 px-2 py-2"><StatusBadge status={r.status} /></td>
                           <td className="border border-slate-300 px-2 py-2">
                             <RowActions
                               row={r}
@@ -456,10 +439,9 @@ export default function DailyCollectionRecordPage() {
                           <p className="font-semibold text-slate-900">{r.productName}</p>
                           <p className="text-sm text-slate-600">{r.batchNumber} · {r.market} · {r.packSize}</p>
                         </div>
-                        <StatusBadge status={r.status} />
                       </div>
                       <p className="mt-2 text-sm">{formatQuantity(r.quantityCollected, r.quantityUnit)} · {r.collectedByName}</p>
-                      <p className="text-sm text-slate-500">{r.sampleType}{r.remarks ? ` · ${r.remarks}` : ""}</p>
+                      {r.remarks ? <p className="text-sm text-slate-500">{r.remarks}</p> : null}
                       <div className="mt-3">
                         <RowActions
                           row={r}
@@ -582,9 +564,6 @@ function RowActions({
       {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" onClick={() => onWorkflow("submit")}>Submit</Button> : null}
       {row.status === "Submitted" && canReview ? <Button size="sm" variant="outline" onClick={() => onWorkflow("review")}>Review</Button> : null}
       {row.status === "Reviewed" && canReview ? <Button size="sm" onClick={() => onWorkflow("finalize")}>Finalize</Button> : null}
-      {(row.status === "Draft" && canCreate) || (row.status === "Submitted" && canReview) ? (
-        <Button size="sm" variant="ghost" onClick={() => onWorkflow("cancel")}>Cancel</Button>
-      ) : null}
       {row.status === "Finalized" && canCorrect ? <Button size="sm" variant="outline" onClick={onCorrect}>Correct</Button> : null}
       {canViewAudit ? <Button size="sm" variant="ghost" onClick={onAudit}>Audit</Button> : null}
     </div>

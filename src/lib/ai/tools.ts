@@ -24,7 +24,7 @@ export const TOOL_LABELS: Record<string, string> = {
 export const skymapTools = {
   listCatalog: tool({
     description:
-      "Look up live SkyMap master or inventory records by name/code before creating or changing anything. Use this to resolve IDs. products/batches are stability inventory only; controlProducts/controlBatches are control samples only — they are not shared.",
+      "Look up live SkyMap master or inventory records by name/code before creating or changing anything. Use this to resolve IDs. products/batches are stability inventory only; controlProducts/controlBatches are controlled samples only — they are not shared.",
     inputSchema: z.object({
         kind: z.enum([
         "products",
@@ -47,7 +47,7 @@ export const skymapTools = {
 
   createProduct: tool({
     description:
-      "Create a product in Stability Product Master only. Do not use this for control samples — those have a separate product master.",
+      "Create a product in Stability Product Master only. Do not use this for controlled samples — those have a separate product master.",
     inputSchema: z.object({
       productName: z.string().describe("Product name, e.g. Paracetamol 500 mg tablet"),
       productCode: z.string().optional(),
@@ -58,7 +58,7 @@ export const skymapTools = {
   }),
 
   createBatch: tool({
-    description: "Create a batch for an existing stability product. Do not use this for control sample batches.",
+    description: "Create a batch for an existing stability product. Do not use this for controlled sample batches.",
     inputSchema: z.object({
       productName: z.string().describe("Exact or unique product name"),
       batchNumber: z.string(),

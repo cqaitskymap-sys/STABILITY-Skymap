@@ -71,7 +71,7 @@ export const Input = forwardRef<
     error?: string;
     hint?: string;
     uppercase?: boolean;
-    /** Keep day + month + year. Only Control Sample Collection date uses this. */
+    /** Keep day + month + year. Only Controlled Sample Collection date uses this. */
     fullDate?: boolean;
     /** Month pickers store YYYY-MM-01 by default; use "end" for To/End filters. */
     monthBound?: "start" | "end";

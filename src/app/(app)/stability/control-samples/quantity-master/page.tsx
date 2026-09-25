@@ -39,7 +39,7 @@ export default function QuantityMasterPage() {
     }
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      toast.error("Control sample quantity must be greater than zero.");
+      toast.error("Controlled sample quantity must be greater than zero.");
       return;
     }
     setSaving(true);
@@ -72,8 +72,8 @@ export default function QuantityMasterPage() {
   return (
     <div>
       <PageHeader
-        title="Control Sample Quantity Master"
-        description="Annexure-I — product-wise required quantity from the Control Sample Product Master. Revisions are history-preserving; old requirements are never overwritten. Stability inventory products are not used here."
+        title="Controlled Sample Quantity Master"
+        description="Annexure-I — product-wise required quantity from the Controlled Sample Product Master. Revisions are history-preserving; old requirements are never overwritten. Stability inventory products are not used here."
         actions={<Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
       />
       {catalog.loading ? <LoadingSkeleton rows={6} /> : null}
@@ -90,11 +90,11 @@ export default function QuantityMasterPage() {
             </Select>
             {!(catalog.data?.products || []).some((p) => p.status === "Active") ? (
               <p className="text-xs text-slate-500">
-                Add products in Control Samples → Products. Quantity master does not use stability inventory products.
+                Add products in Controlled Sample → Products. Quantity master does not use stability inventory products.
               </p>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input label="Control sample quantity" type="number" required value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={!can} />
+              <Input label="Controlled sample quantity" type="number" required value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={!can} />
               <Select label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!can}>
                 <option value="">Select unit</option>
                 {(catalog.data?.units || []).filter((u) => u.status === "Active").map((u) => (

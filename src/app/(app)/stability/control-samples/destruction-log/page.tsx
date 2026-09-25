@@ -28,7 +28,7 @@ export default function DestructionLogPage() {
   return (
     <div>
       <PageHeader
-        title="Destruction Log Book of Control Sample"
+        title="Destruction Log Book of Controlled Sample"
         description="Annexure-VII — destruction history is retained. Records are never auto-deleted after two years; a retention review flag is shown instead."
         actions={
           <div className="flex flex-wrap gap-2">
@@ -40,7 +40,8 @@ export default function DestructionLogPage() {
       {logs.loading ? <LoadingSkeleton rows={6} /> : null}
       {logs.error ? <ErrorState message={logs.error} onRetry={logs.reload} /> : null}
       {print ? (
-        <PrintDocument title="Destruction Log Book of Control Sample" documentNumber="Annexure-VII">
+        <div className="mb-6">
+        <PrintDocument title="Destruction Log Book of Controlled Sample" documentNumber="Annexure-VII">
           <table className="min-w-full text-xs">
             <thead>
               <tr className="border-b">{["Month", "Year", "DCN", "Product", "Batch", "Qty", "Date", "Initiated", "Checked", "Verified"].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr>
@@ -63,6 +64,8 @@ export default function DestructionLogPage() {
             </tbody>
           </table>
         </PrintDocument>
+        <Button className="mt-3 print:hidden" variant="outline" onClick={() => setPrint(false)}>Close print preview</Button>
+        </div>
       ) : null}
       <Card>
         <CardHeader title="Monthly filter" />

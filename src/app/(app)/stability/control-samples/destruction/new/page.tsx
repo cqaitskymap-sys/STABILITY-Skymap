@@ -8,7 +8,7 @@ import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { DEFAULT_DESTRUCTION_STEPS } from "@/lib/control-samples";
-import { formatDate, friendlyError } from "@/lib/utils";
+import { formatFullDate, friendlyError } from "@/lib/utils";
 import {
   approveDestruction,
   completeDestructionChecklist,
@@ -40,6 +40,8 @@ export default function DestructionNotePage() {
 
   async function create() {
     if (!profile || !can || !sampleId) return;
+    if (!reason.trim()) return toast.error("Reason for destruction is required.");
+    if (!Number.isFinite(Number(qty)) || Number(qty) <= 0) return toast.error("Destruction quantity must be greater than zero.");
     setSaving(true);
     try {
       await createDestructionNote({
@@ -110,7 +112,7 @@ export default function DestructionNotePage() {
   return (
     <div>
       <PageHeader
-        title="Destruction of Control Sample"
+        title="Destruction of Controlled Sample"
         description="Annexure-VI — DCN numbering is DCN/MM/YY/001. The application records checklist completion; it does not perform physical destruction."
         actions={<Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
       />
@@ -118,10 +120,10 @@ export default function DestructionNotePage() {
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
       {printRow ? (
         <div className="space-y-6">
-          <PrintDocument title="Destruction of Control Sample" documentNumber={printRow.dcnNumber}>
+          <PrintDocument title="Destruction of Controlled Sample" documentNumber={printRow.dcnNumber}>
             <PrintFieldGrid rows={[
               { label: "DCN Number", value: printRow.dcnNumber },
-              { label: "Date", value: formatDate(printRow.date) },
+              { label: "Date", value: formatFullDate(printRow.date) },
               { label: "Product / Material", value: printRow.productName },
               { label: "Batch No.", value: printRow.batchNumber },
               { label: "Quantity", value: printRow.quantity },
@@ -135,21 +137,22 @@ export default function DestructionNotePage() {
           {printRow.status === "Destroyed" ? (
             <PrintDocument title="Destruction Verification Report" documentNumber={printRow.dcnNumber}>
               <PrintFieldGrid rows={[
-                { label: "Material Destructed On", value: formatDate(printRow.destroyedOn) },
+                { label: "Material Destructed On", value: formatFullDate(printRow.destroyedOn) },
                 { label: "Material Destructed By QA", value: printRow.destroyedBy },
                 { label: "Verified By QA", value: printRow.verifiedBy },
-                { label: "Date", value: formatDate(printRow.destroyedOn) },
+                { label: "Date", value: formatFullDate(printRow.destroyedOn) },
                 { label: "Remarks", value: printRow.remarks },
               ]} />
             </PrintDocument>
           ) : null}
+          <Button className="print:hidden" variant="outline" onClick={() => setPrintId("")}>Close print preview</Button>
         </div>
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="Create destruction note" />
           <div className="grid gap-3 p-4">
-            <Select label="Control sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
+            <Select label="Controlled sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
               {(catalog.data?.samples || []).filter((s) => (s.availableQuantity || 0) > 0).map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} / {s.batchNumber}</option>

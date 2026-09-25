@@ -137,7 +137,7 @@ export default function SampleInwardPage() {
     <div>
       <PageHeader
         title="Sample Inward / Receiving"
-        description="Record stability samples received into the control sample room before charging. COA must be received before a sample can be charged."
+        description="Record stability samples received into the controlled sample room before charging. COA must be received before a sample can be charged."
         actions={
           <Button variant="outline" onClick={() => void receipts.reload()}>
             <RefreshCw className="h-4 w-4" />

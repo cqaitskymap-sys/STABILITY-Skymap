@@ -34,6 +34,11 @@ import type {
   ControlTxType,
 } from "@/types/control-samples";
 
+function finiteNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -56,7 +61,7 @@ async function audit(input: {
 }) {
   await writeAuditLog({
     action: input.action,
-    module: "Control Samples",
+    module: "Controlled Sample",
     recordId: input.recordId,
     recordType: "controlSample",
     previousValue: input.previousValue,
@@ -185,7 +190,7 @@ export async function createQuantityMasterRevision(input: {
   conversionBatchUnit?: string;
   user: AppUser;
 }) {
-  if (input.quantity <= 0) throw new Error("Required quantity must be greater than zero.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Required quantity must be greater than zero.");
   const existing = await getActiveQuantityMaster(input.productId);
   const stamp = nowISO();
   if (existing) {
@@ -235,7 +240,7 @@ export async function getCollection(id: string) {
 }
 
 export async function createCollection(input: Omit<ControlSampleCollection, "id" | "collectionId" | "status" | "createdBy" | "createdByName" | "createdAt" | "updatedAt"> & { user: AppUser; finalize?: boolean }) {
-  if (input.actualQuantity <= 0) throw new Error("Actual quantity collected must be greater than zero.");
+  if (!Number.isFinite(input.actualQuantity) || input.actualQuantity <= 0) throw new Error("Actual quantity collected must be greater than zero.");
   const collectionId = await nextSequentialId("CSC");
   const stamp = nowISO();
   const { user, finalize, ...fields } = input;
@@ -254,7 +259,7 @@ export async function createCollection(input: Omit<ControlSampleCollection, "id"
     recordId: collectionId,
     newValue: payload,
     user,
-    reason: "Control sample collection",
+    reason: "Controlled sample collection",
   });
   return { id: ref.id, ...payload };
 }
@@ -280,7 +285,7 @@ export async function submitCollection(id: string, user: AppUser) {
   const row = await getCollection(id);
   if (!row) throw new Error("Collection record not found.");
   if (row.status !== "Collected" && row.status !== "Draft") {
-    throw new Error("Only collected records can be submitted to the Control Sample Room.");
+    throw new Error("Only collected records can be submitted to the Controlled Sample Room.");
   }
   const stamp = nowISO();
   await updateDoc(doc(getDb(), COLLECTIONS.controlSampleCollections, id), {
@@ -353,8 +358,9 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
       updatedAt: stamp,
     });
   });
+  let created: Awaited<ReturnType<typeof createControlSample>> | null = null;
   try {
-    const created = await createControlSample({
+    created = await createControlSample({
       productId: row.productId,
       productName: row.productName,
       batchId: row.batchId,
@@ -371,7 +377,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
       conversionBatch: row.conversionBatch,
       brand: row.brand,
       conversionNoteRef: row.conversionNoteRef,
-      purpose: "Control sample",
+      purpose: "Controlled sample",
       destructionEligibleDate: destructionEligibleDate(row.expiryDate, settings.controlDestructionMonthsAfterExpiry),
       nextObservationDate: nextObservationDate(row.date || todayISO(), settings.controlObservationIntervalMonths),
       user,
@@ -399,12 +405,22 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
     await audit({ action: "Verification", recordId: created.controlSampleId, newValue: { collectionId: row.collectionId }, user });
     return created;
   } catch (err) {
-    await updateDoc(colRef, {
-      status: row.status,
-      verifiedBy: deleteField(),
-      verifiedAt: deleteField(),
-      updatedAt: nowISO(),
-    }).catch(() => undefined);
+    if (created) {
+      await updateDoc(colRef, {
+        status: "Verified",
+        controlSampleDocId: created.id,
+        verifiedBy: user.displayName || user.email,
+        verifiedAt: stamp,
+        updatedAt: nowISO(),
+      }).catch(() => undefined);
+    } else {
+      await updateDoc(colRef, {
+        status: row.status,
+        verifiedBy: deleteField(),
+        verifiedAt: deleteField(),
+        updatedAt: nowISO(),
+      }).catch(() => undefined);
+    }
     throw err;
   }
 }
@@ -415,7 +431,7 @@ export async function createControlSample(
     "id" | "controlSampleId" | "issuedQuantity" | "returnedQuantity" | "disposedQuantity" | "availableQuantity" | "status" | "createdBy" | "createdByName" | "createdAt" | "updatedAt"
   > & { user: AppUser }
 ) {
-  if (input.quantity <= 0) throw new Error("Quantity must be greater than zero.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Quantity must be greater than zero.");
   const settings = controlOrg(await getOrganizationSettings());
   const controlSampleId = await nextSequentialId("CTL");
   const stamp = nowISO();
@@ -452,7 +468,7 @@ export async function createControlSample(
     previousQuantity: 0,
     newQuantity: input.quantity,
     toLocation: input.locationLabel,
-    reason: "Control sample created",
+    reason: "Controlled sample created",
     performedBy: user.uid,
     performedByName: user.displayName || user.email,
     performedAt: stamp,
@@ -476,10 +492,10 @@ export async function storeControlSample(input: {
   user: AppUser;
 }) {
   const row = await getControlSample(input.id);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   if (!input.storageArea?.trim()) throw new Error("Storage area is required.");
   if (!input.rackNumber?.trim() || !input.boxNumber?.trim()) {
-    throw new Error("Rack and box are required to store a control sample.");
+    throw new Error("Rack and box are required to store a controlled sample.");
   }
   const settings = controlOrg(await getOrganizationSettings());
   if (!settings.controlAllowDuplicateBoxOccupancy && input.boxNumber) {
@@ -543,12 +559,12 @@ export async function createRack(input: { rackNumber: string; partitionNumber?: 
   const payload: Omit<ControlSampleRack, "id"> = {
     rackNumber: input.rackNumber,
     partitionNumber: input.partitionNumber,
-    area: input.area || "Control Sample Room",
+    area: input.area || "Controlled Sample Room",
     status: "Active",
     createdAt: nowISO(),
   };
   const ref = await addDoc(collection(getDb(), COLLECTIONS.controlSampleLocations), omitUndefined(payload as unknown as Record<string, unknown>));
-  await audit({ action: "Create", recordId: ref.id, newValue: payload, user: input.user, reason: "Control sample rack" });
+  await audit({ action: "Create", recordId: ref.id, newValue: payload, user: input.user, reason: "Controlled sample rack" });
   return { id: ref.id, ...payload };
 }
 
@@ -601,28 +617,33 @@ export async function createBox(input: {
   user: AppUser;
 }) {
   const requestedNumber = input.boxNumber?.trim();
-  if (requestedNumber) {
-    const boxes = await listBoxes();
-    if (boxes.some((b) => b.status === "Active" && b.boxNumber === requestedNumber)) {
-      throw new Error("An active box with this number already exists.");
-    }
+  const boxes = await listBoxes();
+  const taken = new Set(boxes.filter((b) => b.status === "Active").map((b) => b.boxNumber));
+  if (requestedNumber && taken.has(requestedNumber)) {
+    throw new Error("An active box with this number already exists.");
   }
   const created = await runTransaction(getDb(), async (tx) => {
     let boxNumber = requestedNumber;
+    let categoryName = input.category;
     if (!boxNumber && input.categoryId) {
       const catRef = doc(getDb(), COLLECTIONS.controlSampleBoxCategories, input.categoryId);
       const snap = await tx.get(catRef);
-      if (!snap.exists()) throw new Error("Box category not found.");
+      if (!snap.exists()) throw new Error("Box type not found. Save a box type first.");
       const cat = snap.data() as ControlSampleBoxCategory;
-      const next = (cat.currentSequence || 0) + 1;
+      let next = (cat.currentSequence || 0) + 1;
       boxNumber = `${cat.prefix}${String(next).padStart(3, "0")}`;
+      while (taken.has(boxNumber)) {
+        next += 1;
+        boxNumber = `${cat.prefix}${String(next).padStart(3, "0")}`;
+      }
+      categoryName = input.category || cat.category;
       tx.update(catRef, { currentSequence: next, updatedAt: nowISO() });
     }
-    if (!boxNumber) throw new Error("Box number is required.");
+    if (!boxNumber) throw new Error("Choose a box type so a box number can be created.");
     const boxRef = doc(collection(getDb(), COLLECTIONS.controlSampleBoxes));
     const payload: Omit<ControlSampleBox, "id"> = {
       boxNumber,
-      category: input.category,
+      category: categoryName,
       rackNumber: input.rackNumber,
       partitionNumber: input.partitionNumber,
       remarks: input.remarks,
@@ -674,7 +695,7 @@ export async function recordObservation(input: {
   user: AppUser;
 }) {
   const row = await getControlSample(input.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   if (input.discardedQuantity < 0) throw new Error("Discarded quantity cannot be negative.");
   if (input.discardedQuantity > row.availableQuantity) {
     throw new Error("Discarded quantity cannot exceed available quantity.");
@@ -766,9 +787,11 @@ export async function createRequisition(input: {
   remarks?: string;
   user: AppUser;
 }) {
-  if (input.quantityRequired <= 0) throw new Error("Quantity required must be greater than zero.");
+  if (!Number.isFinite(input.quantityRequired) || input.quantityRequired <= 0) {
+    throw new Error("Quantity required must be greater than zero.");
+  }
   const row = await getControlSample(input.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   if (input.quantityRequired > row.availableQuantity) {
     throw new Error(`Required quantity exceeds available quantity (${row.availableQuantity}).`);
   }
@@ -824,7 +847,7 @@ export async function approveRequisition(id: string, user: AppUser, approved: bo
 
 export async function issueApprovedRequisition(id: string, input: { quantity: number; issuedTo: string; user: AppUser }) {
   const settings = controlOrg(await getOrganizationSettings());
-  if (input.quantity <= 0) throw new Error("Issue quantity must be greater than zero.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Issue quantity must be greater than zero.");
   const stamp = nowISO();
   const result = await runTransaction(getDb(), async (tx) => {
     const reqRef = doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id);
@@ -837,19 +860,21 @@ export async function issueApprovedRequisition(id: string, input: { quantity: nu
     if (!settings.controlRequireWithdrawalApproval && req.status !== "Approved" && req.status !== "Submitted") {
       throw new Error("Requisition is not eligible for issue.");
     }
-    if (input.quantity > req.quantityRequired - req.quantityIssued) {
+    const issuedSoFar = finiteNumber(req.quantityIssued);
+    const required = finiteNumber(req.quantityRequired);
+    if (input.quantity > required - issuedSoFar) {
       throw new Error("Cannot issue more than the approved requisition quantity.");
     }
     const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, req.controlSampleDocId);
     const sampleSnap = await tx.get(sampleRef);
-    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
     const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
-    if (input.quantity > row.availableQuantity) {
-      throw new Error(`Cannot issue more than available quantity (${row.availableQuantity}).`);
+    if (input.quantity > finiteNumber(row.availableQuantity)) {
+      throw new Error(`Cannot issue more than available quantity (${finiteNumber(row.availableQuantity)}).`);
     }
-    const next = applyQty(row, { issuedQuantity: row.issuedQuantity + input.quantity });
+    const next = applyQty(row, { issuedQuantity: finiteNumber(row.issuedQuantity) + input.quantity });
     const status = deriveControlInventoryStatus({ ...row, ...next });
-    const issued = req.quantityIssued + input.quantity;
+    const issued = issuedSoFar + input.quantity;
     tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
     tx.update(reqRef, {
       quantityIssued: issued,
@@ -881,24 +906,29 @@ export async function issueApprovedRequisition(id: string, input: { quantity: nu
 }
 
 export async function returnRequisition(id: string, input: { quantity: number; returnedBy: string; condition?: string; remarks?: string; user: AppUser }) {
-  if (input.quantity <= 0) throw new Error("Return quantity must be greater than zero.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Return quantity must be greater than zero.");
   const stamp = nowISO();
   const result = await runTransaction(getDb(), async (tx) => {
     const reqRef = doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id);
     const reqSnap = await tx.get(reqRef);
     if (!reqSnap.exists()) throw new Error("Requisition not found.");
     const req = { id: reqSnap.id, ...reqSnap.data() } as ControlSampleRequisition;
-    const outstanding = Math.max(0, req.quantityIssued - req.quantityReturned);
+    const issuedSoFar = finiteNumber(req.quantityIssued);
+    const returnedSoFar = finiteNumber(req.quantityReturned);
+    const outstanding = Math.max(0, issuedSoFar - returnedSoFar);
+    if (!["Approved", "Issued", "Partially Returned"].includes(req.status) || outstanding <= 0) {
+      throw new Error("Only issued quantity can be returned.");
+    }
     if (input.quantity > outstanding) {
       throw new Error(`Cannot return more than outstanding issued quantity (${outstanding}).`);
     }
     const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, req.controlSampleDocId);
     const sampleSnap = await tx.get(sampleRef);
-    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
     const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
-    const next = applyQty(row, { returnedQuantity: row.returnedQuantity + input.quantity });
+    const next = applyQty(row, { returnedQuantity: finiteNumber(row.returnedQuantity) + input.quantity });
     const status = deriveControlInventoryStatus({ ...row, ...next });
-    const returned = req.quantityReturned + input.quantity;
+    const returned = returnedSoFar + input.quantity;
     tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
     tx.update(
       reqRef,
@@ -925,7 +955,7 @@ export async function returnRequisition(id: string, input: { quantity: number; r
     quantity: input.quantity,
     previousQuantity: result.row.availableQuantity,
     newQuantity: result.next.availableQuantity,
-    reason: "Control sample return",
+    reason: "Controlled sample return",
     reference: result.req.requisitionNumber,
     remarks: input.remarks,
     performedBy: input.user.uid,
@@ -979,7 +1009,7 @@ export async function adjustControlSample(input: {
   if (!input.reason.trim()) throw new Error("A reason is required for an approved quantity adjustment.");
   if (!input.quantityDelta) throw new Error("Adjustment quantity cannot be zero.");
   const row = await getControlSample(input.id);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   const next = applyQty(row, { adjustedQuantity: (row.adjustedQuantity || 0) + input.quantityDelta });
   await persistSample(row, next, {
     type: "CONTROL_SAMPLE_ADJUSTED",
@@ -1013,7 +1043,7 @@ export async function applyDestructionHold(input: {
   user: AppUser;
 }) {
   const row = await getControlSample(input.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   const holdId = await nextSequentialId("CSH");
   const stamp = nowISO();
   const payload: Omit<ControlSampleHold, "id"> = {
@@ -1082,14 +1112,25 @@ export async function createDestructionNote(input: {
   user: AppUser;
 }) {
   const row = await getControlSample(input.controlSampleDocId);
-  if (!row) throw new Error("Control sample not found.");
+  if (!row) throw new Error("Controlled sample not found.");
   if (row.destructionHold) throw new Error("Cannot destroy a sample under an active destruction hold.");
   const settings = controlOrg(await getOrganizationSettings());
   if (!isEligibleNow(row, settings)) {
     throw new Error("Sample is not yet eligible for destruction (expiry + configured retention).");
   }
-  if (input.quantity <= 0 || input.quantity > row.availableQuantity) {
-    throw new Error("Destruction quantity must be greater than zero and not exceed available quantity.");
+  const openNotes = (await listDestructions()).filter(
+    (note) =>
+      note.controlSampleDocId === row.id &&
+      ["QA Initiated", "Note Created", "Approved", "Destroyed Pending Verification"].includes(note.status)
+  );
+  const reserved = openNotes.reduce((sum, note) => sum + finiteNumber(note.quantity), 0);
+  const remaining = finiteNumber(row.availableQuantity) - reserved;
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0 || input.quantity > remaining) {
+    throw new Error(
+      remaining > 0
+        ? `Destruction quantity must be greater than zero and not exceed the unreserved quantity (${remaining}).`
+        : "This sample already has open destruction notes for the full available quantity."
+    );
   }
   const dcnNumber = await nextDcnNumber();
   const stamp = nowISO();
@@ -1189,7 +1230,7 @@ export async function verifyDestruction(id: string, user: AppUser, remarks?: str
     }
     const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, note.controlSampleDocId);
     const sampleSnap = await tx.get(sampleRef);
-    if (!sampleSnap.exists()) throw new Error("Control sample not found.");
+    if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
     const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
     const next = applyQty(row, { destroyedQuantity: destroyedQty(row) + note.quantity });
     const status = deriveControlInventoryStatus({ ...row, ...next });

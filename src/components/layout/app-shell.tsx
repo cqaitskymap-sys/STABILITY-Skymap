@@ -15,7 +15,7 @@ import { listAlerts } from "@/services/inventory";
 const TITLE_MAP: Record<string, string> = {
   "/home": "Select a module",
   "/stability/dashboard": "Stability Dashboard",
-  "/stability/control-samples": "Control Samples",
+  "/stability/control-samples": "Controlled Sample",
   "/stability/admin/users": "User Management",
   "/stability/admin/organization": "Organization",
   "/stability/audit": "Audit Trail",
@@ -45,18 +45,18 @@ const TITLE_MAP: Record<string, string> = {
   "/masters/pack-sizes": "Pack Size Master",
   "/stability/control-samples/collection": "Collection / Inward",
   "/stability/control-samples/daily-collection": "Daily Collection Record",
-  "/stability/control-samples/register": "Control Sample Register",
+  "/stability/control-samples/register": "Controlled Sample Register",
   "/stability/control-samples/observation": "Periodic Observation",
   "/stability/control-samples/withdrawal": "Withdrawal / Requisition",
-  "/stability/control-samples/locations": "Location & Boxes",
+  "/stability/control-samples/locations": "Where samples are stored",
   "/stability/control-samples/destruction-due": "Destruction Due",
   "/stability/control-samples/destruction/new": "Destruction",
   "/stability/control-samples/destruction-log": "Destruction Log",
-  "/stability/control-samples/products": "Control Sample Product Master",
-  "/stability/control-samples/batches": "Control Sample Batch Master",
+  "/stability/control-samples/products": "Controlled Sample Product Master",
+  "/stability/control-samples/batches": "Controlled Sample Batch Master",
   "/stability/control-samples/quantity-master": "Quantity Master",
-  "/stability/control-samples/transactions": "Control Sample Transactions",
-  "/stability/control-samples/reports": "Control Sample Reports",
+  "/stability/control-samples/transactions": "Controlled Sample Transactions",
+  "/stability/control-samples/reports": "Controlled Sample Reports",
 };
 
 function resolveTitle(pathname: string) {
@@ -65,7 +65,7 @@ function resolveTitle(pathname: string) {
   if (pathname.startsWith("/stability/inventory/")) return "Sample Details";
   if (pathname.startsWith("/stability/withdrawals/")) return "Withdrawal Details";
   const moduleId = resolveAppModule(pathname);
-  if (moduleId === "control-samples") return "Control Samples";
+  if (moduleId === "control-samples") return "Controlled Sample";
   if (moduleId === "admin") return "Admin";
   return "Stability Inventory";
 }
@@ -95,7 +95,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const isHome = currentModule === "home";
   const moduleLabel =
     currentModule === "control-samples"
-      ? "Control Samples"
+      ? "Controlled Sample"
       : currentModule === "admin"
         ? "Admin"
         : "Stability Inventory";

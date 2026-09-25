@@ -28,8 +28,8 @@ export default function ControlTransactionsPage() {
   return (
     <div>
       <PageHeader
-        title="Control Sample Transactions"
-        description="Append-only ledger for control samples. These records are not mixed with stability inventory transactions and cannot be edited from this screen."
+        title="Controlled Sample Transactions"
+        description="Append-only ledger for controlled samples. These records are not mixed with stability inventory transactions and cannot be edited from this screen."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void rows.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
@@ -52,7 +52,7 @@ export default function ControlTransactionsPage() {
           page={page}
           onPage={setPage}
           rowKey={(r) => String(r.id)}
-          empty={<EmptyState title="No control sample transactions" />}
+          empty={<EmptyState title="No controlled sample transactions" />}
           columns={[
             { key: "id", header: "Transaction ID" },
             { key: "when", header: "Date/Time" },

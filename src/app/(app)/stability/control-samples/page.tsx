@@ -24,8 +24,8 @@ export default function ControlSampleDashboardPage() {
   const stats = useMemo(() => {
     if (!data) return [];
     return [
-      { title: "Total Control Samples", value: data.total, icon: Shield, tone: "teal" as const },
-      { title: "Available Control Samples", value: data.available, icon: Boxes, tone: "emerald" as const },
+      { title: "Total Controlled Samples", value: data.total, icon: Shield, tone: "teal" as const },
+      { title: "Available Controlled Samples", value: data.available, icon: Boxes, tone: "emerald" as const },
       { title: "Samples Under Periodic Observation", value: data.observationDue, icon: ClipboardCheck, tone: "blue" as const },
       { title: "Samples Requiring Attention", value: data.requiringAttention, icon: AlertTriangle, tone: "amber" as const },
       { title: "Withdrawal Requests", value: data.withdrawalRequests, icon: PackageMinus, tone: "indigo" as const },
@@ -38,8 +38,8 @@ export default function ControlSampleDashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Control Samples"
-        description="Control samples are separate from stability pull-point inventory. No accelerated, intermediate, or long-term schedules are created here."
+        title="Controlled Sample"
+        description="Controlled samples are separate from stability pull-point inventory. No accelerated, intermediate, or long-term schedules are created here."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void dash.reload()}>
@@ -161,7 +161,7 @@ export default function ControlSampleDashboardPage() {
             <Card>
               <CardHeader title="Recent Activity" action={<Link className="text-sm text-teal-700" href="/stability/control-samples/transactions">Ledger</Link>} />
               {!data.recentActivity.length ? (
-                <EmptyState title="No control sample transactions" description="Control sample quantity changes are recorded in a separate ledger from stability inventory." />
+                <EmptyState title="No controlled sample transactions" description="Controlled sample quantity changes are recorded in a separate ledger from stability inventory." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">

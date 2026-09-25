@@ -8,7 +8,7 @@ import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { formatDate, friendlyError } from "@/lib/utils";
+import { formatFullDate, friendlyError } from "@/lib/utils";
 import {
   approveRequisition,
   createRequisition,
@@ -32,7 +32,8 @@ export default function WithdrawalPage() {
   const [reason, setReason] = useState("");
   const [issuedTo, setIssuedTo] = useState("");
   const [issueQty, setIssueQty] = useState("");
-  const [actionId, setActionId] = useState("");
+  const [issueId, setIssueId] = useState("");
+  const [returnId, setReturnId] = useState("");
   const [returnQty, setReturnQty] = useState("");
   const [returnedBy, setReturnedBy] = useState("");
   const [condition, setCondition] = useState("");
@@ -44,6 +45,9 @@ export default function WithdrawalPage() {
 
   async function create() {
     if (!profile || !can || !sampleId) return;
+    if (!dept.trim()) return toast.error("From department is required.");
+    if (!Number.isFinite(Number(qty)) || Number(qty) <= 0) return toast.error("Quantity required must be greater than zero.");
+    if (!reason.trim()) return toast.error("Reason for withdrawal is required.");
     setSaving(true);
     try {
       await createRequisition({
@@ -79,10 +83,12 @@ export default function WithdrawalPage() {
   }
 
   async function issue() {
-    if (!profile || !can || !actionId) return;
+    if (!profile || !can || !issueId) return;
+    if (!issuedTo.trim()) return toast.error("Issued to is required.");
+    if (!Number.isFinite(Number(issueQty)) || Number(issueQty) <= 0) return toast.error("Issue quantity must be greater than zero.");
     setSaving(true);
     try {
-      await issueApprovedRequisition(actionId, { quantity: Number(issueQty), issuedTo, user: profile });
+      await issueApprovedRequisition(issueId, { quantity: Number(issueQty), issuedTo, user: profile });
       toast.success("CONTROL_SAMPLE_ISSUED recorded.");
       await catalog.reload();
     } catch (err) {
@@ -93,10 +99,12 @@ export default function WithdrawalPage() {
   }
 
   async function ret() {
-    if (!profile || !can || !actionId) return;
+    if (!profile || !can || !returnId) return;
+    if (!returnedBy.trim()) return toast.error("Returned by is required.");
+    if (!Number.isFinite(Number(returnQty)) || Number(returnQty) <= 0) return toast.error("Return quantity must be greater than zero.");
     setSaving(true);
     try {
-      await returnRequisition(actionId, { quantity: Number(returnQty), returnedBy, condition, user: profile });
+      await returnRequisition(returnId, { quantity: Number(returnQty), returnedBy, condition, user: profile });
       toast.success("CONTROL_SAMPLE_RETURNED recorded.");
       await catalog.reload();
     } catch (err) {
@@ -109,17 +117,18 @@ export default function WithdrawalPage() {
   return (
     <div>
       <PageHeader
-        title="Requisition for Withdrawal of Control Sample"
+        title="Requisition for Withdrawal of Controlled Sample"
         description="Annexure-V — QA Manager approval is required before issue. Quantity cannot exceed available stock."
         actions={<Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
       />
       {catalog.loading ? <LoadingSkeleton rows={6} /> : null}
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
       {printRow ? (
-        <PrintDocument title="Requisition for Withdrawal of Control Sample" documentNumber={printRow.requisitionNumber}>
+        <div className="mb-6">
+        <PrintDocument title="Requisition for Withdrawal of Controlled Sample" documentNumber={printRow.requisitionNumber}>
           <PrintFieldGrid rows={[
             { label: "Requisition Number", value: printRow.requisitionNumber },
-            { label: "Date", value: formatDate(printRow.date) },
+            { label: "Date", value: formatFullDate(printRow.date) },
             { label: "From Department", value: printRow.fromDepartment },
             { label: "Product", value: printRow.productName },
             { label: "Batch No.", value: printRow.batchNumber },
@@ -134,12 +143,14 @@ export default function WithdrawalPage() {
             { label: "Remarks", value: printRow.remarks },
           ]} />
         </PrintDocument>
+        <Button className="mt-3 print:hidden" variant="outline" onClick={() => setPrintId("")}>Close print preview</Button>
+        </div>
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="New requisition" />
           <div className="grid gap-3 p-4">
-            <Select label="Control sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
+            <Select label="Controlled sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
               {(catalog.data?.samples || []).filter((s) => (s.availableQuantity || 0) > 0).map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} ({s.availableQuantity} {s.unit})</option>
@@ -152,17 +163,23 @@ export default function WithdrawalPage() {
           </div>
         </Card>
         <Card>
-          <CardHeader title="Issue / return" />
+          <CardHeader title="Issue" />
           <div className="grid gap-3 p-4">
-            <Select label="Requisition" value={actionId} onChange={(e) => setActionId(e.target.value)} disabled={!can}>
+            <Select label="Approved requisition" value={issueId} onChange={(e) => setIssueId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
-              {(catalog.data?.rows || []).map((r) => (
-                <option key={r.id} value={r.id}>{r.requisitionNumber} — {r.status}</option>
+              {(catalog.data?.rows || []).filter((r) => r.status === "Approved" && (r.quantityIssued || 0) < (r.quantityRequired || 0)).map((r) => (
+                <option key={r.id} value={r.id}>{r.requisitionNumber} — {(r.quantityRequired || 0) - (r.quantityIssued || 0)} remaining</option>
               ))}
             </Select>
             <Input label="Issued to" value={issuedTo} onChange={(e) => setIssuedTo(e.target.value)} disabled={!can} />
             <Input label="Quantity issued" type="number" value={issueQty} onChange={(e) => setIssueQty(e.target.value)} disabled={!can} />
             {can ? <Button onClick={() => void issue()} loading={saving}>Issue</Button> : null}
+            <Select label="Issued requisition to return" value={returnId} onChange={(e) => setReturnId(e.target.value)} disabled={!can}>
+              <option value="">Select</option>
+              {(catalog.data?.rows || []).filter((r) => ["Approved", "Issued", "Partially Returned"].includes(r.status) && (r.quantityIssued || 0) > (r.quantityReturned || 0)).map((r) => (
+                <option key={r.id} value={r.id}>{r.requisitionNumber} — {(r.quantityIssued || 0) - (r.quantityReturned || 0)} outstanding</option>
+              ))}
+            </Select>
             <Input label="Returned by" value={returnedBy} onChange={(e) => setReturnedBy(e.target.value)} disabled={!can} />
             <Input label="Return quantity" type="number" value={returnQty} onChange={(e) => setReturnQty(e.target.value)} disabled={!can} />
             <Input label="Condition on return" value={condition} onChange={(e) => setCondition(e.target.value)} disabled={!can} />

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, PackagePlus, RefreshCw } from "lucide-react";
 import {
@@ -30,7 +30,7 @@ import {
 } from "@/components/stability/charge-form-logic";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { addMonthsToDate, formatDate, friendlyError, todayISO } from "@/lib/utils";
+import { addMonthsToDate, formatDate, formatFullDate, friendlyError, todayISO } from "@/lib/utils";
 import { isChargingBeyondWindow, splitOrientation, DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { createStudyAndCharge } from "@/services/inventory";
 import { listSampleReceipts } from "@/services/receipts";
@@ -87,8 +87,7 @@ function SampleChargingPageInner() {
   const [appliedReceiptId, setAppliedReceiptId] = useState("");
 
   const receipt = (masters.data?.receipts || []).find((r) => r.id === receiptFromUrl) || null;
-  useEffect(() => {
-    if (!receipt || appliedReceiptId === receipt.id) return;
+  if (receipt && appliedReceiptId !== receipt.id) {
     setAppliedReceiptId(receipt.id);
     if (receipt.status === "COA Received - Ready for Charging") {
       setForm((prev) => ({
@@ -102,7 +101,7 @@ function SampleChargingPageInner() {
         unit: receipt.unit,
       }));
     }
-  }, [receipt, appliedReceiptId]);
+  }
   const receiptNotReady = Boolean(receipt && receipt.status !== "COA Received - Ready for Charging");
 
   const activeProducts = useMemo(
@@ -630,7 +629,7 @@ function SampleChargingPageInner() {
                     Charging beyond {chargingWindowDays} days of batch release
                   </p>
                   <p className="mt-1">
-                    Release date {selectedBatch?.releaseDate || "not recorded"}.
+                    Release date {selectedBatch?.releaseDate ? formatFullDate(selectedBatch.releaseDate) : "not recorded"}.
                     {requireLateChargingReason
                       ? " A reason is required before charging."
                       : " Record a reason if this needs explanation."}

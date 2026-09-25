@@ -41,10 +41,10 @@ type ReportKey =
   | "holds";
 
 const REPORTS: { key: ReportKey; title: string }[] = [
-  { key: "register", title: "Control Sample Register" },
+  { key: "register", title: "Controlled Sample Register" },
   { key: "daily-collection", title: "Daily Collection Report" },
-  { key: "product-wise", title: "Product-wise Control Sample Report" },
-  { key: "batch-wise", title: "Batch-wise Control Sample Report" },
+  { key: "product-wise", title: "Product-wise Controlled Sample Report" },
+  { key: "batch-wise", title: "Batch-wise Controlled Sample Report" },
   { key: "location-wise", title: "Location-wise Report" },
   { key: "rack-wise", title: "Rack-wise Report" },
   { key: "box-wise", title: "Box-wise Report" },
@@ -54,8 +54,8 @@ const REPORTS: { key: ReportKey; title: string }[] = [
   { key: "destruction-due", title: "Destruction Due Report" },
   { key: "destruction", title: "Destruction Report" },
   { key: "destruction-log", title: "Destruction Log" },
-  { key: "transactions", title: "Control Sample Transaction Report" },
-  { key: "holds", title: "Control Sample Hold Report" },
+  { key: "transactions", title: "Controlled Sample Transaction Report" },
+  { key: "holds", title: "Controlled Sample Hold Report" },
 ];
 
 export default function ControlSampleReportsPage() {
@@ -177,8 +177,8 @@ export default function ControlSampleReportsPage() {
   return (
     <div>
       <PageHeader
-        title="Control Sample Reports"
-        description="Print, CSV, and Excel export for control sample records. These reports do not mix stability pull-point inventory."
+        title="Controlled Sample Reports"
+        description="Print, CSV, and Excel export for controlled sample records. These reports do not mix stability pull-point inventory."
         actions={<Button variant="outline" onClick={() => void data.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>}
       />
       {data.loading ? <LoadingSkeleton rows={8} /> : null}

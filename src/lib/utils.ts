@@ -52,7 +52,7 @@ export function formatDate(value?: string | Date | null, pattern = "MM/yyyy") {
   return format(date, pattern);
 }
 
-/** Control Sample Collection date — the only date that keeps the day. */
+/** Controlled Sample Collection date — the only date that keeps the day. */
 export function formatFullDate(value?: string | Date | null) {
   return formatDate(value, "dd/MM/yyyy");
 }

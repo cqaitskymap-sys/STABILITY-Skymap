@@ -260,8 +260,8 @@ export default function ControlSampleCollectionPage() {
   return (
     <div>
       <PageHeader
-        title="Control Sample Collection"
-        description="IPQA collects required quantity product-wise per Annexure-I. Product and batch come from the Control Sample masters, not from stability inventory."
+        title="Controlled Sample Collection"
+        description="IPQA collects required quantity product-wise per Annexure-I. Product and batch come from the Controlled Sample masters, not from stability inventory."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void catalog.reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
@@ -282,8 +282,8 @@ export default function ControlSampleCollectionPage() {
               </Select>
               {!products.length ? (
                 <p className="text-xs text-slate-500">
-                  No control sample products yet. Add them in{" "}
-                  <Link href="/stability/control-samples/products" className="font-medium underline">Control Samples → Products</Link>
+                  No controlled sample products yet. Add them in{" "}
+                  <Link href="/stability/control-samples/products" className="font-medium underline">Controlled Sample → Products</Link>
                   . They are not shared with stability inventory.
                 </p>
               ) : null}
@@ -293,7 +293,7 @@ export default function ControlSampleCollectionPage() {
               </Select>
               {productId && !batches.length ? (
                 <p className="text-xs text-slate-500">
-                  No control sample batches for this product.{" "}
+                  No controlled sample batches for this product.{" "}
                   <Link href="/stability/control-samples/batches" className="font-medium underline">Add a batch</Link>
                 </p>
               ) : null}

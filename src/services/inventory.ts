@@ -386,7 +386,7 @@ export async function createStudyAndCharge(input: {
   invertedPullAllocations?: { code: string; months: number; quantity: number }[];
   user: AppUser;
 }) {
-  if (input.totalQuantity <= 0) throw new Error("Total quantity must be greater than zero.");
+  if (!Number.isFinite(input.totalQuantity) || input.totalQuantity <= 0) throw new Error("Total quantity must be greater than zero.");
   if (input.manufacturingDate && input.expiryDate && input.expiryDate < input.manufacturingDate) {
     throw new Error("Expiry date cannot be before manufacturing date.");
   }
@@ -767,7 +767,7 @@ export async function withdrawSample(input: {
   remarks?: string;
   user: AppUser;
 }) {
-  if (input.actualQuantity <= 0) throw new Error("Withdrawn quantity must be greater than zero.");
+  if (!Number.isFinite(input.actualQuantity) || input.actualQuantity <= 0) throw new Error("Withdrawn quantity must be greater than zero.");
 
   const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
   const withdrawalId = await nextSequentialId("WDR");

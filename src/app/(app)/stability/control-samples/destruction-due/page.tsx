@@ -84,7 +84,7 @@ export default function DestructionDuePage() {
   return (
     <div>
       <PageHeader
-        title="List of Control Samples Destruction"
+        title="List of Controlled Samples Destruction"
         description="Annexure-IX — eligible date is expiry plus configured retention (SOP default: one year). Samples under hold cannot be destroyed."
         actions={
           <div className="flex flex-wrap gap-2">
@@ -99,7 +99,8 @@ export default function DestructionDuePage() {
       {catalog.loading ? <LoadingSkeleton rows={6} /> : null}
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
       {print ? (
-        <PrintDocument title="List of Control Samples Destruction" documentNumber="Annexure-IX">
+        <div className="mb-6">
+        <PrintDocument title="List of Controlled Samples Destruction" documentNumber="Annexure-IX">
           <table className="min-w-full text-xs">
             <thead>
               <tr className="border-b">{["Product", "Batch", "Mfg", "Exp", "Qty", "Location", "Eligible", "Hold", "Status"].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr>
@@ -121,6 +122,8 @@ export default function DestructionDuePage() {
             </tbody>
           </table>
         </PrintDocument>
+        <Button className="mt-3 print:hidden" variant="outline" onClick={() => setPrint(false)}>Close print preview</Button>
+        </div>
       ) : null}
       <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
@@ -166,7 +169,7 @@ export default function DestructionDuePage() {
         <Card>
           <CardHeader title="Destruction hold" description="Legal enquiry, market complaint, regulatory sample, or uncleared matter." />
           <div className="grid gap-3 p-4">
-            <Select label="Control sample" value={holdSample} onChange={(e) => setHoldSample(e.target.value)} disabled={!can}>
+            <Select label="Controlled sample" value={holdSample} onChange={(e) => setHoldSample(e.target.value)} disabled={!can}>
               <option value="">Select</option>
               {(catalog.data?.samples || []).filter((s) => s.status !== "Destroyed").map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName}</option>

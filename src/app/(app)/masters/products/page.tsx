@@ -9,7 +9,7 @@ export default function ProductsPage() {
   return (
     <MasterPage<Product>
       title="Product Master"
-      description="Maintain products used only for stability studies, charging, and inventory. Control samples have a separate product master."
+      description="Maintain products used only for stability studies, charging, and inventory. Controlled samples have a separate product master."
       collectionName={COLLECTIONS.products}
       recordType="product"
       loader={listProducts}

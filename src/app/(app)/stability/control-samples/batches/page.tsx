@@ -18,10 +18,10 @@ export default function ControlSampleBatchesPage() {
   if (!activeProducts.length) {
     return (
       <EmptyState
-        title="Add a control sample product first"
-        description="Control sample batches belong to a control sample product. They are not linked to stability inventory products."
+        title="Add a controlled sample product first"
+        description="Controlled sample batches belong to a controlled sample product. They are not linked to stability inventory products."
         action={
-          <Button href="/stability/control-samples/products">Go to Control Sample Products</Button>
+          <Button href="/stability/control-samples/products">Go to Controlled Sample Products</Button>
         }
       />
     );
@@ -29,8 +29,8 @@ export default function ControlSampleBatchesPage() {
 
   return (
     <MasterPage<Batch>
-      title="Control Sample Batch Master"
-      description="Batches used only for control sample collection. These are not shared with stability inventory."
+      title="Controlled Sample Batch Master"
+      description="Batches used only for controlled sample collection. These are not shared with stability inventory."
       collectionName={COLLECTIONS.controlSampleBatches}
       recordType="controlSampleBatch"
       managePermission={["control.perform", "masters.manage"]}
@@ -46,7 +46,7 @@ export default function ControlSampleBatchesPage() {
         { key: "batchNumber", label: "Batch Number", required: true },
         { key: "manufacturingDate", label: "Manufacturing Date", type: "date", required: true },
         { key: "expiryDate", label: "Expiry Date", type: "date", required: true, monthBound: "end" },
-        { key: "releaseDate", label: "Release Date", type: "date" },
+        { key: "releaseDate", label: "Release Date", type: "date", fullDate: true },
         { key: "batchSize", label: "Batch Size" },
         {
           key: "status",

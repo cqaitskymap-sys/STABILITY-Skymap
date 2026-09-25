@@ -30,7 +30,7 @@ export default function BatchesPage() {
   return (
     <MasterPage<Batch>
       title="Batch Master"
-      description="Maintain product batches used only for stability study charging. Control samples have a separate batch master."
+      description="Maintain product batches used only for stability study charging. Controlled samples have a separate batch master."
       collectionName={COLLECTIONS.batches}
       recordType="batch"
       loader={listBatches}
@@ -45,7 +45,7 @@ export default function BatchesPage() {
         { key: "batchNumber", label: "Batch Number", required: true },
         { key: "manufacturingDate", label: "Manufacturing Date", type: "date", required: true },
         { key: "expiryDate", label: "Expiry Date", type: "date", required: true, monthBound: "end" },
-        { key: "releaseDate", label: "Release Date", type: "date" },
+        { key: "releaseDate", label: "Release Date", type: "date", fullDate: true },
         { key: "batchSize", label: "Batch Size" },
         {
           key: "status",

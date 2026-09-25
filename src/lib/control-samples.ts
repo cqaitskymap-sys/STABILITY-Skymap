@@ -5,10 +5,10 @@ import type { ControlSample, OrganizationSettings } from "@/types";
 
 /**
  * SOP annexure mapping (developer/admin reference):
- * Annexure-I   → Control Sample Quantity Master
+ * Annexure-I   → Controlled Sample Quantity Master
  * Annexure-II  → Daily Collection Record
- * Annexure-III → Control Sample Stamp
- * Annexure-IV  → Control Sample Log Book
+ * Annexure-III → Controlled Sample Stamp
+ * Annexure-IV  → Controlled Sample Log Book
  * Annexure-V   → Withdrawal / Requisition
  * Annexure-VI  → Destruction Note + Verification
  * Annexure-VII → Destruction Log Book
@@ -16,14 +16,14 @@ import type { ControlSample, OrganizationSettings } from "@/types";
  * Annexure-IX  → Destruction Due List
  */
 export const CONTROL_SAMPLE_ANNEXURES = [
-  { annexure: "Annexure-I", feature: "Control Sample Quantity Master", href: "/stability/control-samples/quantity-master" },
+  { annexure: "Annexure-I", feature: "Controlled Sample Quantity Master", href: "/stability/control-samples/quantity-master" },
       { annexure: "Annexure-II", feature: "Daily Collection Record", href: "/stability/control-samples/daily-collection" },
-  { annexure: "Annexure-III", feature: "Control Sample Stamp", href: "/stability/control-samples/register" },
-  { annexure: "Annexure-IV", feature: "Control Sample Log Book", href: "/stability/control-samples/register" },
+  { annexure: "Annexure-III", feature: "Controlled Sample Stamp", href: "/stability/control-samples/register" },
+  { annexure: "Annexure-IV", feature: "Controlled Sample Log Book", href: "/stability/control-samples/register" },
   { annexure: "Annexure-V", feature: "Withdrawal / Requisition", href: "/stability/control-samples/withdrawal" },
   { annexure: "Annexure-VI", feature: "Destruction Note + Verification", href: "/stability/control-samples/destruction/new" },
   { annexure: "Annexure-VII", feature: "Destruction Log Book", href: "/stability/control-samples/destruction-log" },
-  { annexure: "Annexure-VIII", feature: "Location & Box Management", href: "/stability/control-samples/locations" },
+  { annexure: "Annexure-VIII", feature: "Storage — racks and boxes", href: "/stability/control-samples/locations" },
   { annexure: "Annexure-IX", feature: "Destruction Due List", href: "/stability/control-samples/destruction-due" },
 ] as const;
 

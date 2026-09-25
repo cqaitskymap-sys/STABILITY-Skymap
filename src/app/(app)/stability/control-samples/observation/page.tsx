@@ -62,7 +62,7 @@ export default function ObservationPage() {
 
   async function save() {
     if (!profile || !can || !sampleId) {
-      toast.error("Select a control sample.");
+      toast.error("Select a controlled sample.");
       return;
     }
     setSaving(true);
@@ -140,7 +140,7 @@ export default function ObservationPage() {
         <Card>
           <CardHeader title="Record observation" />
           <div className="grid gap-3 p-4">
-            <Select label="Control sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
+            <Select label="Controlled sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
               {(catalog.data?.samples || []).filter((s) => s.status !== "Destroyed").map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} / {s.batchNumber}</option>
@@ -216,7 +216,7 @@ export default function ObservationPage() {
             empty={<EmptyState title="No observations recorded" />}
             columns={[
               { key: "id", header: "Observation ID" },
-              { key: "sample", header: "Control Sample" },
+              { key: "sample", header: "Controlled Sample" },
               { key: "product", header: "Product" },
               { key: "date", header: "Date" },
               { key: "observer", header: "Observer" },

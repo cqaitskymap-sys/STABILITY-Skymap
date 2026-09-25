@@ -8,8 +8,8 @@ import type { Product } from "@/types";
 export default function ControlSampleProductsPage() {
   return (
     <MasterPage<Product>
-      title="Control Sample Product Master"
-      description="Products used only for control sample collection, register, and quantity master. These are not shared with stability inventory."
+      title="Controlled Sample Product Master"
+      description="Products used only for controlled sample collection, register, and quantity master. These are not shared with stability inventory."
       collectionName={COLLECTIONS.controlSampleProducts}
       recordType="controlSampleProduct"
       managePermission={["control.perform", "masters.manage"]}

@@ -83,13 +83,13 @@ export default function OrganizationSettingsPage() {
             <input type="checkbox" checked={data.simulationEnabled} onChange={(e) => set("simulationEnabled", e.target.checked)} disabled={!can} />
             Allow separated simulation/test data
           </label>
-          <Input label="Control sample destruction months after expiry" type="number" value={String(data.controlDestructionMonthsAfterExpiry)} onChange={(e) => set("controlDestructionMonthsAfterExpiry", Number(e.target.value) || 0)} disabled={!can} hint="SOP default is 12 months (one year after expiry)." />
-          <Input label="Control sample observation interval (months)" type="number" value={String(data.controlObservationIntervalMonths)} onChange={(e) => set("controlObservationIntervalMonths", Number(e.target.value) || 0)} disabled={!can} />
+          <Input label="Controlled sample destruction months after expiry" type="number" value={String(data.controlDestructionMonthsAfterExpiry)} onChange={(e) => set("controlDestructionMonthsAfterExpiry", Number(e.target.value) || 0)} disabled={!can} hint="SOP default is 12 months (one year after expiry)." />
+          <Input label="Controlled sample observation interval (months)" type="number" value={String(data.controlObservationIntervalMonths)} onChange={(e) => set("controlObservationIntervalMonths", Number(e.target.value) || 0)} disabled={!can} />
           <Input label="Observation window after expiry (months)" type="number" value={String(data.controlObservationAfterExpiryMonths)} onChange={(e) => set("controlObservationAfterExpiryMonths", Number(e.target.value) || 0)} disabled={!can} />
           <Input label="Conversion batch default quantity" type="number" value={String(data.controlConversionBatchQuantity)} onChange={(e) => set("controlConversionBatchQuantity", Number(e.target.value) || 0)} disabled={!can} hint="SOP example is 1 shrink pack or 1 pack. Override per product in Quantity Master." />
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={data.controlRequireWithdrawalApproval} onChange={(e) => set("controlRequireWithdrawalApproval", e.target.checked)} disabled={!can} />
-            Require QA Manager approval before control sample issue
+            Require QA Manager approval before controlled sample issue
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={data.controlAllowDuplicateBoxOccupancy} onChange={(e) => set("controlAllowDuplicateBoxOccupancy", e.target.checked)} disabled={!can} />

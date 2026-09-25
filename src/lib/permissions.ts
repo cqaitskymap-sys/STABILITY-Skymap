@@ -67,12 +67,12 @@ export const MODULE_ACCESS: {
   },
   {
     permission: "control.collect",
-    label: "Control Sample Collection (IPQA)",
-    description: "Collect control samples, maintain the daily collection register, and submit collection records",
+    label: "Controlled Sample Collection (IPQA)",
+    description: "Collect controlled samples, maintain the daily collection register, and submit collection records",
   },
   {
     permission: "control.perform",
-    label: "Control Samples (QA)",
+    label: "Controlled Sample (QA)",
     description: "Receive, verify, store, observe, withdraw, review/finalize daily collection records, and prepare destruction",
   },
   {

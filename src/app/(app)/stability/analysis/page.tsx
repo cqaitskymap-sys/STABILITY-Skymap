@@ -80,6 +80,7 @@ export default function AnalysisRequestsPage() {
               ]}
             />
           </PrintDocument>
+          <Button className="mt-3 print:hidden" variant="outline" onClick={() => setPrintId(null)}>Close print preview</Button>
         </div>
       ) : null}
     </div>

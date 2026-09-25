@@ -38,7 +38,7 @@ export async function createSampleReceipt(input: {
   remarks?: string;
   user: AppUser;
 }) {
-  if (input.sampleQuantity <= 0) throw new Error("Sample quantity must be greater than zero.");
+  if (!Number.isFinite(input.sampleQuantity) || input.sampleQuantity <= 0) throw new Error("Sample quantity must be greater than zero.");
   if (input.expiryDate && input.manufacturingDate && input.expiryDate < input.manufacturingDate) {
     throw new Error("Expiry date cannot be before manufacturing date.");
   }
