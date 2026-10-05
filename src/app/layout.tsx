@@ -15,8 +15,8 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "SKYMAP Stability Inventory",
-  description: "Stability Sample Inventory Management for Pharmaceutical QA. Developed by Satyajit Patri from Odisha.",
+  title: "SKYMAP Stability Management System",
+  description: "Stability Management System for Skymap Pharmaceuticals Pvt. Ltd. Developed by Satyajit Patri from Odisha.",
   authors: [{ name: "Satyajit Patri" }],
   creator: "Satyajit Patri",
   icons: {

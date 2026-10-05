@@ -82,10 +82,10 @@ function LoginForm() {
         <section className="hidden flex-1 flex-col justify-end p-12 lg:flex xl:p-16">
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-100 backdrop-blur">
             <FlaskConical className="h-3.5 w-3.5" />
-            Pharmaceutical Quality Assurance
+            Skymap Pharmaceuticals Pvt. Ltd.
           </div>
           <h1 className="mt-6 max-w-lg text-4xl font-semibold leading-[1.1] tracking-tight text-white xl:text-5xl">
-            Stability Sample Inventory
+            Stability Management System
           </h1>
           <p className="mt-5 max-w-md text-sm leading-7 text-slate-200/90">
             Charge samples, track pulls, and keep a complete QA audit trail across every chamber.
@@ -106,8 +106,8 @@ function LoginForm() {
               <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
               <div className="relative flex flex-col items-center text-center">
                 <SkymapLogo priority className="h-16 w-auto max-w-[220px]" />
-                <p className="mt-3 text-sm font-medium text-sky-200">Stability Sample Inventory</p>
-                <p className="mt-1 text-xs text-slate-400">Pharmaceutical Quality Assurance</p>
+                <p className="mt-3 text-sm font-medium text-sky-200">Stability Management System</p>
+                <p className="mt-1 text-xs text-slate-400">Skymap Pharmaceuticals Pvt. Ltd.</p>
               </div>
             </div>
             <form onSubmit={onSubmit} className="space-y-4 px-4 py-5 sm:px-6 sm:py-6">
