@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Sparkles, Send, Square, X, Bot } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
@@ -16,16 +17,24 @@ import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { executeSkymapTool } from "@/lib/ai/execute-tool";
+import { getControlContext } from "@/lib/ai/control-context";
 import { getInventoryContext } from "@/lib/ai/inventory-context";
 import { OPEN_AI_EVENT } from "@/lib/ai/events";
 import { TOOL_LABELS } from "@/lib/ai/tools";
 import { getFirebaseAuth } from "@/lib/firebase/config";
 
-const SUGGESTIONS = [
+const STABILITY_SUGGESTIONS = [
   "Add product Paracetamol 500 mg tablet, code PCM-500",
   "Which withdrawals are overdue or due today?",
   "Summarize chamber utilization risks",
   "Explain active QA alerts",
+];
+
+const CONTROL_SUGGESTIONS = [
+  "Which controlled samples are due for observation?",
+  "Which controlled samples are due for destruction?",
+  "Add controlled sample product Paracetamol 500 mg tablet",
+  "Show open withdrawal requisitions",
 ];
 
 function messageText(message: UIMessage) {
@@ -91,6 +100,9 @@ function ToolChip({ part }: { part: UIMessage["parts"][number] }) {
 
 export function AssistantPanel() {
   const { profile, hasPermission } = useAuth();
+  const pathname = usePathname();
+  const controlModule = pathname.startsWith("/stability/control-samples");
+  const suggestions = controlModule ? CONTROL_SUGGESTIONS : STABILITY_SUGGESTIONS;
   const profileRef = useRef(profile);
   const hasPermissionRef = useRef(hasPermission);
 
@@ -110,14 +122,15 @@ export function AssistantPanel() {
         prepareSendMessagesRequest: async ({ id, messages, api, headers }) => {
           const token = await getFirebaseAuth().currentUser?.getIdToken();
           if (!token) throw new Error("Sign in required.");
-          const context = await getInventoryContext();
+          const onControl = window.location.pathname.startsWith("/stability/control-samples");
+          const context = onControl ? await getControlContext() : await getInventoryContext();
           return {
             api,
             headers: {
               ...(headers as Record<string, string> | undefined),
               Authorization: `Bearer ${token}`,
             },
-            body: { id, messages, context },
+            body: { id, messages, context, module: onControl ? "control-samples" : "stability" },
           };
         },
       }),
@@ -223,7 +236,9 @@ export function AssistantPanel() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">SkyMap QA Assistant</p>
                   <p className="mt-3 hidden text-[11px] text-slate-300 sm:block">
-                    Can add products, charge, withdraw, and answer from live data
+                    {controlModule
+                      ? "Can collect, store, observe, and answer from live controlled samples"
+                      : "Can add products, charge, withdraw, and answer from live data"}
                   </p>
                 </div>
               </div>
@@ -240,8 +255,9 @@ export function AssistantPanel() {
             <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {!messages.length ? (
                 <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-4 text-sm text-teal-950">
-                  Ask me to add a product, create a batch, charge a study, or withdraw samples — I will do it with your
-                  permissions. I can also explain overdue pulls, chambers, and alerts.
+                  {controlModule
+                    ? "Ask me about observation due, destruction due, or to add a controlled sample product, collect a batch, store a sample, or record an observation. I use your Controlled Sample permissions."
+                    : "Ask me to add a product, create a batch, charge a study, or withdraw samples — I will do it with your permissions. I can also explain overdue pulls, chambers, and alerts."}
                 </div>
               ) : null}
 
@@ -289,7 +305,7 @@ export function AssistantPanel() {
 
               {!messages.length ? (
                 <div className="flex flex-wrap gap-2">
-                  {SUGGESTIONS.map((item) => (
+                  {suggestions.map((item) => (
                     <button
                       key={item}
                       type="button"
@@ -316,7 +332,11 @@ export function AssistantPanel() {
                     }
                   }}
                   rows={2}
-                  placeholder="e.g. Add product Paracetamol 500 mg tablet…"
+                  placeholder={
+                    controlModule
+                      ? "e.g. Which controlled samples are due for observation?"
+                      : "e.g. Add product Paracetamol 500 mg tablet…"
+                  }
                   className="min-h-12 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
                 />
                 {busy ? (

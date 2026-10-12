@@ -8,7 +8,9 @@ import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
+import { controlOrg } from "@/lib/control-samples";
 import { formatFullDate, friendlyError } from "@/lib/utils";
+import { getOrganizationSettings } from "@/services/organization";
 import {
   approveRequisition,
   createRequisition,
@@ -23,8 +25,12 @@ export default function WithdrawalPage() {
   const can = hasPermission("control.perform");
   const canApprove = hasPermission("approve.records");
   const catalog = useAsync(async () => {
-    const [samples, rows] = await Promise.all([listControlSamples(), listRequisitions()]);
-    return { samples, rows };
+    const [samples, rows, settings] = await Promise.all([
+      listControlSamples(),
+      listRequisitions(),
+      getOrganizationSettings().catch(() => null),
+    ]);
+    return { samples, rows, requireApproval: controlOrg(settings).controlRequireWithdrawalApproval };
   }, []);
   const [sampleId, setSampleId] = useState("");
   const [dept, setDept] = useState("");
@@ -57,7 +63,11 @@ export default function WithdrawalPage() {
         reason,
         user: profile,
       });
-      toast.success("Requisition submitted. Issue is blocked until QA Manager approval.");
+      toast.success(
+        catalog.data?.requireApproval
+          ? "Requisition submitted. Issue is blocked until QA Manager approval."
+          : "Requisition submitted."
+      );
       setQty("");
       setReason("");
       await catalog.reload();
@@ -152,7 +162,7 @@ export default function WithdrawalPage() {
           <div className="grid gap-3 p-4">
             <Select label="Controlled sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
-              {(catalog.data?.samples || []).filter((s) => (s.availableQuantity || 0) > 0).map((s) => (
+              {(catalog.data?.samples || []).filter((s) => (s.availableQuantity || 0) > 0 && !s.destructionHold).map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} ({s.availableQuantity} {s.unit})</option>
               ))}
             </Select>
@@ -167,7 +177,14 @@ export default function WithdrawalPage() {
           <div className="grid gap-3 p-4">
             <Select label="Approved requisition" value={issueId} onChange={(e) => setIssueId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
-              {(catalog.data?.rows || []).filter((r) => r.status === "Approved" && (r.quantityIssued || 0) < (r.quantityRequired || 0)).map((r) => (
+              {(catalog.data?.rows || [])
+                .filter((r) => {
+                  const remaining = (r.quantityRequired || 0) - (r.quantityIssued || 0);
+                  if (remaining <= 0) return false;
+                  if (r.status === "Approved" || r.status === "Partially Returned") return true;
+                  return !catalog.data?.requireApproval && r.status === "Submitted";
+                })
+                .map((r) => (
                 <option key={r.id} value={r.id}>{r.requisitionNumber} — {(r.quantityRequired || 0) - (r.quantityIssued || 0)} remaining</option>
               ))}
             </Select>

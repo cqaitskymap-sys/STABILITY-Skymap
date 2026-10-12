@@ -16,7 +16,7 @@ export default function AuditTrailPage() {
     const term = q.trim().toLowerCase();
     return (logs.data || []).filter((row) =>
       !term ||
-      [row.action, row.module, row.recordType, row.recordId, row.userName, row.reason]
+      [row.action, row.module, row.recordType, row.recordId, row.userName, row.userEmail, row.reason]
         .join(" ")
         .toLowerCase()
         .includes(term)

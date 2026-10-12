@@ -112,11 +112,11 @@ export default function StabilityDashboardPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
                       <div className="rounded-xl bg-slate-50 p-2">
-                        <p className="text-slate-500">Total</p>
+                        <p className="text-slate-500">Total qty</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{row.totalSamples}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-2">
-                        <p className="text-slate-500">Available</p>
+                        <p className="text-slate-500">Available qty</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{row.availableSamples}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-2">

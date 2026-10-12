@@ -94,14 +94,18 @@ export default function StudyTypesPage() {
         if (duplicateCode) return "A study type with this code already exists.";
         return null;
       }}
-      buildPayload={(values, isCreate) => ({
-        name: values.name.trim(),
-        code: values.code.trim(),
-        description: values.description.trim() || undefined,
-        sortOrder: sortOrderForName(values.name.trim()),
-        status: values.status,
-        ...(isCreate ? { defaultPullPointIds: [], workflow: STUDY_TYPE_PRESETS.find((p) => p.name === values.name.trim())?.workflow || "standard-inventory" } : {}),
-      })}
+      buildPayload={(values, isCreate) => {
+        const preset = STUDY_TYPE_PRESETS.find((p) => p.name === values.name.trim());
+        return {
+          name: values.name.trim(),
+          code: values.code.trim(),
+          description: values.description.trim() || undefined,
+          sortOrder: sortOrderForName(values.name.trim()),
+          status: values.status,
+          ...(preset ? { workflow: preset.workflow } : isCreate ? { workflow: "standard-inventory" as const } : {}),
+          ...(isCreate ? { defaultPullPointIds: [] } : {}),
+        };
+      }}
     />
   );
 }

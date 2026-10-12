@@ -31,8 +31,10 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { addMonthsToDate, formatDate, friendlyError, todayISO } from "@/lib/utils";
+import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow } from "@/lib/sop";
 import { peekNextId } from "@/services/ids";
 import { createStudyAndCharge } from "@/services/inventory";
+import { getOrganizationSettings } from "@/services/organization";
 import {
   listBatches,
   listChambers,
@@ -60,7 +62,7 @@ export default function NewStabilityStudyPage() {
   const canCreate = hasPermission("studies.create") || hasPermission("charging.perform");
 
   const masters = useAsync(async () => {
-    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview] =
+    const [products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview, settings] =
       await Promise.all([
         listProducts(),
         listBatches(),
@@ -72,8 +74,9 @@ export default function NewStabilityStudyPage() {
         listUnits(),
         listStudyReasons(),
         peekNextId("STB"),
+        getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS),
       ]);
-    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview };
+    return { products, batches, studyTypes, conditions, pullPoints, chambers, locations, units, reasons, studyIdPreview, settings };
   }, []);
 
   const [step, setStep] = useState(0);
@@ -134,6 +137,13 @@ export default function NewStabilityStudyPage() {
   const selectedCondition = activeConditions.find((c) => c.id === form.storageConditionId);
   const selectedLocation = chamberLocations.find((l) => l.id === form.locationId);
   const activeReasons = (masters.data?.reasons || []).filter((r) => r.status === "Active");
+  const orgSettings = masters.data?.settings ?? DEFAULT_ORG_SETTINGS;
+  const receiptRequired = orgSettings.requireReceiptBeforeCharging;
+  const lateCharging = isChargingBeyondWindow(
+    selectedBatch?.releaseDate,
+    form.chargingDate,
+    orgSettings.chargingWindowDays
+  );
 
   const mastersReady = useMemo(
     () => (masters.data ? getMissingChargeMasters(masters.data) : null),
@@ -161,8 +171,8 @@ export default function NewStabilityStudyPage() {
     if (current === 1) {
       if (!form.storageConditionId) next.storageConditionId = "Storage condition is required.";
       if (!form.chamberId) next.chamberId = "Chamber is required.";
-      if (selectedChamber?.status === "Inactive") {
-        next.chamber = "Cannot allocate samples to an inactive chamber.";
+      if (selectedChamber?.status === "Inactive" || selectedChamber?.status === "Out of Service") {
+        next.chamber = "Cannot allocate samples to an inactive or out-of-service chamber.";
       }
     }
     if (current === 2) {
@@ -206,6 +216,14 @@ export default function NewStabilityStudyPage() {
 
   async function onConfirm() {
     if (!profile || !masters.data) return;
+    if (receiptRequired) {
+      toast.error("Sample must be received and COA-cleared before charging. Use Sample Charging.");
+      return;
+    }
+    if (lateCharging && orgSettings.requireLateChargingReason && !form.lateChargingReason.trim()) {
+      toast.error(`Charging beyond ${orgSettings.chargingWindowDays} days of batch release requires a reason.`);
+      return;
+    }
     if (!validateStep(5)) return;
     setSubmitting(true);
     try {
@@ -239,6 +257,16 @@ export default function NewStabilityStudyPage() {
       {!canCreate ? (
         <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Your role can view this screen but cannot create studies.
+        </Card>
+      ) : null}
+
+      {receiptRequired ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          This plant requires a COA-cleared inward record before charging.{" "}
+          <Link href="/stability/inventory/charging" className="font-medium underline">
+            Open Sample Charging
+          </Link>
+          .
         </Card>
       ) : null}
 
@@ -366,10 +394,17 @@ export default function NewStabilityStudyPage() {
                 <Input
                   label="Date of Charging"
                   type="date"
+                  fullDate
                   required
                   value={form.chargingDate}
                   error={errors.chargingDate}
-                  onChange={(e) => updateField("chargingDate", e.target.value)}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      chargingDate: e.target.value,
+                      incubationDate: e.target.value,
+                    }))
+                  }
                 />
                 <Select
                   label="Study Type"
@@ -432,7 +467,7 @@ export default function NewStabilityStudyPage() {
                 >
                   <option value="">Select chamber</option>
                   {(masters.data.chambers || []).map((c) => (
-                    <option key={c.id} value={c.id} disabled={c.status === "Inactive"}>
+                    <option key={c.id} value={c.id} disabled={c.status === "Inactive" || c.status === "Out of Service"}>
                       {c.chamberName} ({c.status})
                     </option>
                   ))}
@@ -444,10 +479,10 @@ export default function NewStabilityStudyPage() {
                   Chamber is Under Maintenance.
                 </div>
               ) : null}
-              {selectedChamber?.status === "Inactive" ? (
+              {selectedChamber?.status === "Inactive" || selectedChamber?.status === "Out of Service" ? (
                 <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Inactive chambers are blocked.
+                  Inactive and out-of-service chambers are blocked.
                 </div>
               ) : null}
             </Card>
@@ -531,8 +566,8 @@ export default function NewStabilityStudyPage() {
                           </td>
                           <td className="px-4 py-3">{p.months}M</td>
                           <td className="px-4 py-3">
-                            {form.chargingDate
-                              ? formatDate(addMonthsToDate(form.chargingDate, p.months))
+                            {form.incubationDate || form.chargingDate
+                              ? formatDate(addMonthsToDate(form.incubationDate || form.chargingDate, p.months))
                               : "—"}
                           </td>
                           <td className="px-4 py-3">
@@ -562,7 +597,9 @@ export default function NewStabilityStudyPage() {
                       <p className="font-semibold text-slate-900">{p.code}</p>
                       <p className="text-sm text-slate-500">
                         {p.label} · {p.months}M
-                        {form.chargingDate ? ` · ${formatDate(addMonthsToDate(form.chargingDate, p.months))}` : ""}
+                        {form.incubationDate || form.chargingDate
+                          ? ` · ${formatDate(addMonthsToDate(form.incubationDate || form.chargingDate, p.months))}`
+                          : ""}
                       </p>
                       <div className="mt-3">
                         <Input
@@ -641,6 +678,26 @@ export default function NewStabilityStudyPage() {
                 <ReviewRow label="Pull Required" value={String(totalRequired)} />
                 <ReviewRow label="Notes" value={form.notes || "—"} />
               </div>
+              {lateCharging ? (
+                <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">
+                    Charging beyond {orgSettings.chargingWindowDays} days of batch release
+                  </p>
+                  <p className="mt-1">
+                    {orgSettings.requireLateChargingReason
+                      ? "A reason is required before this study can be charged."
+                      : "Record a reason if this needs explanation."}
+                  </p>
+                  <div className="mt-3">
+                    <Textarea
+                      label="Late charging reason"
+                      required={orgSettings.requireLateChargingReason}
+                      value={form.lateChargingReason}
+                      onChange={(e) => updateField("lateChargingReason", e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <div className="border-t border-slate-100 p-4">
                 <p className="mb-2 text-sm font-medium text-slate-800">Pull allocations</p>
                 <ul className="space-y-1 text-sm text-slate-600">
@@ -649,7 +706,7 @@ export default function NewStabilityStudyPage() {
                     .map((p) => (
                       <li key={p.id}>
                         {p.code}: {form.pullAllocations[p.id]} · due{" "}
-                        {formatDate(addMonthsToDate(form.chargingDate, p.months))}
+                        {formatDate(addMonthsToDate(form.incubationDate || form.chargingDate, p.months))}
                       </li>
                     ))}
                 </ul>
@@ -670,7 +727,7 @@ export default function NewStabilityStudyPage() {
             ) : (
               <Button
                 className="w-full sm:w-auto"
-                disabled={!canCreate}
+                disabled={!canCreate || receiptRequired}
                 onClick={() => {
                   if (!canCreate) {
                     toast.error("You do not have permission to create studies.");
@@ -681,6 +738,16 @@ export default function NewStabilityStudyPage() {
                     return;
                   }
                   if (!validateStep(5)) return;
+                  if (receiptRequired) {
+                    toast.error("Sample must be received and COA-cleared before charging. Use Sample Charging.");
+                    return;
+                  }
+                  if (lateCharging && orgSettings.requireLateChargingReason && !form.lateChargingReason.trim()) {
+                    toast.error(
+                      `Charging beyond ${orgSettings.chargingWindowDays} days of batch release requires a reason.`
+                    );
+                    return;
+                  }
                   setConfirmOpen(true);
                 }}
               >

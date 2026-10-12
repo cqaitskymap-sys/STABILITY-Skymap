@@ -399,7 +399,17 @@ export function MasterPage<T extends { id: string; status?: string }>({
                                 <Pencil className="h-3.5 w-3.5" />
                                 Edit
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setDeleteId(item.id)}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (item.status === "Inactive") {
+                                    toast.error("This record is already inactive.");
+                                    return;
+                                  }
+                                  setDeleteId(item.id);
+                                }}
+                              >
                                 <Ban className="h-3.5 w-3.5 text-rose-600" />
                               </Button>
                             </div>
@@ -430,7 +440,17 @@ export function MasterPage<T extends { id: string; status?: string }>({
                         <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(item)}>
                           Edit
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setDeleteId(item.id)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (item.status === "Inactive") {
+                              toast.error("This record is already inactive.");
+                              return;
+                            }
+                            setDeleteId(item.id);
+                          }}
+                        >
                           Deactivate
                         </Button>
                       </div>

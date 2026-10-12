@@ -86,19 +86,21 @@ function DisposalPageInner() {
       ? "Select a sample to dispose."
       : selectedSample.availableQuantity <= 0
         ? "No available quantity left to dispose."
-        : !hasQty
-          ? "Enter a valid disposal quantity greater than zero."
-          : qty > available
-            ? `Cannot dispose more than available quantity (${available}).`
-            : !disposalDate
-              ? "Disposal date is required."
-              : !reason
-                ? "Select a disposal reason."
-                : reason === "Other" && !remarks.trim()
-                  ? "Remarks are required when reason is Other."
-                  : !disposedByValue.trim()
-                    ? "Disposed by is required."
-                    : null;
+        : selectedSample.status === "Under Reconciliation"
+          ? "This sample is under reconciliation. Finish the count before disposing."
+          : !hasQty
+            ? "Enter a valid disposal quantity greater than zero."
+            : qty > available
+              ? `Cannot dispose more than available quantity (${available}).`
+              : !disposalDate
+                ? "Disposal date is required."
+                : !reason
+                  ? "Select a disposal reason."
+                  : reason === "Other" && !remarks.trim()
+                    ? "Remarks are required when reason is Other."
+                    : !disposedByValue.trim()
+                      ? "Disposed by is required."
+                      : null;
 
   function resetForm(keepSample = true) {
     if (!keepSample) setSampleOverride("");
@@ -266,6 +268,7 @@ function DisposalPageInner() {
                       <Input
                         label="Disposal Date"
                         type="date"
+                        fullDate
                         required
                         value={disposalDate}
                         onChange={(e) => setDisposalDate(e.target.value)}

@@ -226,6 +226,7 @@ export default function SampleInwardPage() {
                 <Input
                   label="Date Received"
                   type="date"
+                  fullDate
                   required
                   value={dateReceived}
                   onChange={(e) => setDateReceived(e.target.value)}

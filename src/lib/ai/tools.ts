@@ -19,6 +19,15 @@ export const TOOL_LABELS: Record<string, string> = {
   disposeSample: "Disposing sample",
   reconcileSample: "Reconciling inventory",
   acknowledgeAlert: "Acknowledging alert",
+  createControlProduct: "Creating controlled sample product",
+  createControlBatch: "Creating controlled sample batch",
+  collectControlSample: "Collecting controlled sample",
+  advanceControlCollection: "Updating collection",
+  storeControlSample: "Storing controlled sample",
+  recordControlObservation: "Recording observation",
+  createControlRequisition: "Creating withdrawal requisition",
+  setControlQuantity: "Updating quantity master",
+  createControlDestructionNote: "Creating destruction note",
 };
 
 export const skymapTools = {
@@ -40,6 +49,12 @@ export const skymapTools = {
         "samples",
         "duePulls",
         "alerts",
+        "controlSamples",
+        "controlCollections",
+        "controlRequisitions",
+        "controlRacks",
+        "controlBoxes",
+        "controlQuantityMasters",
       ]),
       query: z.string().optional().describe("Optional name, code, batch, or sample id filter."),
     }),
@@ -214,6 +229,118 @@ export const skymapTools = {
     description: "Mark a QA alert as acknowledged.",
     inputSchema: z.object({
       title: z.string().describe("Alert title or unique fragment"),
+    }),
+  }),
+
+  createControlProduct: tool({
+    description:
+      "Create a product in the Controlled Sample product master only. Do not use createProduct for this.",
+    inputSchema: z.object({
+      productName: z.string(),
+      genericName: z.string().optional(),
+      strength: z.string().optional(),
+      dosageForm: z.string().optional(),
+      status: statusSchema,
+    }),
+  }),
+
+  createControlBatch: tool({
+    description: "Create a batch for an existing controlled sample product. Do not use createBatch for this.",
+    inputSchema: z.object({
+      productName: z.string(),
+      batchNumber: z.string(),
+      manufacturingDate: z.string().describe("YYYY-MM or YYYY-MM-DD"),
+      expiryDate: z.string().describe("YYYY-MM or YYYY-MM-DD, valid through month-end"),
+      releaseDate: z.string().optional(),
+      batchSize: z.string().optional(),
+      status: statusSchema,
+    }),
+  }),
+
+  collectControlSample: tool({
+    description:
+      "Record a controlled sample collection (Annexure collection) and mark it Collected. Uses the controlled sample product and batch masters, not stability products.",
+    inputSchema: z.object({
+      productName: z.string(),
+      batchNumber: z.string(),
+      actualQuantity: z.number(),
+      market: z.string(),
+      unit: z.string().optional().describe("Required when the product has no active quantity master."),
+      collectionStage: z.enum(["Initial", "Middle", "End"]).optional(),
+      collectionDate: z.string().optional().describe("YYYY-MM-DD; defaults to today"),
+      physicalAppearanceCheck: z.boolean().optional(),
+      codingDetailsCheck: z.boolean().optional(),
+      remarks: z.string().optional(),
+    }),
+  }),
+
+  advanceControlCollection: tool({
+    description:
+      "Move a controlled sample collection one step: submit to the sample room, QA receive, QA verify (creates the register entry), or record a verification exception.",
+    inputSchema: z.object({
+      collectionId: z.string().describe("Collection id such as CSC-0001"),
+      action: z.enum(["submit", "receive", "verify", "exception"]),
+      discrepancy: z.string().optional().describe("Required for exception"),
+      remarks: z.string().optional().describe("Required for exception"),
+    }),
+  }),
+
+  storeControlSample: tool({
+    description: "Assign a verified controlled sample to a storage area, rack, and box.",
+    inputSchema: z.object({
+      controlSampleId: z.string().describe("CTL id from the register"),
+      storageArea: z.string(),
+      rackNumber: z.string(),
+      boxNumber: z.string(),
+      partitionNumber: z.string().optional(),
+      position: z.string().optional(),
+    }),
+  }),
+
+  recordControlObservation: tool({
+    description: "Record a periodic observation for a controlled sample. Abnormal results are not auto-closed.",
+    inputSchema: z.object({
+      controlSampleId: z.string(),
+      result: z.enum(["OK", "Abnormal Observation"]),
+      productType: z.string().optional().describe("Glass Ampoules, Glass Vials, Dry Powder, or Eye/Ear/Nasal Drops"),
+      discardedQuantity: z.number().optional(),
+      otherObservation: z.string().optional().describe("Required when result is Abnormal Observation"),
+      remarks: z.string().optional(),
+      checklist: z.array(z.object({ parameter: z.string(), result: z.string() })).optional(),
+    }),
+  }),
+
+  createControlRequisition: tool({
+    description:
+      "Submit a controlled sample withdrawal requisition. This does not issue quantity; QA Manager approval is still required.",
+    inputSchema: z.object({
+      controlSampleId: z.string(),
+      fromDepartment: z.string(),
+      quantityRequired: z.number(),
+      reason: z.string(),
+      remarks: z.string().optional(),
+    }),
+  }),
+
+  setControlQuantity: tool({
+    description: "Create a new active quantity-master revision for a controlled sample product.",
+    inputSchema: z.object({
+      productName: z.string(),
+      quantity: z.number(),
+      unit: z.string(),
+      effectiveDate: z.string().optional().describe("YYYY-MM-DD; defaults to today"),
+    }),
+  }),
+
+  createControlDestructionNote: tool({
+    description:
+      "Start a destruction note for an eligible controlled sample. Does not approve, destroy, or verify — those stay on the Destruction screen.",
+    inputSchema: z.object({
+      controlSampleId: z.string(),
+      quantity: z.number(),
+      reason: z.string(),
+      modeOfDestruction: z.string().optional(),
+      remarks: z.string().optional(),
     }),
   }),
 };

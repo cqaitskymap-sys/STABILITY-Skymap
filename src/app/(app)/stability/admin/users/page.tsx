@@ -24,6 +24,7 @@ import {
   type Permission,
 } from "@/lib/permissions";
 import { cn, friendlyError } from "@/lib/utils";
+import { getOrganizationSettings } from "@/services/organization";
 import { deleteManagedUser, listUsers, updateManagedUser } from "@/services/users";
 import type { AppUser, UserRole } from "@/types";
 
@@ -51,6 +52,18 @@ const TABS: { id: AdminTab; label: string; description: string; icon: typeof Use
     icon: KeyRound,
   },
 ];
+
+function userStatusLabel(user: Pick<AppUser, "active" | "accountLocked">) {
+  if (user.active === false) return "Inactive";
+  if (user.accountLocked) return "Locked";
+  return "Active";
+}
+
+function editAccountStatus(active: boolean, locked: boolean) {
+  if (!active) return "inactive";
+  if (locked) return "locked";
+  return "active";
+}
 
 function ModuleAccessPicker({
   selected,
@@ -112,6 +125,13 @@ export default function AdminUsersPage() {
   const loadingUsers = usersState.loading;
   const usersError = usersState.error;
 
+  const org = useAsync(async () => {
+    if (authLoading || !canManage) return null;
+    return getOrganizationSettings();
+  }, [authLoading, canManage]);
+  const passwordMin = Math.max(6, org.data?.passwordMinLength || 8);
+  const passwordMax = Math.max(passwordMin, org.data?.passwordMaxLength || 12);
+
   const [displayName, setDisplayName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
@@ -123,6 +143,7 @@ export default function AdminUsersPage() {
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<UserRole>("QA User");
   const [editActive, setEditActive] = useState(true);
+  const [editLocked, setEditLocked] = useState(false);
   const [editAccess, setEditAccess] = useState<Permission[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -141,6 +162,7 @@ export default function AdminUsersPage() {
       setEditName("");
       setEditRole("QA User");
       setEditActive(true);
+      setEditLocked(false);
       setEditAccess([]);
       return;
     }
@@ -148,11 +170,8 @@ export default function AdminUsersPage() {
     setEditName(u.displayName);
     setEditRole(u.role);
     setEditActive(u.active);
-    setEditAccess(
-      u.moduleAccess && u.moduleAccess.length > 0
-        ? [...u.moduleAccess]
-        : permissionsForRole(u.role)
-    );
+    setEditLocked(Boolean(u.accountLocked));
+    setEditAccess(Array.isArray(u.moduleAccess) ? [...u.moduleAccess] : permissionsForRole(u.role));
   }
 
   async function reloadUsers() {
@@ -219,6 +238,7 @@ export default function AdminUsersPage() {
         displayName: editName,
         role: editRole,
         active: editActive,
+        accountLocked: editLocked,
         actor: profile,
       });
       toast.success("User updated.");
@@ -267,6 +287,7 @@ export default function AdminUsersPage() {
         actor: profile,
       });
       toast.success("User deleted.");
+      setDeleteOpen(false);
       applyUserSelection(null);
       await reloadUsers();
     } catch (err) {
@@ -346,11 +367,12 @@ export default function AdminUsersPage() {
                 label="Temporary password"
                 type="password"
                 required
-                minLength={6}
+                minLength={passwordMin}
+                maxLength={passwordMax}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
-                hint="Minimum 6 characters. Share securely with the user."
+                hint={`${passwordMin}–${passwordMax} characters. Share securely with the user.`}
               />
               <Select
                 label="Role"
@@ -425,7 +447,7 @@ export default function AdminUsersPage() {
                               </td>
                               <td className="px-2 py-2 font-mono text-xs">{u.employeeId || "—"}</td>
                               <td className="px-2 py-2">{u.role}</td>
-                              <td className="px-2 py-2">{u.active ? "Active" : "Inactive"}</td>
+                              <td className="px-2 py-2">{userStatusLabel(u)}</td>
                             </tr>
                           );
                         })}
@@ -447,7 +469,7 @@ export default function AdminUsersPage() {
                         >
                           <div className="text-sm font-medium text-slate-800">{u.displayName}</div>
                           <div className="mt-0.5 text-xs text-slate-500">
-                            {u.employeeId || "—"} · {u.role} · {u.active ? "Active" : "Inactive"}
+                            {u.employeeId || "—"} · {u.role} · {userStatusLabel(u)}
                           </div>
                         </button>
                       );
@@ -485,11 +507,16 @@ export default function AdminUsersPage() {
                 <Select
                   label="Status"
                   required
-                  value={editActive ? "active" : "inactive"}
-                  onChange={(e) => setEditActive(e.target.value === "active")}
+                  value={editAccountStatus(editActive, editLocked)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setEditActive(next !== "inactive");
+                    setEditLocked(next === "locked");
+                  }}
                   disabled={isSelf}
                 >
                   <option value="active">Active</option>
+                  <option value="locked">Locked</option>
                   <option value="inactive">Inactive</option>
                 </Select>
                 <p className="text-xs text-slate-500">
@@ -514,7 +541,7 @@ export default function AdminUsersPage() {
                 </div>
                 {isSelf ? (
                   <p className="text-xs text-amber-700">
-                    You cannot deactivate or delete your own account.
+                    You cannot lock, deactivate, or delete your own account.
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500">

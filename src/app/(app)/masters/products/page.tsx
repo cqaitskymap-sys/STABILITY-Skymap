@@ -32,6 +32,27 @@ export default function ProductsPage() {
           ],
         },
       ]}
+      validate={({ values, items, editing }) => {
+        const name = values.productName.trim();
+        const code = values.productCode.trim();
+        if (
+          items.some(
+            (item) => item.id !== editing?.id && item.productName.trim().toLowerCase() === name.toLowerCase()
+          )
+        ) {
+          return "A product with this name already exists.";
+        }
+        if (
+          code &&
+          items.some(
+            (item) =>
+              item.id !== editing?.id && (item.productCode || "").trim().toLowerCase() === code.toLowerCase()
+          )
+        ) {
+          return "A product with this code already exists.";
+        }
+        return null;
+      }}
       mapRow={(item) => ({
         Name: item.productName,
         Code: item.productCode || "—",

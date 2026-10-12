@@ -230,6 +230,8 @@ export interface ControlSampleDestruction {
   verifiedBy?: string;
   destroyedOn?: string;
   destroyedBy?: string;
+  /** Set when the destroyed quantity has already been removed from available stock. */
+  quantityPosted?: boolean;
   remarks?: string;
   createdBy: string;
   createdByName: string;

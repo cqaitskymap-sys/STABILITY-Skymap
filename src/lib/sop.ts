@@ -121,6 +121,7 @@ export function splitOrientation(total: number, invertedPercent = 25) {
   return { uprightQuantity, invertedQuantity, invertedPercent: pct };
 }
 
+/** Split scheduled pull quantities by orientation. Reserve is not part of the pull total. */
 export function splitPullsByOrientation<T extends { quantity: number }>(
   pulls: T[],
   uprightQuantity: number,
@@ -128,19 +129,27 @@ export function splitPullsByOrientation<T extends { quantity: number }>(
 ) {
   const total = Math.max(0, Number(totalQuantity) || 0);
   const uprightTarget = Math.max(0, Math.min(Number(uprightQuantity) || 0, total));
-  if (!pulls.length || total <= 0 || uprightTarget <= 0) {
+  const pullSum = pulls.reduce((sum, p) => sum + Math.max(0, Number(p.quantity) || 0), 0);
+  if (!pulls.length || total <= 0 || pullSum <= 0 || uprightTarget <= 0) {
     return {
       uprightPulls: pulls.map((p) => ({ ...p, quantity: 0 })),
-      invertedPulls: pulls.map((p) => ({ ...p })),
+      invertedPulls: pulls.map((p) => ({ ...p, quantity: uprightTarget <= 0 ? Number(p.quantity) || 0 : 0 })),
+    };
+  }
+  if (uprightTarget >= total) {
+    return {
+      uprightPulls: pulls.map((p) => ({ ...p, quantity: Number(p.quantity) || 0 })),
+      invertedPulls: pulls.map((p) => ({ ...p, quantity: 0 })),
     };
   }
 
-  const raw = pulls.map((p) => (Number(p.quantity) * uprightTarget) / total);
+  const uprightPullTarget = Math.min(pullSum, Math.round((pullSum * uprightTarget) / total));
+  const raw = pulls.map((p) => ((Number(p.quantity) || 0) * uprightPullTarget) / pullSum);
   const floors = raw.map((n) => Math.floor(n));
-  let leftover = uprightTarget - floors.reduce((sum, n) => sum + n, 0);
+  let leftover = uprightPullTarget - floors.reduce((sum, n) => sum + n, 0);
   const order = raw
     .map((n, i) => ({ i, frac: n - floors[i], room: Math.max(0, Number(pulls[i].quantity) - floors[i]) }))
-    .sort((a, b) => b.frac - a.frac);
+    .sort((a, b) => b.frac - a.frac || b.room - a.room);
   const qty = floors.slice();
   for (const item of order) {
     if (leftover <= 0) break;
@@ -152,6 +161,22 @@ export function splitPullsByOrientation<T extends { quantity: number }>(
   const uprightPulls = pulls.map((p, i) => ({ ...p, quantity: qty[i] }));
   const invertedPulls = pulls.map((p, i) => ({ ...p, quantity: Math.max(0, Number(p.quantity) - qty[i]) }));
   return { uprightPulls, invertedPulls };
+}
+
+/** Split reserve in the same ratio as upright/inverted quantity. */
+export function splitReservedQuantity(reserved: number, uprightQuantity: number, totalQuantity: number) {
+  const total = Math.max(0, Number(totalQuantity) || 0);
+  const uprightQty = Math.max(0, Math.min(Number(uprightQuantity) || 0, total));
+  const reserve = Math.max(0, Number(reserved) || 0);
+  if (reserve === 0 || total === 0) return { upright: 0, inverted: 0 };
+  if (uprightQty >= total) return { upright: reserve, inverted: 0 };
+  if (uprightQty <= 0) return { upright: 0, inverted: reserve };
+  const upright = Math.min(reserve, Math.round((reserve * uprightQty) / total));
+  return { upright, inverted: Math.max(0, reserve - upright) };
+}
+
+export function isChamberClosed(status?: string | null) {
+  return status === "Inactive" || status === "Out of Service";
 }
 
 export function isChargingBeyondWindow(releaseDate: string | undefined, chargingDate: string, windowDays: number) {

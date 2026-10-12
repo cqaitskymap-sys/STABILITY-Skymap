@@ -173,14 +173,12 @@ export function permissionsForRole(role: UserRole): Permission[] {
   return [...(ROLE_PERMISSIONS[role] ?? [])];
 }
 
-/** Custom moduleAccess overrides role defaults when present. */
+/** A stored moduleAccess list replaces role defaults, including an empty list. */
 export function effectivePermissions(input: {
   role?: UserRole | null;
   moduleAccess?: Permission[] | null;
 }): Permission[] {
-  if (input.moduleAccess && input.moduleAccess.length > 0) {
-    return [...input.moduleAccess];
-  }
+  if (Array.isArray(input.moduleAccess)) return [...input.moduleAccess];
   if (!input.role) return [];
   return permissionsForRole(input.role);
 }

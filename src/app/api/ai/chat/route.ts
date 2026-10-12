@@ -23,16 +23,25 @@ export async function POST(request: Request) {
     const configError = missingAiConfigResponse();
     if (configError) return configError;
 
-    const body = (await request.json()) as { messages?: UIMessage[]; context?: unknown };
+    const body = (await request.json()) as {
+      messages?: UIMessage[];
+      context?: unknown;
+      module?: string;
+    };
     const messages = body.messages ?? [];
     if (!messages.length) {
       return Response.json({ error: "Message is required." }, { status: 400 });
     }
 
+    const moduleLine =
+      body.module === "control-samples"
+        ? "Current module: Controlled Sample. Prefer controlled-sample tools and the snapshot below."
+        : "Current module: Stability Inventory. Prefer stability tools unless the user asks about controlled samples.";
+
     const openrouter = getOpenRouter();
     const result = streamText({
       model: openrouter(getOpenRouterModelId()),
-      system: `${QA_ASSISTANT_SYSTEM_PROMPT}\n\nLive inventory snapshot:\n${snapshotText(body.context)}`,
+      system: `${QA_ASSISTANT_SYSTEM_PROMPT}\n\n${moduleLine}\n\nLive snapshot:\n${snapshotText(body.context)}`,
       messages: await convertToModelMessages(messages),
       tools: skymapTools,
       maxOutputTokens: AI_MAX_OUTPUT_TOKENS,

@@ -67,7 +67,7 @@ function MovementPageInner() {
   );
 
   const activeChambers = useMemo(
-    () => (chambers.data || []).filter((c) => c.status !== "Inactive"),
+    () => (chambers.data || []).filter((c) => c.status !== "Inactive" && c.status !== "Out of Service"),
     [chambers.data]
   );
 
@@ -113,8 +113,8 @@ function MovementPageInner() {
           ? "Disposed samples cannot be moved."
           : !toChamberId
             ? "Select a destination chamber."
-            : destinationChamber?.status === "Inactive"
-              ? "Cannot move samples to an inactive chamber."
+            : destinationChamber?.status === "Inactive" || destinationChamber?.status === "Out of Service"
+              ? "Cannot move samples to an inactive or out-of-service chamber."
               : !toLocationId
                 ? "Select a destination location."
                 : filteredLocations.length === 0
@@ -295,8 +295,8 @@ function MovementPageInner() {
                       setToLocationId("");
                     }}
                     error={
-                      destinationChamber?.status === "Inactive"
-                        ? "Chamber is inactive"
+                      destinationChamber?.status === "Inactive" || destinationChamber?.status === "Out of Service"
+                        ? "Chamber cannot receive samples"
                         : capacityShort || undefined
                     }
                     hint={
@@ -307,7 +307,7 @@ function MovementPageInner() {
                   >
                     <option value="">Select chamber…</option>
                     {(chambers.data || []).map((c) => (
-                      <option key={c.id} value={c.id} disabled={c.status === "Inactive"}>
+                      <option key={c.id} value={c.id} disabled={c.status === "Inactive" || c.status === "Out of Service"}>
                         {c.chamberName} ({c.status}) · free{" "}
                         {Math.max(0, Number(c.capacity || 0) - Number(c.usedCapacity || 0))}
                       </option>
@@ -335,6 +335,7 @@ function MovementPageInner() {
                   <Input
                     label="Movement Date"
                     type="date"
+                    fullDate
                     required
                     value={movementDate}
                     onChange={(e) => setMovementDate(e.target.value)}

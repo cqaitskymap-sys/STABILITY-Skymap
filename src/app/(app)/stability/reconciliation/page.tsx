@@ -32,7 +32,8 @@ import {
 function ReconciliationPageInner() {
   const searchParams = useSearchParams();
   const sampleFromUrl = searchParams.get("sample") || "";
-  const { profile } = useAuth();
+  const { profile, hasPermission } = useAuth();
+  const canReconcile = hasPermission("reconciliation.perform");
   const samples = useAsync(listSamples, []);
   const history = useAsync(listReconciliations, []);
 
@@ -69,7 +70,9 @@ function ReconciliationPageInner() {
   const variance = hasPhysical ? physical - systemQty : 0;
   const liveStatus = hasPhysical ? resolveReconciliationStatus(variance, adjust) : "Matched";
 
-  const validationError = !selectedSample
+  const validationError = !canReconcile
+    ? "You do not have permission to reconcile inventory."
+    : !selectedSample
     ? "Select a sample to reconcile."
     : !hasPhysical
       ? "Enter a valid physical quantity (zero or greater)."
@@ -126,6 +129,12 @@ function ReconciliationPageInner() {
           </Button>
         }
       />
+
+      {!canReconcile ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Your role can view reconciliation history but cannot adjust inventory.
+        </Card>
+      ) : null}
 
       <Card className="mb-6">
         <CardHeader title="Reconcile Sample" description="Enter the physical count and review live variance status." />
@@ -247,6 +256,7 @@ function ReconciliationPageInner() {
 
               <div className="flex justify-end">
                 <Button
+                  disabled={!canReconcile || saving}
                   onClick={() => {
                     if (validationError) {
                       toast.error(validationError);

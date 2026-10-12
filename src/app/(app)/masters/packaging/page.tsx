@@ -42,6 +42,22 @@ export default function PackagingPage() {
           ],
         },
       ]}
+      validate={({ values, items, editing }) => {
+        const material = values.material.trim();
+        const kind = values.kind.trim();
+        if (!material) return "Material is required.";
+        if (
+          items.some(
+            (item) =>
+              item.id !== editing?.id &&
+              item.kind === kind &&
+              item.material.trim().toLowerCase() === material.toLowerCase()
+          )
+        ) {
+          return "This material is already listed for the selected type.";
+        }
+        return null;
+      }}
       mapRow={(item) => ({
         Type: item.kind,
         Material: item.material,

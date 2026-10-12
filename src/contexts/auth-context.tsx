@@ -33,6 +33,8 @@ import { COLLECTIONS, getDb, getFirebaseApp, getFirebaseAuth, isIndexedDbClosing
 import { can, type Permission } from "@/lib/permissions";
 import { nowISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
+import { getOrganizationSettings } from "@/services/organization";
+import { listUsers } from "@/services/users";
 import type { AppUser, UserRole } from "@/types";
 
 interface AuthContextValue {
@@ -157,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (firebaseUser) {
           const p = await ensureProfile(firebaseUser, firebaseUser.displayName || "");
           if (cancelled) return;
-          if (!p || p.active === false) {
+          if (!p || p.active === false || p.accountLocked) {
             setProfile(null);
             await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
             if (!cancelled) setUser(null);
@@ -226,6 +228,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
       throw new Error("This account is inactive. Contact an Admin.");
     }
+    if (p.accountLocked) {
+      await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
+      throw new Error("This account is locked. Contact an Admin.");
+    }
     setUser(cred.user);
     setProfile(p);
     await writeAuditLog({
@@ -259,6 +265,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isValidEmployeeId(id)) {
         throw new Error("Invalid Employee ID. Use 2–32 letters, numbers, hyphen, or underscore.");
       }
+      const settings = await getOrganizationSettings();
+      const minLength = Math.max(6, settings.passwordMinLength || 6);
+      const maxLength = Math.max(minLength, settings.passwordMaxLength || minLength);
+      if (password.length < minLength || password.length > maxLength) {
+        throw new Error(`Password must be ${minLength}–${maxLength} characters.`);
+      }
+      const existing = await listUsers();
+      if (existing.some((row) => normalizeEmployeeId(row.employeeId || "") === id)) {
+        throw new Error("An account with this Employee ID already exists.");
+      }
       const authEmail = employeeIdToAuthEmail(id);
 
       let secondaryApp: FirebaseApp | undefined;
@@ -279,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           active: true,
           createdAt: now,
           updatedAt: now,
-          ...(moduleAccess && moduleAccess.length > 0 ? { moduleAccess } : {}),
+          ...(moduleAccess ? { moduleAccess } : {}),
         };
 
         try {

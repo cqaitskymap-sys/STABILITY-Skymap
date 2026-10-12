@@ -144,7 +144,7 @@ export default function StudyDetailPage() {
                   href={`/stability/inventory/${s.id}`}
                   className="mt-2 block text-teal-700 hover:underline print:no-underline"
                 >
-                  {s.sampleId}
+                  {s.sampleId} · {s.orientation || "Upright"}
                 </Link>
               ))}
             </div>

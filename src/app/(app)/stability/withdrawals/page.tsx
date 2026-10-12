@@ -165,7 +165,9 @@ function WithdrawalsPageInner() {
         ? "This pull point is already fully withdrawn."
         : !sample
           ? "Sample inventory could not be loaded."
-          : sample.availableQuantity <= 0
+          : sample.status === "Under Reconciliation"
+            ? "This sample is under reconciliation. Finish the count before withdrawing."
+            : sample.availableQuantity <= 0
             ? "No available quantity left for this sample."
             : remainingPlanned <= 0
               ? "No remaining planned quantity for this pull point."
@@ -328,6 +330,7 @@ function WithdrawalsPageInner() {
                   <Input
                     label="Withdrawal Date"
                     type="date"
+                    fullDate
                     required
                     value={withdrawalDate}
                     onChange={(e) => setWithdrawalDate(e.target.value)}

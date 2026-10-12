@@ -28,10 +28,17 @@ export async function updateManagedUser(input: {
   role?: UserRole;
   moduleAccess?: Permission[];
   active?: boolean;
+  accountLocked?: boolean;
   actor: AppUser;
 }) {
   if (input.uid === input.actor.uid && input.active === false) {
     throw new Error("You cannot deactivate your own account.");
+  }
+  if (input.uid === input.actor.uid && input.accountLocked === true) {
+    throw new Error("You cannot lock your own account.");
+  }
+  if (input.displayName !== undefined && !input.displayName.trim()) {
+    throw new Error("Full name is required.");
   }
 
   const ref = doc(getDb(), COLLECTIONS.users, input.uid);
@@ -40,16 +47,17 @@ export async function updateManagedUser(input: {
   if (input.role !== undefined) patch.role = input.role;
   if (input.moduleAccess !== undefined) patch.moduleAccess = input.moduleAccess;
   if (input.active !== undefined) patch.active = input.active;
+  if (input.accountLocked !== undefined) {
+    patch.accountLocked = input.accountLocked;
+    if (!input.accountLocked) patch.failedLoginCount = 0;
+  }
 
-  // Prevent self-lockout from User Management.
+  // Prevent self-lockout from User Management. An explicit empty list means no modules.
   if (input.uid === input.actor.uid) {
     const nextRole = (input.role ?? input.actor.role) as UserRole;
     const nextAccess =
-      input.moduleAccess !== undefined
-        ? input.moduleAccess
-        : input.actor.moduleAccess;
-    const effective =
-      nextAccess && nextAccess.length > 0 ? nextAccess : permissionsForRole(nextRole);
+      input.moduleAccess !== undefined ? input.moduleAccess : input.actor.moduleAccess;
+    const effective = Array.isArray(nextAccess) ? nextAccess : permissionsForRole(nextRole);
     if (!effective.includes("users.manage")) {
       throw new Error("You cannot remove your own User Management access.");
     }

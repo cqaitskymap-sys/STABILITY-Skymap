@@ -39,6 +39,48 @@ function finiteNumber(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+const STOCK_RESERVING_DESTRUCTION = new Set([
+  "QA Initiated",
+  "Note Created",
+  "Approved",
+  "Destroyed Pending Verification",
+]);
+
+function destructionReserved(notes: ControlSampleDestruction[], sampleDocId: string) {
+  return notes
+    .filter(
+      (note) =>
+        note.controlSampleDocId === sampleDocId &&
+        !note.quantityPosted &&
+        STOCK_RESERVING_DESTRUCTION.has(note.status)
+    )
+    .reduce((sum, note) => sum + finiteNumber(note.quantity), 0);
+}
+
+function requisitionHeld(rows: ControlSampleRequisition[], sampleDocId: string) {
+  return rows
+    .filter(
+      (req) =>
+        req.controlSampleDocId === sampleDocId &&
+        (req.status === "Submitted" || req.status === "Approved" || req.status === "Partially Returned")
+    )
+    .reduce(
+      (sum, req) => sum + Math.max(0, finiteNumber(req.quantityRequired) - finiteNumber(req.quantityIssued)),
+      0
+    );
+}
+
+function requisitionStatusAfterQuantities(
+  required: number,
+  issued: number,
+  returned: number
+): ControlSampleRequisition["status"] {
+  if (returned > 0 && returned < issued) return "Partially Returned";
+  if (issued >= required && returned >= issued && issued > 0) return "Returned";
+  if (issued >= required && issued > 0) return "Issued";
+  return "Approved";
+}
+
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -353,6 +395,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
     if (current.controlSampleDocId) throw new Error("This collection has already been verified.");
     tx.update(colRef, {
       status: "Verified",
+      controlSampleDocId: "pending",
       verifiedBy: user.displayName || user.email,
       verifiedAt: stamp,
       updatedAt: stamp,
@@ -696,9 +739,16 @@ export async function recordObservation(input: {
 }) {
   const row = await getControlSample(input.controlSampleDocId);
   if (!row) throw new Error("Controlled sample not found.");
+  if (row.destructionHold) throw new Error("Cannot discard quantity from a sample that is on destruction hold.");
   if (input.discardedQuantity < 0) throw new Error("Discarded quantity cannot be negative.");
-  if (input.discardedQuantity > row.availableQuantity) {
-    throw new Error("Discarded quantity cannot exceed available quantity.");
+  const reserved = destructionReserved(await listDestructions(), row.id);
+  const free = finiteNumber(row.availableQuantity) - reserved;
+  if (input.discardedQuantity > free) {
+    throw new Error(
+      free > 0
+        ? `Discarded quantity cannot exceed quantity that is not reserved for destruction (${free}).`
+        : "Available quantity is reserved for destruction."
+    );
   }
   if (input.result === "Abnormal Observation" && !input.natureOfObservation && !input.otherObservation) {
     throw new Error("Nature of observation is required for an abnormal result.");
@@ -792,8 +842,16 @@ export async function createRequisition(input: {
   }
   const row = await getControlSample(input.controlSampleDocId);
   if (!row) throw new Error("Controlled sample not found.");
-  if (input.quantityRequired > row.availableQuantity) {
-    throw new Error(`Required quantity exceeds available quantity (${row.availableQuantity}).`);
+  if (row.destructionHold) throw new Error("Cannot withdraw a sample that is on destruction hold.");
+  const [requisitions, notes] = await Promise.all([listRequisitions(), listDestructions()]);
+  const free =
+    finiteNumber(row.availableQuantity) - requisitionHeld(requisitions, row.id) - destructionReserved(notes, row.id);
+  if (input.quantityRequired > free) {
+    throw new Error(
+      free > 0
+        ? `Required quantity exceeds quantity that is not already committed (${free}).`
+        : "Available quantity is already committed to another requisition or destruction note."
+    );
   }
   const requisitionNumber = await nextSequentialId("CSR");
   const stamp = nowISO();
@@ -848,16 +906,17 @@ export async function approveRequisition(id: string, user: AppUser, approved: bo
 export async function issueApprovedRequisition(id: string, input: { quantity: number; issuedTo: string; user: AppUser }) {
   const settings = controlOrg(await getOrganizationSettings());
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Issue quantity must be greater than zero.");
+  const notes = await listDestructions();
   const stamp = nowISO();
   const result = await runTransaction(getDb(), async (tx) => {
     const reqRef = doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id);
     const reqSnap = await tx.get(reqRef);
     if (!reqSnap.exists()) throw new Error("Requisition not found.");
     const req = { id: reqSnap.id, ...reqSnap.data() } as ControlSampleRequisition;
-    if (settings.controlRequireWithdrawalApproval && req.status !== "Approved") {
+    if (settings.controlRequireWithdrawalApproval && req.status === "Submitted") {
       throw new Error("QA Manager approval is required before issue.");
     }
-    if (!settings.controlRequireWithdrawalApproval && req.status !== "Approved" && req.status !== "Submitted") {
+    if (!["Approved", "Partially Returned", "Submitted"].includes(req.status)) {
       throw new Error("Requisition is not eligible for issue.");
     }
     const issuedSoFar = finiteNumber(req.quantityIssued);
@@ -869,8 +928,15 @@ export async function issueApprovedRequisition(id: string, input: { quantity: nu
     const sampleSnap = await tx.get(sampleRef);
     if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
     const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
-    if (input.quantity > finiteNumber(row.availableQuantity)) {
-      throw new Error(`Cannot issue more than available quantity (${finiteNumber(row.availableQuantity)}).`);
+    if (row.destructionHold) throw new Error("Cannot issue a sample that is on destruction hold.");
+    const reserved = destructionReserved(notes, row.id);
+    const free = finiteNumber(row.availableQuantity) - reserved;
+    if (input.quantity > free) {
+      throw new Error(
+        free > 0
+          ? `Cannot issue more than quantity that is not reserved for destruction (${free}).`
+          : "Available quantity is reserved for destruction."
+      );
     }
     const next = applyQty(row, { issuedQuantity: finiteNumber(row.issuedQuantity) + input.quantity });
     const status = deriveControlInventoryStatus({ ...row, ...next });
@@ -881,7 +947,7 @@ export async function issueApprovedRequisition(id: string, input: { quantity: nu
       issuedTo: input.issuedTo,
       issuedBy: input.user.displayName || input.user.email,
       issuedAt: stamp,
-      status: issued >= req.quantityRequired ? "Issued" : "Approved",
+      status: requisitionStatusAfterQuantities(required, issued, finiteNumber(req.quantityReturned)),
       updatedAt: stamp,
     });
     return { req, row, next };
@@ -939,7 +1005,7 @@ export async function returnRequisition(id: string, input: { quantity: number; r
         returnCheckedBy: input.user.displayName || input.user.email,
         returnCondition: input.condition,
         remarks: input.remarks || req.remarks,
-        status: returned >= req.quantityIssued ? "Returned" : "Partially Returned",
+        status: requisitionStatusAfterQuantities(finiteNumber(req.quantityRequired), issuedSoFar, returned),
         updatedAt: stamp,
       })
     );
@@ -1010,6 +1076,17 @@ export async function adjustControlSample(input: {
   if (!input.quantityDelta) throw new Error("Adjustment quantity cannot be zero.");
   const row = await getControlSample(input.id);
   if (!row) throw new Error("Controlled sample not found.");
+  if (input.quantityDelta < 0) {
+    const reserved = destructionReserved(await listDestructions(), row.id);
+    const free = finiteNumber(row.availableQuantity) - reserved;
+    if (-input.quantityDelta > free) {
+      throw new Error(
+        free > 0
+          ? `Adjustment cannot reduce quantity reserved for destruction. Free quantity is ${free}.`
+          : "Available quantity is reserved for destruction."
+      );
+    }
+  }
   const next = applyQty(row, { adjustedQuantity: (row.adjustedQuantity || 0) + input.quantityDelta });
   await persistSample(row, next, {
     type: "CONTROL_SAMPLE_ADJUSTED",
@@ -1118,13 +1195,9 @@ export async function createDestructionNote(input: {
   if (!isEligibleNow(row, settings)) {
     throw new Error("Sample is not yet eligible for destruction (expiry + configured retention).");
   }
-  const openNotes = (await listDestructions()).filter(
-    (note) =>
-      note.controlSampleDocId === row.id &&
-      ["QA Initiated", "Note Created", "Approved", "Destroyed Pending Verification"].includes(note.status)
-  );
-  const reserved = openNotes.reduce((sum, note) => sum + finiteNumber(note.quantity), 0);
-  const remaining = finiteNumber(row.availableQuantity) - reserved;
+  const openReserved = destructionReserved(await listDestructions(), row.id);
+  const held = requisitionHeld(await listRequisitions(), row.id);
+  const remaining = finiteNumber(row.availableQuantity) - openReserved - held;
   if (!Number.isFinite(input.quantity) || input.quantity <= 0 || input.quantity > remaining) {
     throw new Error(
       remaining > 0
@@ -1208,12 +1281,50 @@ export async function completeDestructionChecklist(id: string, checklist: Contro
   if (!cleaned.length || cleaned.some((step) => !step.completed)) {
     throw new Error("Complete every destruction checklist step before recording destruction.");
   }
-  await updateDoc(doc(getDb(), COLLECTIONS.controlSampleDestructions, id), {
-    checklist: cleaned,
-    status: "Destroyed Pending Verification",
-    destroyedOn: todayISO(),
-    destroyedBy: user.displayName || user.email,
-    updatedAt: nowISO(),
+  const stamp = nowISO();
+  const posted = await runTransaction(getDb(), async (tx) => {
+    const noteRef = doc(getDb(), COLLECTIONS.controlSampleDestructions, id);
+    const noteSnap = await tx.get(noteRef);
+    if (!noteSnap.exists()) throw new Error("Destruction note not found.");
+    const note = { id: noteSnap.id, ...noteSnap.data() } as ControlSampleDestruction;
+    if (note.status !== "Approved") throw new Error("Destruction cannot be performed before QA Head approval.");
+    if (note.quantityPosted) throw new Error("Destruction quantity was already removed from stock.");
+    const sampleRef = doc(getDb(), COLLECTIONS.controlSamples, note.controlSampleDocId);
+    const sampleSnap = await tx.get(sampleRef);
+    if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
+    const sampleRow = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
+    if (sampleRow.destructionHold) throw new Error("Cannot destroy a sample under an active destruction hold.");
+    if (note.quantity > finiteNumber(sampleRow.availableQuantity)) {
+      throw new Error(`Cannot destroy more than available quantity (${finiteNumber(sampleRow.availableQuantity)}).`);
+    }
+    const next = applyQty(sampleRow, { destroyedQuantity: destroyedQty(sampleRow) + note.quantity });
+    const status = deriveControlInventoryStatus({ ...sampleRow, ...next });
+    tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    tx.update(noteRef, {
+      checklist: cleaned,
+      status: "Destroyed Pending Verification",
+      quantityPosted: true,
+      destroyedOn: todayISO(),
+      destroyedBy: user.displayName || user.email,
+      updatedAt: stamp,
+    });
+    return { note, sampleRow, next };
+  });
+  await writeControlTx({
+    transactionId: await nextSequentialId("CTX"),
+    controlSampleId: posted.sampleRow.controlSampleId,
+    controlSampleDocId: posted.sampleRow.id,
+    productName: posted.sampleRow.productName,
+    batchNumber: posted.sampleRow.batchNumber,
+    transactionType: "CONTROL_SAMPLE_DESTROYED",
+    quantity: posted.note.quantity,
+    previousQuantity: posted.sampleRow.availableQuantity,
+    newQuantity: posted.next.availableQuantity,
+    reason: posted.note.reason,
+    reference: posted.note.dcnNumber,
+    performedBy: user.uid,
+    performedByName: user.displayName || user.email,
+    performedAt: stamp,
   });
   await audit({ action: "Destruction", recordId: row.dcnNumber, newValue: { checklist: cleaned }, user });
 }
@@ -1232,37 +1343,48 @@ export async function verifyDestruction(id: string, user: AppUser, remarks?: str
     const sampleSnap = await tx.get(sampleRef);
     if (!sampleSnap.exists()) throw new Error("Controlled sample not found.");
     const row = { id: sampleSnap.id, ...sampleSnap.data() } as ControlSample;
-    const next = applyQty(row, { destroyedQuantity: destroyedQty(row) + note.quantity });
-    const status = deriveControlInventoryStatus({ ...row, ...next });
-    tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    const alreadyPosted = Boolean(note.quantityPosted);
+    if (!alreadyPosted && note.quantity > finiteNumber(row.availableQuantity)) {
+      throw new Error(`Cannot destroy more than available quantity (${finiteNumber(row.availableQuantity)}).`);
+    }
+    const next = alreadyPosted
+      ? applyQty(row, {})
+      : applyQty(row, { destroyedQuantity: destroyedQty(row) + note.quantity });
+    if (!alreadyPosted) {
+      const status = deriveControlInventoryStatus({ ...row, ...next });
+      tx.update(sampleRef, omitUndefined({ ...next, status, updatedAt: stamp }));
+    }
     tx.update(
       noteRef,
       omitUndefined({
         status: "Destroyed",
+        quantityPosted: true,
         verifiedBy: user.displayName || user.email,
         remarks: remarks || note.remarks,
         updatedAt: stamp,
       })
     );
-    return { note, row, next };
+    return { note, row, next, alreadyPosted };
   });
-  const { note, row, next } = result;
-  await writeControlTx({
-    transactionId: await nextSequentialId("CTX"),
-    controlSampleId: row.controlSampleId,
-    controlSampleDocId: row.id,
-    productName: row.productName,
-    batchNumber: row.batchNumber,
-    transactionType: "CONTROL_SAMPLE_DESTROYED",
-    quantity: note.quantity,
-    previousQuantity: row.availableQuantity,
-    newQuantity: next.availableQuantity,
-    reason: note.reason,
-    reference: note.dcnNumber,
-    performedBy: user.uid,
-    performedByName: user.displayName || user.email,
-    performedAt: stamp,
-  });
+  const { note, row, next, alreadyPosted } = result;
+  if (!alreadyPosted) {
+    await writeControlTx({
+      transactionId: await nextSequentialId("CTX"),
+      controlSampleId: row.controlSampleId,
+      controlSampleDocId: row.id,
+      productName: row.productName,
+      batchNumber: row.batchNumber,
+      transactionType: "CONTROL_SAMPLE_DESTROYED",
+      quantity: note.quantity,
+      previousQuantity: row.availableQuantity,
+      newQuantity: next.availableQuantity,
+      reason: note.reason,
+      reference: note.dcnNumber,
+      performedBy: user.uid,
+      performedByName: user.displayName || user.email,
+      performedAt: stamp,
+    });
+  }
   await writeControlTx({
     transactionId: await nextSequentialId("CTX"),
     controlSampleId: row.controlSampleId,

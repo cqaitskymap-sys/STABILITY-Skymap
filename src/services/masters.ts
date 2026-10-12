@@ -4,7 +4,6 @@ import {
   deleteDoc,
   doc,
   getDocs,
-  orderBy,
   query,
   updateDoc,
   where,
@@ -36,23 +35,17 @@ function omitUndefined<T extends Record<string, unknown>>(input: T): T {
 }
 
 async function listCollection<T>(name: string, orderField = "createdAt") {
-  try {
-    const q = query(collection(getDb(), name), orderBy(orderField, "desc"));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
-  } catch {
-    // Fallback when order field is missing on older docs (avoids breaking inventory/filters).
-    const snap = await getDocs(collection(getDb(), name));
-    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T & { id: string }));
-    return rows.sort((a, b) => {
-      const rawA = (a as Record<string, unknown>)[orderField];
-      const rawB = (b as Record<string, unknown>)[orderField];
-      if (orderField === "sortOrder") {
-        return Number(rawA ?? 0) - Number(rawB ?? 0);
-      }
-      return String(rawB ?? "").localeCompare(String(rawA ?? ""));
-    });
-  }
+  // Read every document, then sort here. An orderBy query omits records that do not have that field.
+  const snap = await getDocs(collection(getDb(), name));
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T & { id: string }));
+  return rows.sort((a, b) => {
+    const rawA = (a as Record<string, unknown>)[orderField];
+    const rawB = (b as Record<string, unknown>)[orderField];
+    if (orderField === "sortOrder") {
+      return Number(rawA ?? 0) - Number(rawB ?? 0);
+    }
+    return String(rawB ?? "").localeCompare(String(rawA ?? ""));
+  });
 }
 
 export async function listStudyTypes() {

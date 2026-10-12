@@ -2,6 +2,8 @@ import type { Permission } from "@/lib/permissions";
 import { COLLECTIONS } from "@/lib/firebase/config";
 import { friendlyError, fromMonthInput, todayISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
+import { invalidateControlContext } from "@/lib/ai/control-context";
+import { isControlCatalog, isControlTool, listControlCatalog, runControlTool } from "@/lib/ai/execute-control";
 import { invalidateInventoryContext } from "@/lib/ai/inventory-context";
 import {
   acknowledgeAlert,
@@ -49,21 +51,30 @@ const WRITE_TOOLS = new Set([
   "disposeSample",
   "reconcileSample",
   "acknowledgeAlert",
+  "createControlProduct",
+  "createControlBatch",
+  "collectControlSample",
+  "advanceControlCollection",
+  "storeControlSample",
+  "recordControlObservation",
+  "createControlRequisition",
+  "setControlQuantity",
+  "createControlDestructionNote",
 ]);
 
-function fail(error: string): Fail {
+export function fail(error: string): Fail {
   return { ok: false, error };
 }
 
-function ok(data: Record<string, unknown> = {}): ToolResult {
+export function ok(data: Record<string, unknown> = {}): ToolResult {
   return { ok: true, ...data };
 }
 
-function eq(a: string | undefined, b: string | undefined) {
+export function eq(a: string | undefined, b: string | undefined) {
   return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 }
 
-function includesQ(row: unknown, query?: string) {
+export function includesQ(row: unknown, query?: string) {
   if (!query?.trim()) return true;
   const q = query.trim().toLowerCase();
   return JSON.stringify(row).toLowerCase().includes(q);
@@ -71,7 +82,7 @@ function includesQ(row: unknown, query?: string) {
 
 type Fail = { ok: false; error: string };
 
-function pick<T>(
+export function pick<T>(
   items: T[],
   matcher: (item: T) => boolean,
   label: string,
@@ -85,11 +96,11 @@ function pick<T>(
   return hits[0];
 }
 
-function isFail<T>(value: T | Fail): value is Fail {
+export function isFail<T>(value: T | Fail): value is Fail {
   return Boolean(value && typeof value === "object" && "ok" in value && (value as Fail).ok === false);
 }
 
-function need(hasPermission: PermFn, permission: Permission, label: string): ToolResult | null {
+export function need(hasPermission: PermFn, permission: Permission, label: string): ToolResult | null {
   if (hasPermission(permission)) return null;
   return fail(`You do not have ${label} permission. Ask an Admin to grant that module.`);
 }
@@ -110,11 +121,11 @@ function asRecord(input: unknown): Record<string, unknown> {
   return input && typeof input === "object" ? (input as Record<string, unknown>) : {};
 }
 
-function str(input: Record<string, unknown>, key: string) {
+export function str(input: Record<string, unknown>, key: string) {
   return String(input[key] ?? "").trim();
 }
 
-function num(input: Record<string, unknown>, key: string) {
+export function num(input: Record<string, unknown>, key: string) {
   return Number(input[key]);
 }
 
@@ -133,7 +144,10 @@ export async function executeSkymapTool(input: {
     }
 
     const result = await runTool(name, args, profile, hasPermission);
-    if (result.ok && WRITE_TOOLS.has(name)) invalidateInventoryContext();
+    if (result.ok && WRITE_TOOLS.has(name)) {
+      invalidateInventoryContext();
+      if (isControlTool(name)) invalidateControlContext();
+    }
     return result;
   } catch (error) {
     return fail(friendlyError(error, error instanceof Error ? error.message : "Action failed."));
@@ -178,6 +192,10 @@ async function runTool(
     case "acknowledgeAlert":
       return ackAlert(args, hasPermission);
     default:
+      if (isControlTool(name)) {
+        if (!profile) return fail("Sign in with an active account to make changes.");
+        return runControlTool(name, args, profile, hasPermission);
+      }
       return fail(`Unknown action: ${name}`);
   }
 }
@@ -343,6 +361,7 @@ async function listCatalog(kind: string, query?: string): Promise<ToolResult> {
       return ok({ kind, count: rows.length, records: rows });
     }
     default:
+      if (isControlCatalog(kind)) return listControlCatalog(kind, query);
       return fail(`Unknown catalog: ${kind}`);
   }
 }

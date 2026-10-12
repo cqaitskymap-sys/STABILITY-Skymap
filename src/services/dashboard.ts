@@ -75,11 +75,17 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   return {
     totalActiveStudies: activeStudies.length,
-    totalSamples: samples.reduce((s, x) => s + x.totalQuantity, 0),
-    availableSamples: samples.reduce((s, x) => s + x.availableQuantity, 0),
-    samplesWithdrawn: samples.reduce((s, x) => s + x.withdrawnQuantity, 0),
-    samplesDueSoon: enrichedPulls.filter((p) => p.status === "Due Soon" || p.status === "Due Today" || p.status === "Due").length,
-    overdueSamples: enrichedPulls.filter((p) => p.status === "Overdue").length,
+    totalSamples: samples.length,
+    availableSamples: samples.filter((x) => x.availableQuantity > 0).length,
+    samplesWithdrawn: samples.filter((x) => x.withdrawnQuantity > 0).length,
+    samplesDueSoon: new Set(
+      enrichedPulls
+        .filter((p) => p.status === "Due Soon" || p.status === "Due Today" || p.status === "Due")
+        .map((p) => p.sampleDocId || p.id)
+    ).size,
+    overdueSamples: new Set(
+      enrichedPulls.filter((p) => p.status === "Overdue").map((p) => p.sampleDocId || p.id)
+    ).size,
     activeChambers: activeChambers.length,
     chamberUtilization: roundPct(usedCapacity, totalCapacity),
     samplesAwaitingCoa: receipts.filter((r) => r.status === "Received - Awaiting COA").length,

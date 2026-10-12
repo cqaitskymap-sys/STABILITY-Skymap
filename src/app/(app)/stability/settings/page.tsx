@@ -158,8 +158,10 @@ export default function StabilitySettingsPage() {
             <Row
               label="Module access"
               value={
-                profile?.moduleAccess?.length
-                  ? `${profile.moduleAccess.length} custom permission(s)`
+                Array.isArray(profile?.moduleAccess)
+                  ? profile.moduleAccess.length
+                    ? `${profile.moduleAccess.length} custom permission(s)`
+                    : "No module access"
                   : "Role defaults"
               }
             />

@@ -7,8 +7,9 @@ import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleto
 import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { DEFAULT_DESTRUCTION_STEPS } from "@/lib/control-samples";
+import { DEFAULT_DESTRUCTION_STEPS, isDestructionEligible } from "@/lib/control-samples";
 import { formatFullDate, friendlyError } from "@/lib/utils";
+import { getOrganizationSettings } from "@/services/organization";
 import {
   approveDestruction,
   completeDestructionChecklist,
@@ -23,8 +24,12 @@ export default function DestructionNotePage() {
   const can = hasPermission("control.perform") || hasPermission("disposal.perform");
   const canApprove = hasPermission("approve.records");
   const catalog = useAsync(async () => {
-    const [samples, notes] = await Promise.all([listControlSamples(), listDestructions()]);
-    return { samples, notes };
+    const [samples, notes, settings] = await Promise.all([
+      listControlSamples(),
+      listDestructions(),
+      getOrganizationSettings().catch(() => null),
+    ]);
+    return { samples, notes, settings };
   }, []);
   const [sampleId, setSampleId] = useState("");
   const [qty, setQty] = useState("");
@@ -154,7 +159,7 @@ export default function DestructionNotePage() {
           <div className="grid gap-3 p-4">
             <Select label="Controlled sample" value={sampleId} onChange={(e) => setSampleId(e.target.value)} disabled={!can}>
               <option value="">Select</option>
-              {(catalog.data?.samples || []).filter((s) => (s.availableQuantity || 0) > 0).map((s) => (
+              {(catalog.data?.samples || []).filter((s) => isDestructionEligible(s, catalog.data?.settings)).map((s) => (
                 <option key={s.id} value={s.id}>{s.controlSampleId} — {s.productName} / {s.batchNumber}</option>
               ))}
             </Select>

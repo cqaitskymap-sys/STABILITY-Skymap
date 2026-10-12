@@ -23,7 +23,15 @@ import {
 } from "@/lib/utils";
 import { nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
-import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow, pullWindowEnd, splitOrientation, splitPullsByOrientation } from "@/lib/sop";
+import {
+  DEFAULT_ORG_SETTINGS,
+  isChamberClosed,
+  isChargingBeyondWindow,
+  pullWindowEnd,
+  splitOrientation,
+  splitPullsByOrientation,
+  splitReservedQuantity,
+} from "@/lib/sop";
 import { getOrganizationSettings } from "@/services/organization";
 import { createAnalysisRequestFromWithdrawal } from "@/services/analysis";
 import type {
@@ -93,6 +101,12 @@ function studyStatusFromSamples(
   if (!anyRemaining && anyWithdrawn) return "Fully Withdrawn";
   if (anyWithdrawn || anyDisposed) return "Partially Withdrawn";
   return "Active";
+}
+
+function earliestPullDate(anchor: string, pulls: { months: number; quantity: number }[]) {
+  const months = pulls.filter((p) => p.quantity > 0).map((p) => p.months);
+  if (!months.length) return null;
+  return addMonthsToDate(anchor, Math.min(...months));
 }
 
 function studyTotalsFromSamples(samples: StabilitySample[]) {
@@ -413,11 +427,22 @@ export async function createStudyAndCharge(input: {
       status?: string;
       chargingEligibility?: boolean;
       receiptId?: string;
+      sampleQuantity?: number;
+      unit?: string;
     };
     if (receipt.status === "Charged") throw new Error("This inward record has already been charged.");
     if (receipt.status === "Voided") throw new Error("This inward record has been voided.");
     if (receipt.status !== "COA Received - Ready for Charging" && !receipt.chargingEligibility) {
       throw new Error("COA has not been received. Sample is not eligible for charging.");
+    }
+    const inwardQty = Number(receipt.sampleQuantity || 0);
+    if (inwardQty > 0 && input.totalQuantity > inwardQty) {
+      throw new Error(
+        `Charged quantity cannot exceed the inward quantity (${inwardQty}${receipt.unit ? ` ${receipt.unit}` : ""}).`
+      );
+    }
+    if (receipt.unit && input.unit && receipt.unit.trim().toLowerCase() !== input.unit.trim().toLowerCase()) {
+      throw new Error(`Charging unit (${input.unit}) must match the inward unit (${receipt.unit}).`);
     }
     receiptIdForAudit = receipt.receiptId;
   }
@@ -430,8 +455,8 @@ export async function createStudyAndCharge(input: {
   const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, input.chamberId));
   if (!chamberSnap.exists()) throw new Error("Selected chamber was not found.");
   const chamber = chamberSnap.data();
-  if (chamber.status === "Inactive" || chamber.status === "Out of Service") {
-    throw new Error("Cannot allocate samples to an inactive chamber.");
+  if (isChamberClosed(chamber.status)) {
+    throw new Error("Cannot allocate samples to an inactive or out-of-service chamber.");
   }
   if (Number(chamber.usedCapacity || 0) + input.totalQuantity > Number(chamber.capacity || 0)) {
     throw new Error("Chamber capacity is insufficient for this charge quantity.");
@@ -450,10 +475,7 @@ export async function createStudyAndCharge(input: {
   const stamp = nowISO();
   const availableQuantity = calcAvailableQuantity(input.totalQuantity, 0, 0, 0);
 
-  const nextPullDate =
-    input.pullAllocations.length > 0
-      ? addMonthsToDate(incubationDate, Math.min(...input.pullAllocations.map((p) => p.months)))
-      : null;
+  let nextPullDate: string | null = null;
 
   const studyPayload: Omit<StabilityStudy, "id"> = {
     studyId,
@@ -502,13 +524,18 @@ export async function createStudyAndCharge(input: {
 
   const batch = writeBatch(getDb());
   const studyRef = doc(collection(getDb(), COLLECTIONS.stabilityStudies));
-  batch.set(studyRef, omitUndefined(studyPayload as unknown as Record<string, unknown>));
 
+  const reservedSplit = splitReservedQuantity(
+    input.reservedQuantity,
+    orientation.uprightQuantity,
+    input.totalQuantity
+  );
   const lots: {
     qty: number;
     reserved: number;
     orientation: "Upright" | "Inverted";
     pulls: { code: string; months: number; quantity: number }[];
+    nextPullDate: string | null;
   }[] = [];
   if (orientation.invertedQuantity > 0 && orientation.uprightQuantity > 0) {
     const { uprightPulls, invertedPulls: derivedInverted } = splitPullsByOrientation(
@@ -522,24 +549,65 @@ export async function createStudyAndCharge(input: {
         : derivedInverted;
     lots.push({
       qty: orientation.uprightQuantity,
-      reserved: input.reservedQuantity,
+      reserved: reservedSplit.upright,
       orientation: "Upright",
       pulls: uprightPulls,
+      nextPullDate: earliestPullDate(incubationDate, uprightPulls),
     });
     lots.push({
       qty: orientation.invertedQuantity,
-      reserved: 0,
+      reserved: reservedSplit.inverted,
       orientation: "Inverted",
       pulls: invertedPulls.filter((p) => p.quantity > 0),
+      nextPullDate: earliestPullDate(incubationDate, invertedPulls),
     });
   } else {
+    const onlyInverted = orientation.invertedQuantity > 0;
     lots.push({
       qty: input.totalQuantity,
       reserved: input.reservedQuantity,
-      orientation: orientation.invertedQuantity > 0 ? "Inverted" : "Upright",
+      orientation: onlyInverted ? "Inverted" : "Upright",
       pulls: input.pullAllocations,
+      nextPullDate: earliestPullDate(incubationDate, input.pullAllocations),
     });
   }
+
+  for (const lot of lots) {
+    const pullSum = lot.pulls.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
+    if (pullSum > lot.qty) {
+      throw new Error(
+        `${lot.orientation} pull allocation (${pullSum}) exceeds that orientation's quantity (${lot.qty}).`
+      );
+    }
+  }
+
+  const reserveRooms = lots.map((lot) => {
+    const pullSum = lot.pulls.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
+    return Math.max(0, lot.qty - pullSum);
+  });
+  let reserveLeft = input.reservedQuantity;
+  const fittedReserve = lots.map((lot, index) => {
+    const take = Math.min(reserveRooms[index], Math.max(0, lot.reserved), reserveLeft);
+    reserveLeft -= take;
+    return take;
+  });
+  for (let index = 0; index < lots.length && reserveLeft > 0; index++) {
+    const space = reserveRooms[index] - fittedReserve[index];
+    const take = Math.min(space, reserveLeft);
+    fittedReserve[index] += take;
+    reserveLeft -= take;
+  }
+  if (reserveLeft > 0) {
+    throw new Error("Reserve does not fit after splitting upright and inverted quantities.");
+  }
+  lots.forEach((lot, index) => {
+    lot.reserved = fittedReserve[index];
+  });
+
+  const lotDates = lots.map((lot) => lot.nextPullDate).filter((d): d is string => Boolean(d));
+  nextPullDate = lotDates.sort()[0] ?? null;
+  studyPayload.nextPullDate = nextPullDate;
+  batch.set(studyRef, omitUndefined(studyPayload as unknown as Record<string, unknown>));
 
   let primarySampleId = "";
   let primarySampleDocId = "";
@@ -584,7 +652,7 @@ export async function createStudyAndCharge(input: {
       sampleKind: "stability",
       receiptDocId: input.receiptDocId,
       status: "Available",
-      nextPullDate,
+      nextPullDate: lot.nextPullDate,
       notes: input.notes,
       createdBy: input.user.uid,
       createdByName: input.user.displayName || input.user.email,
@@ -666,8 +734,8 @@ export async function createStudyAndCharge(input: {
     const snap = await tx.get(chamberRef);
     if (!snap.exists()) throw new Error("Selected chamber was not found.");
     const live = snap.data();
-    if (live.status === "Inactive" || live.status === "Out of Service") {
-      throw new Error("Cannot allocate samples to an inactive chamber.");
+    if (isChamberClosed(live.status)) {
+      throw new Error("Cannot allocate samples to an inactive or out-of-service chamber.");
     }
     const used = Number(live.usedCapacity || 0);
     const cap = Number(live.capacity || 0);
@@ -795,6 +863,9 @@ export async function withdrawSample(input: {
     if (input.actualQuantity > sample.availableQuantity) {
       throw new Error("Actual quantity cannot exceed available quantity.");
     }
+    if (sample.status === "Under Reconciliation") {
+      throw new Error("This sample is under reconciliation. Finish the count before withdrawing.");
+    }
 
     const remainingPlanned = Math.max(0, pull.plannedQuantity - pull.actualQuantity);
     if (remainingPlanned <= 0) {
@@ -840,10 +911,15 @@ export async function withdrawSample(input: {
       available: -input.actualQuantity,
       withdrawn: input.actualQuantity,
     });
-    const nextOpen = [
-      ...(pullStatus !== "Withdrawn" ? [pull] : []),
-      ...siblingPulls.filter((p) => p.id !== pull.id && p.status !== "Withdrawn"),
-    ].sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
+    const openPulls = siblingPulls.filter((p) =>
+      p.id === pull.id ? pullStatus !== "Withdrawn" : p.status !== "Withdrawn"
+    );
+    const nextFor = (sampleDocId?: string) =>
+      openPulls
+        .filter((p) => !sampleDocId || p.sampleDocId === sampleDocId)
+        .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0];
+    const sampleNext = nextFor(sample.id);
+    const studyNext = nextFor();
 
     withdrawalPayload = {
       withdrawalId,
@@ -885,12 +961,12 @@ export async function withdrawSample(input: {
       withdrawnQuantity: newWithdrawn,
       availableQuantity: newAvailable,
       status: newSampleStatus,
-      nextPullDate: nextOpen?.plannedDate ?? null,
+      nextPullDate: sampleNext?.plannedDate ?? null,
       updatedAt: stamp,
     });
     tx.update(studyRef, {
       ...studyPatch,
-      nextPullDate: nextOpen?.plannedDate ?? null,
+      nextPullDate: studyNext?.plannedDate ?? null,
       updatedAt: stamp,
     });
     tx.update(chamberRef, {
@@ -973,7 +1049,7 @@ export async function moveSample(input: {
   const chamberSnap = await getDoc(doc(getDb(), COLLECTIONS.chambers, input.toChamberId));
   if (!chamberSnap.exists()) throw new Error("Destination chamber not found.");
   const chamber = chamberSnap.data();
-  if (chamber.status === "Inactive") throw new Error("Cannot move samples to an inactive chamber.");
+  if (isChamberClosed(chamber.status)) throw new Error("Cannot move samples to an inactive or out-of-service chamber.");
 
   const locationSnap = await getDoc(doc(getDb(), COLLECTIONS.storageLocations, input.toLocationId));
   if (!locationSnap.exists()) throw new Error("Destination location not found.");
@@ -1038,6 +1114,17 @@ export async function moveSample(input: {
     updatedAt: stamp,
   });
 
+  const pullSnap = await getDocs(
+    query(collection(getDb(), COLLECTIONS.studyPullPoints), where("sampleDocId", "==", sample.id))
+  );
+  pullSnap.docs.forEach((pullDoc) => {
+    batch.update(pullDoc.ref, {
+      chamberId: input.toChamberId,
+      chamberName: input.toChamberName,
+      updatedAt: stamp,
+    });
+  });
+
   const siblings = await listSamplesByStudy(sample.studyDocId);
   const afterMove = siblings.map((s) =>
     s.id === sample.id
@@ -1089,7 +1176,7 @@ export async function moveSample(input: {
       const destSnap = await tx.get(destRef);
       if (!destSnap.exists()) throw new Error("Destination chamber not found.");
       const dest = destSnap.data();
-      if (dest.status === "Inactive") throw new Error("Cannot move samples to an inactive chamber.");
+      if (isChamberClosed(dest.status)) throw new Error("Cannot move samples to an inactive or out-of-service chamber.");
       const destUsed = Number(dest.usedCapacity || 0);
       const destCap = Number(dest.capacity || 0);
       if (destUsed + qty > destCap) {
@@ -1323,6 +1410,9 @@ export async function disposeSample(input: {
     if (!sampleSnap.exists()) throw new Error("Sample not found.");
     const sample = { id: sampleSnap.id, ...sampleSnap.data() } as StabilitySample;
     if (sample.status === "Disposed") throw new Error("Sample is already fully disposed.");
+    if (sample.status === "Under Reconciliation") {
+      throw new Error("This sample is under reconciliation. Finish the count before disposing.");
+    }
     if (sample.availableQuantity <= 0) throw new Error("No available quantity left to dispose.");
     if (input.quantity > sample.availableQuantity) {
       throw new Error(`Cannot dispose more than available quantity (${sample.availableQuantity}).`);
@@ -1454,7 +1544,18 @@ export async function refreshAlerts() {
   const alertKey = (a: Pick<InventoryAlert, "alertType" | "relatedId">) => `${a.alertType}::${a.relatedId || ""}`;
   const existingByKey = new Map(existing.map((a) => [alertKey(a), a]));
 
+  const sampleById = new Map(samples.map((s) => [s.id, s]));
   for (const p of pulls) {
+    const host = sampleById.get(p.sampleDocId);
+    if (
+      host &&
+      (host.availableQuantity <= 0 ||
+        host.status === "Disposed" ||
+        host.status === "Fully Withdrawn" ||
+        host.status === "Depleted")
+    ) {
+      continue;
+    }
     const remaining = Math.max(0, p.plannedQuantity - p.actualQuantity);
     if (remaining <= 0) continue;
 

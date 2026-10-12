@@ -58,6 +58,30 @@ export default function BatchesPage() {
           ],
         },
       ]}
+      validate={({ values, items, editing }) => {
+        const batchNumber = values.batchNumber.trim();
+        const manufacturing = values.manufacturingDate.trim().slice(0, 7);
+        const expiry = values.expiryDate.trim().slice(0, 7);
+        const release = values.releaseDate.trim().slice(0, 10);
+        if (!values.productId.trim()) return "Select a product.";
+        if (
+          items.some(
+            (item) =>
+              item.id !== editing?.id &&
+              item.productId === values.productId &&
+              item.batchNumber.trim().toLowerCase() === batchNumber.toLowerCase()
+          )
+        ) {
+          return "This batch number already exists for the selected product.";
+        }
+        if (manufacturing && expiry && expiry < manufacturing) {
+          return "Expiry month cannot be earlier than the manufacturing month.";
+        }
+        if (release && manufacturing && release.slice(0, 7) < manufacturing) {
+          return "Release date cannot be earlier than the manufacturing month.";
+        }
+        return null;
+      }}
       mapRow={(item) => ({
         Product: item.productName,
         Batch: item.batchNumber,

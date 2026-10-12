@@ -56,7 +56,16 @@ export default function ObservationPage() {
   const template = DEFAULT_OBSERVATION_TEMPLATES.find((t) => t.productType === productType);
   const params = configured.length ? configured.map((p) => p.parameter) : (template?.parameters || []);
   const due = useMemo(
-    () => (catalog.data?.samples || []).filter((s) => s.status !== "Destroyed" && s.nextObservationDate && s.nextObservationDate <= todayISO()),
+    () =>
+      (catalog.data?.samples || []).filter(
+        (s) =>
+          (s.availableQuantity || 0) > 0 &&
+          s.status !== "Destroyed" &&
+          s.status !== "Disposed" &&
+          s.status !== "Depleted" &&
+          s.nextObservationDate &&
+          s.nextObservationDate.slice(0, 10) <= todayISO()
+      ),
     [catalog.data]
   );
 

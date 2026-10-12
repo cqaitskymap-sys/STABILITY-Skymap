@@ -18,8 +18,7 @@ service cloud.firestore {
     function usesCustomModules() {
       return userDocExists()
         && ('moduleAccess' in userDoc())
-        && userDoc().moduleAccess is list
-        && userDoc().moduleAccess.size() > 0;
+        && userDoc().moduleAccess is list;
     }
     function hasModuleAccess(permission) {
       return usesCustomModules() && permission in userDoc().moduleAccess;
@@ -56,8 +55,9 @@ service cloud.firestore {
     }
     function hasPermission(p) {
       return isActiveUser() && (
-        hasModuleAccess(p)
-        || (!usesCustomModules() && hasDefaultPermission(p))
+        usesCustomModules()
+          ? hasModuleAccess(p)
+          : hasDefaultPermission(p)
       );
     }
     function canManageUsers() {
@@ -118,7 +118,7 @@ service cloud.firestore {
         || (
           isSelf(userId)
           && isActiveUser()
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'moduleAccess', 'active'])
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'moduleAccess', 'active', 'accountLocked', 'failedLoginCount'])
         );
       allow delete: if canManageUsers();
     }

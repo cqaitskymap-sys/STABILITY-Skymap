@@ -10,6 +10,7 @@ import type {
   StudyType,
   Unit,
 } from "@/types";
+import { isChamberClosed } from "@/lib/sop";
 
 export type PullAllocationMap = Record<string, number>;
 
@@ -121,7 +122,7 @@ export function getMissingChargeMasters(masters: {
   if (!masters.conditions.some((c) => c.status === "Active")) {
     missing.push({ label: "Storage Conditions", href: "/masters/storage-conditions" });
   }
-  if (!masters.chambers.some((c) => c.status !== "Inactive")) {
+  if (!masters.chambers.some((c) => !isChamberClosed(c.status))) {
     missing.push({ label: "Chambers", href: "/masters/chambers" });
   }
   if (!masters.locations.some((l) => l.status === "Active")) {
@@ -173,8 +174,8 @@ export function validateChargeForm(
   if (opts.requireAllocations !== false && allocated <= 0) {
     errors.allocations = "Allocate quantity to at least one pull point.";
   }
-  if (opts.chamber?.status === "Inactive") {
-    errors.chamber = "Cannot allocate samples to an inactive chamber.";
+  if (isChamberClosed(opts.chamber?.status)) {
+    errors.chamber = "Cannot allocate samples to an inactive or out-of-service chamber.";
   }
   if (opts.chamber && Number.isFinite(total) && total > 0) {
     const used = Number(opts.chamber.usedCapacity || 0);

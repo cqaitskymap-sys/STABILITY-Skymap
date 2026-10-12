@@ -150,7 +150,7 @@ export default function LocationsPage() {
         }}
         buildPayload={(values, isCreate) => {
           const chamber = allChambers.find((c) => c.id === values.chamberId);
-          const chamberName = chamber?.chamberName || "";
+          const chamberName = chamber?.chamberName?.trim() || chamber?.chamberId || "";
           const rack = values.rack.trim();
           const shelf = values.shelf.trim();
           return {

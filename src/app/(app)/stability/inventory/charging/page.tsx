@@ -147,6 +147,7 @@ function SampleChargingPageInner() {
     [masters.data]
   );
 
+  const pullAnchor = form.incubationDate || form.chargingDate;
   const totalQuantity = Number(form.totalQuantity) || 0;
   const reservedQuantity = Number(form.reservedQuantity) || 0;
   const totalRequired = sumAllocations(form.pullAllocations);
@@ -256,6 +257,21 @@ function SampleChargingPageInner() {
       toast.error(
         `Charging beyond ${chargingWindowDays} days of batch release requires a reason.`
       );
+      return;
+    }
+    const selectedReceipt = readyReceipts.find((r) => r.id === form.receiptDocId);
+    if (selectedReceipt && totalQuantity > Number(selectedReceipt.sampleQuantity || 0)) {
+      toast.error(
+        `Charged quantity cannot exceed the inward quantity (${selectedReceipt.sampleQuantity} ${selectedReceipt.unit}).`
+      );
+      return;
+    }
+    if (
+      selectedReceipt?.unit &&
+      form.unit &&
+      selectedReceipt.unit.trim().toLowerCase() !== form.unit.trim().toLowerCase()
+    ) {
+      toast.error(`Charging unit (${form.unit}) must match the inward unit (${selectedReceipt.unit}).`);
       return;
     }
     setConfirmOpen(true);
@@ -431,6 +447,7 @@ function SampleChargingPageInner() {
               <Input
                 label="Date of Charging"
                 type="date"
+                fullDate
                 required
                 value={form.chargingDate}
                 error={errors.chargingDate}
@@ -444,6 +461,7 @@ function SampleChargingPageInner() {
               <Input
                 label="Incubation / Charging Date (pull calculation)"
                 type="date"
+                fullDate
                 required
                 value={form.incubationDate}
                 hint="Pull dates are calculated from this date, not manufacturing date."
@@ -526,7 +544,7 @@ function SampleChargingPageInner() {
               >
                 <option value="">Select chamber</option>
                 {(masters.data.chambers || []).map((c) => (
-                  <option key={c.id} value={c.id} disabled={c.status === "Inactive"}>
+                  <option key={c.id} value={c.id} disabled={c.status === "Inactive" || c.status === "Out of Service"}>
                     {c.chamberName} ({c.status})
                   </option>
                 ))}
@@ -576,10 +594,10 @@ function SampleChargingPageInner() {
                 Chamber is Under Maintenance. You may still proceed, but confirm with QA before charging.
               </div>
             ) : null}
-            {selectedChamber?.status === "Inactive" ? (
+            {selectedChamber?.status === "Inactive" || selectedChamber?.status === "Out of Service" ? (
               <div className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Inactive chambers cannot receive samples. Select another chamber.
+                Inactive and out-of-service chambers cannot receive samples. Select another chamber.
               </div>
             ) : null}
           </Card>
@@ -725,8 +743,8 @@ function SampleChargingPageInner() {
                           </td>
                           <td className="px-4 py-3">{p.months}M</td>
                           <td className="px-4 py-3">
-                            {form.chargingDate
-                              ? formatDate(addMonthsToDate(form.chargingDate, p.months))
+                            {pullAnchor
+                              ? formatDate(addMonthsToDate(pullAnchor, p.months))
                               : "—"}
                           </td>
                           <td className="px-4 py-3">
@@ -750,7 +768,7 @@ function SampleChargingPageInner() {
                       <p className="font-semibold text-slate-900">{p.code}</p>
                       <p className="text-sm text-slate-500">
                         {p.label} · {p.months}M
-                        {form.chargingDate ? ` · ${formatDate(addMonthsToDate(form.chargingDate, p.months))}` : ""}
+                        {pullAnchor ? ` · ${formatDate(addMonthsToDate(pullAnchor, p.months))}` : ""}
                       </p>
                       <div className="mt-3">
                         <Input

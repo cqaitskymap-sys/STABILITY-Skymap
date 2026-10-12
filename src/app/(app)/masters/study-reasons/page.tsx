@@ -34,6 +34,16 @@ export default function StudyReasonsPage() {
           ],
         },
       ]}
+      validate={({ values, items, editing }) => {
+        const name = values.name.trim();
+        if (!name) return "Reason is required.";
+        if (
+          items.some((item) => item.id !== editing?.id && item.name.trim().toLowerCase() === name.toLowerCase())
+        ) {
+          return "A study reason with this name already exists.";
+        }
+        return null;
+      }}
       mapRow={(item) => ({
         Reason: item.name,
         Description: item.description || "—",
