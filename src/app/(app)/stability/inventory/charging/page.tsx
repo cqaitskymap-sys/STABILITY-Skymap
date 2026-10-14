@@ -255,7 +255,7 @@ function SampleChargingPageInner() {
     if (!validate()) return;
     if (lateCharging && requireLateChargingReason && !form.lateChargingReason.trim()) {
       toast.error(
-        `Charging beyond ${chargingWindowDays} days of batch release requires a reason.`
+        `Charging beyond ${chargingWindowDays} days of the receive date requires a reason.`
       );
       return;
     }
@@ -644,10 +644,10 @@ function SampleChargingPageInner() {
               {lateCharging ? (
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
-                    Charging beyond {chargingWindowDays} days of batch release
+                    Charging beyond {chargingWindowDays} days of the receive date
                   </p>
                   <p className="mt-1">
-                    Release date {selectedBatch?.releaseDate ? formatFullDate(selectedBatch.releaseDate) : "not recorded"}.
+                    Receive date {selectedBatch?.releaseDate ? formatFullDate(selectedBatch.releaseDate) : "not recorded"}.
                     {requireLateChargingReason
                       ? " A reason is required before charging."
                       : " Record a reason if this needs explanation."}

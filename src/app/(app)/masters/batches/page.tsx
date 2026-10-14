@@ -45,7 +45,7 @@ export default function BatchesPage() {
         { key: "batchNumber", label: "Batch Number", required: true },
         { key: "manufacturingDate", label: "Manufacturing Date", type: "date", required: true },
         { key: "expiryDate", label: "Expiry Date", type: "date", required: true, monthBound: "end" },
-        { key: "releaseDate", label: "Release Date", type: "date", fullDate: true },
+        { key: "releaseDate", label: "Receive Date", type: "date", fullDate: true },
         { key: "batchSize", label: "Batch Size" },
         {
           key: "status",
@@ -78,7 +78,7 @@ export default function BatchesPage() {
           return "Expiry month cannot be earlier than the manufacturing month.";
         }
         if (release && manufacturing && release.slice(0, 7) < manufacturing) {
-          return "Release date cannot be earlier than the manufacturing month.";
+          return "Receive date cannot be earlier than the manufacturing month.";
         }
         return null;
       }}

@@ -125,6 +125,9 @@ export async function createDailyCollectionRecord(
   input: DailyCollectionInput & { user: AppUser; allowFutureDate?: boolean }
 ) {
   const { user, allowFutureDate, ...fields } = input;
+  if (fields.sampleType !== "Control Sample") {
+    throw new Error("Only Controlled Sample can be added.");
+  }
   const error = validateDailyCollectionInput(fields, { allowFutureDate });
   if (error) throw new Error(error);
   const existing = await listDailyCollectionRecords();

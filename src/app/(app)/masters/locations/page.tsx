@@ -32,7 +32,7 @@ export default function LocationsPage() {
       <div>
         <PageHeader
           title="Storage Location Master"
-          description="Define tray and shelf slots within chambers."
+          description="Define tray slots within chambers."
         />
         <LoadingSkeleton rows={4} />
       </div>
@@ -44,7 +44,7 @@ export default function LocationsPage() {
       <div>
         <PageHeader
           title="Storage Location Master"
-          description="Define tray and shelf slots within chambers."
+          description="Define tray slots within chambers."
         />
         <Card>
           <ErrorState message={chambers.error} onRetry={chambers.reload} />
@@ -70,7 +70,7 @@ export default function LocationsPage() {
 
       <MasterPage<StorageLocation>
         title="Storage Location Master"
-        description="Define tray and shelf slots within chambers for sample placement and movement."
+        description="Define tray slots within chambers for sample placement and movement."
         collectionName={COLLECTIONS.storageLocations}
         recordType="storageLocation"
         loader={listLocations}
@@ -91,12 +91,6 @@ export default function LocationsPage() {
             placeholder: "e.g. T1",
           },
           {
-            key: "shelf",
-            label: "Shelf",
-            required: true,
-            placeholder: "e.g. S2",
-          },
-          {
             key: "status",
             label: "Status",
             type: "select",
@@ -112,17 +106,18 @@ export default function LocationsPage() {
           "Chamber ID":
             allChambers.find((c) => c.id === item.chamberId)?.chamberId || item.chamberName,
           Tray: item.rack,
-          Shelf: item.shelf,
           Status: item.status || "Active",
         })}
         getCreateDefaults={() => ({
           chamberId: firstActiveChamberId,
           status: "Active",
         })}
+        getEditValues={(item) => ({
+          shelf: item.shelf || "",
+        })}
         validate={({ values, items, editing }) => {
           const chamberId = values.chamberId.trim();
           const rack = values.rack.trim();
-          const shelf = values.shelf.trim();
 
           if (!chamberId) return "Select a chamber.";
           const chamber = allChambers.find((c) => c.id === chamberId);
@@ -131,19 +126,18 @@ export default function LocationsPage() {
             return "Cannot create locations in an inactive chamber.";
           }
 
-          if (!rack || !shelf) {
-            return "Tray and shelf are both required.";
+          if (!rack) {
+            return "Tray is required.";
           }
 
           const duplicateSlot = items.some(
             (i) =>
               i.id !== editing?.id &&
               i.chamberId === chamberId &&
-              i.rack.trim().toLowerCase() === rack.toLowerCase() &&
-              i.shelf.trim().toLowerCase() === shelf.toLowerCase()
+              i.rack.trim().toLowerCase() === rack.toLowerCase()
           );
           if (duplicateSlot) {
-            return "This tray / shelf already exists in the selected chamber.";
+            return "This tray already exists in the selected chamber.";
           }
 
           return null;
@@ -152,7 +146,7 @@ export default function LocationsPage() {
           const chamber = allChambers.find((c) => c.id === values.chamberId);
           const chamberName = chamber?.chamberName?.trim() || chamber?.chamberId || "";
           const rack = values.rack.trim();
-          const shelf = values.shelf.trim();
+          const shelf = isCreate ? "" : (values.shelf || "").trim();
           return {
             chamberId: values.chamberId,
             chamberName,

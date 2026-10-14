@@ -221,7 +221,7 @@ export default function NewStabilityStudyPage() {
       return;
     }
     if (lateCharging && orgSettings.requireLateChargingReason && !form.lateChargingReason.trim()) {
-      toast.error(`Charging beyond ${orgSettings.chargingWindowDays} days of batch release requires a reason.`);
+      toast.error(`Charging beyond ${orgSettings.chargingWindowDays} days of the receive date requires a reason.`);
       return;
     }
     if (!validateStep(5)) return;
@@ -681,7 +681,7 @@ export default function NewStabilityStudyPage() {
               {lateCharging ? (
                 <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
-                    Charging beyond {orgSettings.chargingWindowDays} days of batch release
+                    Charging beyond {orgSettings.chargingWindowDays} days of the receive date
                   </p>
                   <p className="mt-1">
                     {orgSettings.requireLateChargingReason
@@ -744,7 +744,7 @@ export default function NewStabilityStudyPage() {
                   }
                   if (lateCharging && orgSettings.requireLateChargingReason && !form.lateChargingReason.trim()) {
                     toast.error(
-                      `Charging beyond ${orgSettings.chargingWindowDays} days of batch release requires a reason.`
+                      `Charging beyond ${orgSettings.chargingWindowDays} days of the receive date requires a reason.`
                     );
                     return;
                   }

@@ -413,7 +413,7 @@ export async function createStudyAndCharge(input: {
   );
   if (lateCharging && settings.requireLateChargingReason && !input.lateChargingReason?.trim()) {
     throw new Error(
-      `Charging is beyond ${settings.chargingWindowDays} days of batch release. Record a reason before continuing.`
+      `Charging is beyond ${settings.chargingWindowDays} days of the receive date. Record a reason before continuing.`
     );
   }
   if (settings.requireReceiptBeforeCharging && !input.receiptDocId) {

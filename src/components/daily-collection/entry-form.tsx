@@ -331,7 +331,10 @@ export function DailyCollectionEntryForm({
           }
           disabled={readOnly}
         >
-          {DAILY_COLLECTION_SAMPLE_TYPES.map((type) => (
+          {(DAILY_COLLECTION_SAMPLE_TYPES.includes(form.sampleType)
+            ? DAILY_COLLECTION_SAMPLE_TYPES
+            : [form.sampleType, ...DAILY_COLLECTION_SAMPLE_TYPES]
+          ).map((type) => (
             <option key={type} value={type}>{dailyCollectionSampleTypeLabel(type)}</option>
           ))}
         </Select>

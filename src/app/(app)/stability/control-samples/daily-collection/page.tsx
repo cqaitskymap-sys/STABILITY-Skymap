@@ -79,7 +79,6 @@ export default function DailyCollectionRecordPage() {
   const [productId, setProductId] = useState("");
   const [batchFilter, setBatchFilter] = useState("");
   const [market, setMarket] = useState("");
-  const [sampleType, setSampleType] = useState("");
   const [collectedBy, setCollectedBy] = useState("");
   const [month, setMonth] = useState("");
   const [page, setPage] = useState(1);
@@ -116,20 +115,12 @@ export default function DailyCollectionRecordPage() {
 
   const productFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
-    // Masters stay separate: dump the stability catalog only when the user
-    // explicitly filters to Stability Sample. "All types" is Controlled Sample
-    // masters plus products that already appear on this register.
-    if (sampleType === "Stability Sample") {
-      for (const p of catalog.data?.products || []) map.set(p.id, p.productName);
-    } else {
-      for (const p of catalog.data?.controlProducts || []) map.set(p.id, p.productName);
-    }
+    for (const p of catalog.data?.controlProducts || []) map.set(p.id, p.productName);
     for (const r of rows) {
-      if (sampleType && r.sampleType !== sampleType) continue;
       if (r.productId) map.set(r.productId, r.productName);
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [catalog.data, rows, sampleType]);
+  }, [catalog.data, rows]);
 
   const months = useMemo(() => {
     const keys = Array.from(new Set(rows.map((r) => monthKey(r.date)).filter(Boolean)));
@@ -143,7 +134,6 @@ export default function DailyCollectionRecordPage() {
       if (productId && r.productId !== productId) return false;
       if (batchFilter && !r.batchNumber.toLowerCase().includes(batchFilter.toLowerCase())) return false;
       if (market && r.market !== market) return false;
-      if (sampleType && r.sampleType !== sampleType) return false;
       if (collectedBy && !r.collectedByName.toLowerCase().includes(collectedBy.toLowerCase())) return false;
       if (month && monthKey(r.date) !== month) return false;
       return true;
@@ -157,7 +147,7 @@ export default function DailyCollectionRecordPage() {
       return b.serialNumber - a.serialNumber;
     });
     return next;
-  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows, sampleType]);
+  }, [batchFilter, collectedBy, dateFrom, dateTo, market, month, productId, rows]);
 
   const paged = paginate(filtered, page, 20);
   const companyName = catalog.data?.settings.companyName?.trim() || process.env.NEXT_PUBLIC_COMPANY_NAME || COMPANY_FALLBACK;
@@ -275,10 +265,10 @@ export default function DailyCollectionRecordPage() {
   if (!profile) return <LoadingSkeleton rows={8} />;
 
   return (
-    <div>
+    <div className="min-w-0">
       <PageHeader
         title="Daily Collection Record"
-        description="Digital register for daily collection of Controlled Samples and Stability Samples. Product and batch masters are separate for each sample type and are not linked."
+        description="Digital register for daily collection of Controlled Samples. Product and batch values come from the controlled sample masters."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => void reload()}><RefreshCw className="h-4 w-4" />Refresh</Button>
@@ -356,11 +346,6 @@ export default function DailyCollectionRecordPage() {
                 <option value="">All markets</option>
                 {markets.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
-              <Select label="Sample Type" value={sampleType} onChange={(e) => { setSampleType(e.target.value); setProductId(""); setPage(1); }}>
-                <option value="">All types</option>
-                <option value="Control Sample">Controlled Sample</option>
-                <option value="Stability Sample">Stability Sample</option>
-              </Select>
               <Input label="Collected By" value={collectedBy} onChange={(e) => { setCollectedBy(e.target.value); setPage(1); }} />
             </div>
             <div className="flex flex-wrap gap-2 border-t border-slate-100 px-4 py-3">
@@ -374,7 +359,7 @@ export default function DailyCollectionRecordPage() {
             </div>
           </Card>
 
-          <div className="overflow-hidden rounded-2xl border-2 border-slate-700 bg-[#fbf8f1] shadow-sm">
+          <div className="min-w-0 overflow-hidden rounded-2xl border-2 border-slate-700 bg-[#fbf8f1] shadow-sm">
             <div className="border-b-2 border-slate-700 px-4 py-4 text-center">
               <p className="text-[11px] font-semibold tracking-[0.18em] text-slate-600">{companyName}</p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quality Assurance</p>
@@ -386,31 +371,46 @@ export default function DailyCollectionRecordPage() {
               <EmptyState title="No collection entries" description="Add a daily collection entry to start this controlled register." />
             ) : (
               <>
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="min-w-[1280px] border-collapse text-sm">
+                <div className="hidden min-w-0 md:block">
+                  <table className="w-full table-fixed border-separate border-spacing-0 text-xs leading-tight">
+                    <colgroup>
+                      <col className="w-[5%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[6%]" />
+                      <col className="w-[6%]" />
+                      <col className="w-[7%]" />
+                      <col className="w-[5%]" />
+                      <col className="w-[7%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[4%]" />
+                      <col className="w-[16%]" />
+                    </colgroup>
                     <thead>
-                      <tr className="bg-slate-200/80 text-left text-[11px] uppercase tracking-wide text-slate-700">
+                      <tr className="bg-slate-200/80 text-left text-[10px] uppercase tracking-normal text-slate-700">
                         {["S. No.", "Date", "Product Name", "Batch No.", "Batch Size", "Mfg. Date", "Expiry Date", "Market", "Pack Size", "Qty Collected", "Collected By", "Remarks", "Actions"].map((h) => (
-                          <th key={h} className="border border-slate-400 px-2 py-2 font-semibold">{h}</th>
+                          <th key={h} className="border-b border-r border-slate-400 px-1.5 py-2 align-bottom font-semibold last:border-r-0">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {paged.items.map((r) => (
                         <tr key={r.id} className={r.status === "Cancelled" ? "bg-slate-100 text-slate-500" : "bg-white"}>
-                          <td className="border border-slate-300 px-2 py-2 font-medium">{r.serialDisplay}</td>
-                          <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{formatFullDate(r.date)}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.productName}</td>
-                          <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{r.batchNumber}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.batchSize || "—"}</td>
-                          <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{formatDate(r.manufacturingDate)}</td>
-                          <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{formatDate(r.expiryDate)}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.market}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.packSize}</td>
-                          <td className="border border-slate-300 px-2 py-2 whitespace-nowrap">{formatQuantity(r.quantityCollected, r.quantityUnit)}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.collectedByName}</td>
-                          <td className="border border-slate-300 px-2 py-2">{r.remarks || "—"}</td>
-                          <td className="border border-slate-300 px-2 py-2">
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top font-medium">{r.serialDisplay}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top">{formatFullDate(r.date)}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.productName}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.batchNumber}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.batchSize || "—"}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top">{formatDate(r.manufacturingDate)}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top">{formatDate(r.expiryDate)}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.market}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top">{r.packSize}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top">{formatQuantity(r.quantityCollected, r.quantityUnit)}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.collectedByName}</td>
+                          <td className="border-b border-r border-slate-300 px-1.5 py-2 align-top break-words">{r.remarks || "—"}</td>
+                          <td className="border-b border-slate-300 px-1.5 py-2 align-top">
                             <RowActions
                               row={r}
                               canCreate={canCreate}
@@ -559,13 +559,13 @@ function RowActions({
 }) {
   return (
     <div className="flex flex-wrap gap-1">
-      <Button size="sm" variant="ghost" onClick={onView}>View</Button>
-      {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" onClick={onEdit}>Edit</Button> : null}
-      {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" onClick={() => onWorkflow("submit")}>Submit</Button> : null}
-      {row.status === "Submitted" && canReview ? <Button size="sm" variant="outline" onClick={() => onWorkflow("review")}>Review</Button> : null}
-      {row.status === "Reviewed" && canReview ? <Button size="sm" onClick={() => onWorkflow("finalize")}>Finalize</Button> : null}
-      {row.status === "Finalized" && canCorrect ? <Button size="sm" variant="outline" onClick={onCorrect}>Correct</Button> : null}
-      {canViewAudit ? <Button size="sm" variant="ghost" onClick={onAudit}>Audit</Button> : null}
+      <Button size="sm" variant="ghost" className="h-7 min-h-0 px-2" onClick={onView}>View</Button>
+      {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={onEdit}>Edit</Button> : null}
+      {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("submit")}>Submit</Button> : null}
+      {row.status === "Submitted" && canReview ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("review")}>Review</Button> : null}
+      {row.status === "Reviewed" && canReview ? <Button size="sm" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("finalize")}>Finalize</Button> : null}
+      {row.status === "Finalized" && canCorrect ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={onCorrect}>Correct</Button> : null}
+      {canViewAudit ? <Button size="sm" variant="ghost" className="h-7 min-h-0 px-2" onClick={onAudit}>Audit</Button> : null}
     </div>
   );
 }

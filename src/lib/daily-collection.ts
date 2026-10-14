@@ -1,10 +1,7 @@
 import { todayISO } from "@/lib/utils";
 import type { DailyCollectionInput, DailyCollectionRecord, DailyCollectionSampleType } from "@/types/daily-collection";
 
-export const DAILY_COLLECTION_SAMPLE_TYPES: DailyCollectionSampleType[] = [
-  "Control Sample",
-  "Stability Sample",
-];
+export const DAILY_COLLECTION_SAMPLE_TYPES: DailyCollectionSampleType[] = ["Control Sample"];
 
 export function dailyCollectionSampleTypeLabel(type: string) {
   return type === "Control Sample" ? "Controlled Sample" : type;

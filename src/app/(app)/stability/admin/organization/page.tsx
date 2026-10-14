@@ -85,7 +85,7 @@ export default function OrganizationSettingsPage() {
           <Input label="Plant code" value={data.plantCode} onChange={(e) => set("plantCode", e.target.value)} disabled={!can} />
           <Input label="Department code" value={data.departmentCode} onChange={(e) => set("departmentCode", e.target.value)} disabled={!can} />
           <Input label="Document prefix" value={data.documentPrefix} onChange={(e) => set("documentPrefix", e.target.value)} disabled={!can} />
-          <Input label="Charging window (days from release)" type="number" value={String(data.chargingWindowDays)} onChange={(e) => setNonNegative("chargingWindowDays", e.target.value)} disabled={!can} />
+          <Input label="Charging window (days from receive date)" type="number" value={String(data.chargingWindowDays)} onChange={(e) => setNonNegative("chargingWindowDays", e.target.value)} disabled={!can} />
           <Input label="Withdrawal window (days after due)" type="number" value={String(data.withdrawalWindowDays)} onChange={(e) => setNonNegative("withdrawalWindowDays", e.target.value)} disabled={!can} />
           <Input label="Accelerated analysis days" type="number" value={String(data.analysisDaysAccelerated)} onChange={(e) => setNonNegative("analysisDaysAccelerated", e.target.value)} disabled={!can} />
           <Input label="Long-term analysis days" type="number" value={String(data.analysisDaysLongTerm)} onChange={(e) => setNonNegative("analysisDaysLongTerm", e.target.value)} disabled={!can} />
