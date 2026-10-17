@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteField, doc, getDoc, updateDoc } from "firebase/firestore";
 import { listDocs } from "@/lib/firebase/list-docs";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import {
@@ -87,9 +87,18 @@ function snapshotFields(input: DailyCollectionInput) {
   });
 }
 
-function backdateFields(input: DailyCollectionInput, user: AppUser, stamp: string) {
+function backdateFields(input: DailyCollectionInput, user: AppUser, stamp: string, clearStale = false) {
   const today = todayISO();
-  if (input.date >= today) return {};
+  if (input.date >= today) {
+    if (!clearStale) return {};
+    return {
+      backdatedEntry: false,
+      backdatedReason: deleteField(),
+      enteredBy: deleteField(),
+      enteredByName: deleteField(),
+      enteredAt: deleteField(),
+    };
+  }
   return {
     backdatedEntry: true,
     backdatedReason: input.backdatedReason?.trim(),
@@ -184,7 +193,7 @@ export async function updateDailyCollectionDraft(
   const who = actor(user);
   const patch = omitUndefined({
     ...snapshotFields(fields),
-    ...backdateFields(fields, user, stamp),
+    ...backdateFields(fields, user, stamp, true),
     updatedBy: who.id,
     updatedByName: who.name,
     updatedAt: stamp,
@@ -323,6 +332,7 @@ export async function correctDailyCollectionRecord(
   };
   const patch = omitUndefined({
     ...snapshotFields(fields),
+    ...backdateFields(fields, user, stamp, true),
     corrections: [...(row.corrections || []), correction],
     updatedBy: who.id,
     updatedByName: who.name,

@@ -12,6 +12,7 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/ui";
+import { PrintMasthead, PrintSheetFooter } from "@/components/print/print-document";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { getWithdrawal } from "@/services/inventory";
@@ -19,7 +20,6 @@ import { getWithdrawal } from "@/services/inventory";
 export default function WithdrawalDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id || "";
-  const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || "SKYMAP Stability";
   const { data, loading, error, reload } = useAsync(async () => {
     if (!id) return null;
     return getWithdrawal(id);
@@ -30,7 +30,7 @@ export default function WithdrawalDetailPage() {
   }
 
   return (
-    <div>
+    <div className="print-page">
       <div className="print:hidden">
         <PageHeader
           title="Withdrawal Record"
@@ -70,27 +70,9 @@ export default function WithdrawalDetailPage() {
 
       {data ? (
         <Card className="overflow-hidden print:border-0 print:shadow-none">
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-5 sm:px-6 print:bg-white">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-800">
-                  {companyName}
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-slate-900">
-                  Sample Withdrawal Record
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Controlled document for QA verification and archive.
-                </p>
-              </div>
-              <div className="text-left sm:text-right">
-                <p className="text-sm font-semibold text-teal-800">{data.withdrawalId}</p>
-                <p className="text-xs text-slate-500">Recorded {formatDateTime(data.createdAt)}</p>
-                <div className="mt-2 print:hidden">
-                  <StatusBadge status="Withdrawn" />
-                </div>
-              </div>
-            </div>
+          <PrintMasthead title="Sample Withdrawal Record" documentNumber={data.withdrawalId} department="Quality Assurance" />
+          <div className="flex justify-end px-5 pt-3 print:hidden">
+            <StatusBadge status="Withdrawn" />
           </div>
 
           <div className="space-y-6 px-6 py-6">
@@ -141,10 +123,11 @@ export default function WithdrawalDetailPage() {
               </div>
               <p className="mt-6 text-xs text-slate-500">
                 This document confirms removal of stability samples from controlled storage. Retain
-                with study documentation as per SOP.
+                with study documentation as per SOP. Recorded {formatDateTime(data.createdAt)}.
               </p>
             </section>
           </div>
+          <PrintSheetFooter />
         </Card>
       ) : null}
     </div>

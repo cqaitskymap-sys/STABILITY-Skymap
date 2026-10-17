@@ -173,7 +173,15 @@ export default function DestructionNotePage() {
         <Card>
           <CardHeader title="Destruction checklist" />
           <div className="grid gap-3 p-4">
-            <Select label="Approved note" value={checkId} onChange={(e) => setCheckId(e.target.value)} disabled={!can}>
+            <Select
+              label="Approved note"
+              value={checkId}
+              onChange={(e) => {
+                setCheckId(e.target.value);
+                setChecks(DEFAULT_DESTRUCTION_STEPS.map((step) => ({ step, completed: false, remarks: "" })));
+              }}
+              disabled={!can}
+            >
               <option value="">Select</option>
               {(catalog.data?.notes || []).filter((n) => n.status === "Approved").map((n) => (
                 <option key={n.id} value={n.id}>{n.dcnNumber}</option>

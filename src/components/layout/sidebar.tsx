@@ -333,7 +333,7 @@ export function Sidebar({
 
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[2px] transition lg:hidden",
+          "app-overlay fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[2px] transition lg:hidden",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}

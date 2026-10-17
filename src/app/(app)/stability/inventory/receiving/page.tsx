@@ -73,6 +73,10 @@ export default function SampleInwardPage() {
       toast.error("Quantity must be greater than zero.");
       return;
     }
+    if (!unit.trim()) {
+      toast.error("Unit is required.");
+      return;
+    }
     setSaving(true);
     try {
       await createSampleReceipt({
@@ -83,7 +87,7 @@ export default function SampleInwardPage() {
         manufacturingDate: selectedBatch.manufacturingDate,
         expiryDate: selectedBatch.expiryDate,
         sampleQuantity: qty,
-        unit: unit || "UNIT",
+        unit: unit.trim(),
         sampleReceivedBy: receivedBy || profile.displayName,
         dateReceived,
         remarks: remarks.trim() || undefined,

@@ -1,24 +1,34 @@
-import { collection, getDocs } from "firebase/firestore";
-import { COLLECTIONS, getDb } from "@/lib/firebase/config";
 import { effectiveDueDate, roundPct, todayISO } from "@/lib/utils";
-import type { Chamber, DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
+import type { DashboardStats, StabilitySample, StabilityStudy, StudyPullPoint } from "@/types";
 import { listPullPoints, listSamples, listStudies, listTransactions } from "@/services/inventory";
-import { listStudyTypes } from "@/services/masters";
+import { listChambers, listStudyTypes } from "@/services/masters";
 import { listSampleReceipts } from "@/services/receipts";
 import { listControlSamples } from "@/services/control-samples";
 import { listAnalysisRequests } from "@/services/analysis";
 import { listChamberAlarms, listChamberExcursions, listChamberCalibration, listTemperatureMappings } from "@/services/chamber-ops";
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [studies, samples, pulls, chamberSnap, studyTypeMasters] = await Promise.all([
+  const corePromise = Promise.all([
     listStudies(),
     listSamples(),
     listPullPoints(),
-    getDocs(collection(getDb(), COLLECTIONS.chambers)),
+    listChambers(),
     listStudyTypes(),
   ]);
+  const extrasPromise = Promise.allSettled([
+    listSampleReceipts(),
+    listControlSamples(),
+    listAnalysisRequests(),
+    listChamberAlarms(),
+    listChamberExcursions(),
+    listChamberCalibration(),
+    listTemperatureMappings(),
+  ]);
+  const [[studies, samples, pulls, chambers, studyTypeMasters], extras] = await Promise.all([
+    corePromise,
+    extrasPromise,
+  ]);
 
-  const chambers = chamberSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Chamber));
   const activeStudies = studies.filter((s) => s.status === "Active" || s.status === "Partially Withdrawn");
   const activeChambers = chambers.filter((c) => c.status === "Active");
 
@@ -55,15 +65,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     };
   });
 
-  const extras = await Promise.allSettled([
-    listSampleReceipts(),
-    listControlSamples(),
-    listAnalysisRequests(),
-    listChamberAlarms(),
-    listChamberExcursions(),
-    listChamberCalibration(),
-    listTemperatureMappings(),
-  ]);
   const receipts = extras[0].status === "fulfilled" ? extras[0].value : [];
   const controls = extras[1].status === "fulfilled" ? extras[1].value : [];
   const analysis = extras[2].status === "fulfilled" ? extras[2].value : [];
@@ -108,9 +109,8 @@ export async function getRecentActivity(limitCount = 10) {
 }
 
 export async function getChamberUtilization() {
-  const snap = await getDocs(collection(getDb(), COLLECTIONS.chambers));
-  return snap.docs.map((d) => {
-    const c = { id: d.id, ...d.data() } as Chamber;
+  const chambers = await listChambers();
+  return chambers.map((c) => {
     const used = c.usedCapacity || 0;
     const capacity = c.capacity || 0;
     return {

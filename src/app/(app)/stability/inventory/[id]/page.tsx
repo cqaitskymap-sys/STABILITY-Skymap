@@ -23,6 +23,7 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/ui";
+import { PrintLogo, PrintPageBanner, PrintPageFooter } from "@/components/print/print-document";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -31,7 +32,6 @@ import { getSample, listPullPoints, listTransactionsBySample } from "@/services/
 export default function SampleDetailPage() {
   const params = useParams<{ id: string }>();
   const sampleId = params?.id ?? "";
-  const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || "SKYMAP Stability";
   const { hasPermission } = useAuth();
 
   const canWithdraw = hasPermission("withdrawal.perform");
@@ -75,7 +75,8 @@ export default function SampleDetailPage() {
     sample.availableQuantity > 0 && !["Disposed", "Fully Withdrawn", "Depleted"].includes(sample.status);
 
   return (
-    <div>
+    <div className="print-page">
+      <PrintPageBanner title="Stability Sample Inventory Record" documentNumber={sample.sampleId} />
       <PageHeader
         title={sample.sampleId}
         description={`${sample.productName} · ${sample.batchNumber} · Study ${sample.studyId}`}
@@ -131,11 +132,6 @@ export default function SampleDetailPage() {
         }
       />
 
-      <div className="mb-4 hidden print:block">
-        <p className="text-lg font-semibold text-slate-900">{companyName}</p>
-        <p className="text-sm text-slate-500">Stability Sample Inventory Record</p>
-      </div>
-
       <Card className="mb-4 print-card">
         <CardHeader title="Stability Sample Label" description="Color is an aid only — identification fields are always printed." />
         <div
@@ -148,7 +144,7 @@ export default function SampleDetailPage() {
                 : "#16a34a",
           }}
         >
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{companyName}</p>
+          <PrintLogo className="mb-2 h-10" />
           <p className="text-lg font-semibold text-slate-900">{sample.productName}</p>
           <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
             <p>Batch: {sample.batchNumber}</p>
@@ -337,9 +333,7 @@ export default function SampleDetailPage() {
         )}
       </Card>
 
-      <p className="mt-4 hidden text-xs text-slate-400 print:block">
-        Printed {formatDateTime(new Date().toISOString())} · {companyName}
-      </p>
+      <PrintPageFooter />
     </div>
   );
 }

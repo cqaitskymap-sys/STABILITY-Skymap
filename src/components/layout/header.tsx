@@ -35,12 +35,12 @@ export function Header({
   alertCount?: number;
   hideNav?: boolean;
 }) {
-  const { profile, logout } = useAuth();
+  const { profile, logout, hasPermission } = useAuth();
   const pathname = usePathname();
   const isHome = pathname === "/home";
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+    <header className="app-header sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {!hideNav ? (
@@ -102,18 +102,20 @@ export function Header({
                 <Sparkles className="h-4 w-4" />
                 <span className="hidden md:inline">Ask AI</span>
               </button>
-              <Link
-                href="/stability/alerts"
-                className="relative rounded-xl p-2 text-slate-600 transition hover:bg-slate-100"
-                aria-label="Alerts"
-              >
-                <Bell className="h-5 w-5" />
-                {alertCount > 0 ? (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-sm">
-                    {alertCount > 99 ? "99+" : alertCount}
-                  </span>
-                ) : null}
-              </Link>
+              {hasPermission("reports.view") ? (
+                <Link
+                  href="/stability/alerts"
+                  className="relative rounded-xl p-2 text-slate-600 transition hover:bg-slate-100"
+                  aria-label="Alerts"
+                >
+                  <Bell className="h-5 w-5" />
+                  {alertCount > 0 ? (
+                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-sm">
+                      {alertCount > 99 ? "99+" : alertCount}
+                    </span>
+                  ) : null}
+                </Link>
+              ) : null}
             </>
           ) : null}
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/70 p-1 shadow-sm sm:gap-2.5 sm:px-2 sm:py-1.5 sm:pr-3">

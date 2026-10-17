@@ -175,9 +175,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!cancelled && firebaseUser) {
             try {
               const retry = await ensureProfile(firebaseUser, firebaseUser.displayName || "");
-              if (!cancelled && retry && retry.active !== false) {
+              if (!cancelled && retry && retry.active !== false && !retry.accountLocked) {
                 setProfile(retry);
                 return;
+              }
+              if (!cancelled) {
+                setProfile(null);
+                await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
+                setUser(null);
               }
             } catch {
               /* fall through to loading=false without signing out */
@@ -339,6 +344,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const p = await loadProfile(authUser);
+    if (!p || p.active === false || p.accountLocked) {
+      setProfile(null);
+      await firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
+      setUser(null);
+      return;
+    }
     setProfile(p);
   }, []);
 
@@ -357,7 +368,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [profile]);
 
   const hasPermission = useCallback(
-    (permission: Permission) => profile?.active !== false && can(profile, permission),
+    (permission: Permission) =>
+      !!profile && profile.active !== false && !profile.accountLocked && can(profile, permission),
     [profile]
   );
 

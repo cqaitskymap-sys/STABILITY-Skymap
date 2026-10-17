@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 import {
@@ -16,6 +15,7 @@ import {
   Select,
   StatusBadge,
 } from "@/components/ui";
+import { PrintPageBanner, PrintPageFooter } from "@/components/print/print-document";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import {
@@ -26,6 +26,7 @@ import {
   pullDueUrgency,
   toCsv,
 } from "@/lib/utils";
+import { downloadXlsx } from "@/lib/export-xlsx";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { getChamberUtilization } from "@/services/dashboard";
 import { getOrganizationSettings } from "@/services/organization";
@@ -470,15 +471,12 @@ export default function ReportsPage() {
     toast.success(`CSV exported (${exportable.length} rows).`);
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!exportable.length) {
       toast.error("No rows to export.");
       return;
     }
-    const sheet = XLSX.utils.json_to_sheet(exportable);
-    const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, sheet, "Report");
-    XLSX.writeFile(book, `${report}-${Date.now()}.xlsx`);
+    await downloadXlsx(`${report}-${Date.now()}.xlsx`, "Report", exportable);
     toast.success(`Excel exported (${exportable.length} rows).`);
   }
 
@@ -500,7 +498,8 @@ export default function ReportsPage() {
   }
 
   return (
-    <div>
+    <div className="print-page print-page-landscape">
+      <PrintPageBanner title={selected.title} documentNumber="Stability Report" department="Quality Assurance" />
       <PageHeader
         title="Reports"
         description="Inventory, withdrawal, reconciliation, and chamber utilization reports with export."
@@ -534,7 +533,7 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr] print:block">
         <Card className="h-fit p-3 no-print">
           <div className="space-y-1">
             {REPORTS.map((r) => (
@@ -697,6 +696,7 @@ export default function ReportsPage() {
           ) : null}
         </Card>
       </div>
+      <PrintPageFooter />
     </div>
   );
 }

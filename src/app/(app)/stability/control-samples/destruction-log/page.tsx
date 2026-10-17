@@ -41,7 +41,7 @@ export default function DestructionLogPage() {
       {logs.error ? <ErrorState message={logs.error} onRetry={logs.reload} /> : null}
       {print ? (
         <div className="mb-6">
-        <PrintDocument title="Destruction Log Book of Controlled Sample" documentNumber="Annexure-VII">
+        <PrintDocument title="Destruction Log Book of Controlled Sample" documentNumber="Annexure-VII" orientation="landscape">
           <table className="min-w-full text-xs">
             <thead>
               <tr className="border-b">{["Month", "Year", "DCN", "Product", "Batch", "Qty", "Date", "Initiated", "Checked", "Verified"].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr>

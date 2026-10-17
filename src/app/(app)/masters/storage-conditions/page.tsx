@@ -11,14 +11,15 @@ const STORAGE_CONDITION_PRESETS = [
   { name: "Long Term", temperature: "30°C", relativeHumidity: "75%" },
   { name: "Long Term", temperature: "30°C", relativeHumidity: "65%" },
   { name: "Long Term", temperature: "30°C", relativeHumidity: "35%" },
-  { name: "Long Term", temperature: "20°C", relativeHumidity: "10%" },
+  { name: "Long Term", temperature: "NMT 15°C", relativeHumidity: "" },
   { name: "Long Term", temperature: "25°C", relativeHumidity: "60%" },
   { name: "ACC", temperature: "40°C", relativeHumidity: "75%" },
   { name: "ACC", temperature: "40°C", relativeHumidity: "NMT 25%" },
 ] as const;
 
 function conditionKey(temperature: string, relativeHumidity: string) {
-  return `${temperature} / ${relativeHumidity}`;
+  const humidity = relativeHumidity.trim();
+  return humidity ? `${temperature} / ${humidity}` : temperature;
 }
 
 function findPreset(name: string, key: string) {

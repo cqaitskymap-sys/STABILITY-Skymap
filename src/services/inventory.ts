@@ -23,6 +23,7 @@ import {
 } from "@/lib/utils";
 import { nextSequentialId } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
+import { cachedRead, invalidateReadCache } from "@/lib/firebase/read-cache";
 import {
   DEFAULT_ORG_SETTINGS,
   isChamberClosed,
@@ -181,7 +182,10 @@ async function assertLocationAvailable(locationId: string, exceptSampleId?: stri
   }
 }
 
-export async function listStudies() {
+export function listStudies() {
+  return cachedRead("inv:studies", loadStudies);
+}
+async function loadStudies() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.stabilityStudies), orderBy("createdAt", "desc"))
@@ -195,13 +199,19 @@ export async function listStudies() {
   }
 }
 
-export async function getStudy(id: string) {
+export function getStudy(id: string) {
+  return cachedRead(`inv:study:${id}`, () => loadStudy(id));
+}
+async function loadStudy(id: string) {
   const snap = await getDoc(doc(getDb(), COLLECTIONS.stabilityStudies, id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as StabilityStudy;
 }
 
-export async function listSamples() {
+export function listSamples() {
+  return cachedRead("inv:samples", loadSamples);
+}
+async function loadSamples() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.stabilitySamples), orderBy("createdAt", "desc"))
@@ -215,7 +225,10 @@ export async function listSamples() {
   }
 }
 
-export async function listSamplesByStudy(studyDocId: string) {
+export function listSamplesByStudy(studyDocId: string) {
+  return cachedRead(`inv:samples-by:${studyDocId}`, () => loadSamplesByStudy(studyDocId));
+}
+async function loadSamplesByStudy(studyDocId: string) {
   const snap = await getDocs(
     query(collection(getDb(), COLLECTIONS.stabilitySamples), where("studyDocId", "==", studyDocId))
   );
@@ -224,7 +237,10 @@ export async function listSamplesByStudy(studyDocId: string) {
     .sort((a, b) => String(a.sampleId || "").localeCompare(String(b.sampleId || "")));
 }
 
-export async function listTransactionsByStudy(studyId: string) {
+export function listTransactionsByStudy(studyId: string) {
+  return cachedRead(`inv:tx-by-study:${studyId}`, () => loadTransactionsByStudy(studyId));
+}
+async function loadTransactionsByStudy(studyId: string) {
   const snap = await getDocs(
     query(collection(getDb(), COLLECTIONS.inventoryTransactions), where("studyId", "==", studyId))
   );
@@ -233,7 +249,10 @@ export async function listTransactionsByStudy(studyId: string) {
     .sort((a, b) => String(b.performedAt || "").localeCompare(String(a.performedAt || "")));
 }
 
-export async function listTransactionsBySample(sampleDocId: string) {
+export function listTransactionsBySample(sampleDocId: string) {
+  return cachedRead(`inv:tx-by-sample:${sampleDocId}`, () => loadTransactionsBySample(sampleDocId));
+}
+async function loadTransactionsBySample(sampleDocId: string) {
   const snap = await getDocs(
     query(collection(getDb(), COLLECTIONS.inventoryTransactions), where("sampleDocId", "==", sampleDocId))
   );
@@ -242,13 +261,19 @@ export async function listTransactionsBySample(sampleDocId: string) {
     .sort((a, b) => String(b.performedAt || "").localeCompare(String(a.performedAt || "")));
 }
 
-export async function getSample(id: string) {
+export function getSample(id: string) {
+  return cachedRead(`inv:sample:${id}`, () => loadSample(id));
+}
+async function loadSample(id: string) {
   const snap = await getDoc(doc(getDb(), COLLECTIONS.stabilitySamples, id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as StabilitySample;
 }
 
-export async function listPullPoints(filters?: { studyDocId?: string; sampleDocId?: string }) {
+export function listPullPoints(filters?: { studyDocId?: string; sampleDocId?: string }) {
+  return cachedRead(`inv:pulls:${filters?.studyDocId || ""}:${filters?.sampleDocId || ""}`, () => loadPullPoints(filters));
+}
+async function loadPullPoints(filters?: { studyDocId?: string; sampleDocId?: string }) {
   const settings = await getOrganizationSettings().catch(() => DEFAULT_ORG_SETTINGS);
   const windowDays = settings.withdrawalWindowDays ?? 7;
   const snap = await getDocs(collection(getDb(), COLLECTIONS.studyPullPoints));
@@ -269,7 +294,10 @@ export async function listPullPoints(filters?: { studyDocId?: string; sampleDocI
     .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
 }
 
-export async function listWithdrawals() {
+export function listWithdrawals() {
+  return cachedRead("inv:withdrawals", loadWithdrawals);
+}
+async function loadWithdrawals() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.sampleWithdrawals), orderBy("createdAt", "desc"))
@@ -283,13 +311,19 @@ export async function listWithdrawals() {
   }
 }
 
-export async function getWithdrawal(id: string) {
+export function getWithdrawal(id: string) {
+  return cachedRead(`inv:withdrawal:${id}`, () => loadWithdrawal(id));
+}
+async function loadWithdrawal(id: string) {
   const snap = await getDoc(doc(getDb(), COLLECTIONS.sampleWithdrawals, id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as SampleWithdrawal;
 }
 
-export async function listMovements() {
+export function listMovements() {
+  return cachedRead("inv:movements", loadMovements);
+}
+async function loadMovements() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.sampleMovements), orderBy("createdAt", "desc"))
@@ -303,7 +337,10 @@ export async function listMovements() {
   }
 }
 
-export async function listDisposals() {
+export function listDisposals() {
+  return cachedRead("inv:disposals", loadDisposals);
+}
+async function loadDisposals() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.sampleDisposals), orderBy("createdAt", "desc"))
@@ -317,7 +354,10 @@ export async function listDisposals() {
   }
 }
 
-export async function listReconciliations() {
+export function listReconciliations() {
+  return cachedRead("inv:reconciliations", loadReconciliations);
+}
+async function loadReconciliations() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.inventoryReconciliations), orderBy("createdAt", "desc"))
@@ -331,7 +371,10 @@ export async function listReconciliations() {
   }
 }
 
-export async function listAlerts() {
+export function listAlerts() {
+  return cachedRead("inv:alerts", loadAlerts);
+}
+async function loadAlerts() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.inventoryAlerts), orderBy("createdAt", "desc"))
@@ -349,9 +392,13 @@ export async function acknowledgeAlert(alertId: string) {
   await updateDoc(doc(getDb(), COLLECTIONS.inventoryAlerts, alertId), {
     acknowledged: true,
   });
+  invalidateReadCache();
 }
 
-export async function listTransactions() {
+export function listTransactions() {
+  return cachedRead("inv:transactions", loadTransactions);
+}
+async function loadTransactions() {
   try {
     const snap = await getDocs(
       query(collection(getDb(), COLLECTIONS.inventoryTransactions), orderBy("performedAt", "desc"))
@@ -420,6 +467,8 @@ export async function createStudyAndCharge(input: {
     throw new Error("Sample must be received and COA-cleared before charging. Open Sample Inward first.");
   }
   let receiptIdForAudit: string | undefined;
+  let receiptAlreadyCharged = 0;
+  let receiptInwardQty = 0;
   if (input.receiptDocId) {
     const receiptSnap = await getDoc(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId));
     if (!receiptSnap.exists()) throw new Error("Selected inward record was not found.");
@@ -428,6 +477,7 @@ export async function createStudyAndCharge(input: {
       chargingEligibility?: boolean;
       receiptId?: string;
       sampleQuantity?: number;
+      chargedQuantity?: number;
       unit?: string;
     };
     if (receipt.status === "Charged") throw new Error("This inward record has already been charged.");
@@ -436,9 +486,13 @@ export async function createStudyAndCharge(input: {
       throw new Error("COA has not been received. Sample is not eligible for charging.");
     }
     const inwardQty = Number(receipt.sampleQuantity || 0);
-    if (inwardQty > 0 && input.totalQuantity > inwardQty) {
+    const alreadyCharged = Number(receipt.chargedQuantity || 0);
+    receiptInwardQty = inwardQty;
+    receiptAlreadyCharged = alreadyCharged;
+    const remainingInward = Math.max(0, inwardQty - alreadyCharged);
+    if (inwardQty > 0 && input.totalQuantity > remainingInward) {
       throw new Error(
-        `Charged quantity cannot exceed the inward quantity (${inwardQty}${receipt.unit ? ` ${receipt.unit}` : ""}).`
+        `Charged quantity cannot exceed the remaining inward quantity (${remainingInward}${receipt.unit ? ` ${receipt.unit}` : ""}).`
       );
     }
     if (receipt.unit && input.unit && receipt.unit.trim().toLowerCase() !== input.unit.trim().toLowerCase()) {
@@ -721,12 +775,18 @@ export async function createStudyAndCharge(input: {
   }
 
   if (input.receiptDocId) {
-    batch.update(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId), {
-      status: "Charged",
+    const nextCharged = receiptAlreadyCharged + input.totalQuantity;
+    const fullyCharged = receiptInwardQty <= 0 || nextCharged >= receiptInwardQty;
+    const receiptPatch: Record<string, unknown> = {
+      chargedQuantity: nextCharged,
       chargedStudyId: studyId,
-      chargedAt: stamp,
       updatedAt: stamp,
-    });
+    };
+    if (fullyCharged) {
+      receiptPatch.status = "Charged";
+      receiptPatch.chargedAt = stamp;
+    }
+    batch.update(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId), receiptPatch);
   }
 
   const chamberRef = doc(getDb(), COLLECTIONS.chambers, input.chamberId);
@@ -1009,6 +1069,7 @@ export async function withdrawSample(input: {
     userEmail: input.user.email,
   });
 
+  let analysisWarning: string | undefined;
   try {
     await createAnalysisRequestFromWithdrawal(
       { id: withdrawalRef.id, ...withdrawalPayload },
@@ -1016,9 +1077,11 @@ export async function withdrawSample(input: {
     );
   } catch (err) {
     console.error("Withdrawal saved but analysis request failed:", err);
+    analysisWarning =
+      "Withdrawal was saved, but the analysis request was not created. Open Analysis Requests and add it for this withdrawal.";
   }
 
-  return { withdrawalDocId: withdrawalRef.id, withdrawalId };
+  return { withdrawalDocId: withdrawalRef.id, withdrawalId, analysisWarning };
 }
 
 export async function moveSample(input: {
@@ -1225,6 +1288,7 @@ export async function moveSample(input: {
     throw err;
   }
 
+  invalidateReadCache();
   return { movementId };
 }
 
@@ -1520,6 +1584,7 @@ export async function disposeSample(input: {
 }
 
 export async function refreshAlerts() {
+  invalidateReadCache();
   const [pulls, samples, chambers, reconciliations, settings] = await Promise.all([
     listPullPoints(),
     listSamples(),
@@ -1720,6 +1785,7 @@ export async function refreshAlerts() {
     await batch.commit();
   }
 
+  invalidateReadCache();
   return alerts.length;
 }
 

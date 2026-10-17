@@ -20,7 +20,9 @@ import {
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
+import { COLLECTION_STAGES } from "@/lib/control-samples";
 import { formatDate, formatFullDate, friendlyError, todayISO } from "@/lib/utils";
+import type { CollectionStage } from "@/types/control-samples";
 import { listControlBatches, listControlProducts, listMarkets, listUnits } from "@/services/masters";
 import {
   createCollection,
@@ -58,6 +60,7 @@ export default function ControlSampleCollectionPage() {
   const [actualQty, setActualQty] = useState("");
   const [unit, setUnit] = useState("");
   const [collectionDate, setCollectionDate] = useState(todayISO());
+  const [collectionStage, setCollectionStage] = useState<CollectionStage>("Initial");
   const [appearance, setAppearance] = useState(true);
   const [coding, setCoding] = useState(true);
   const [remarks, setRemarks] = useState("");
@@ -118,6 +121,7 @@ export default function ControlSampleCollectionPage() {
     setActualQty(String(row.actualQuantity));
     setUnit(row.unit);
     setCollectionDate(row.date || todayISO());
+    setCollectionStage(row.collectionStage || "Initial");
     setAppearance(row.physicalAppearanceCheck);
     setCoding(row.codingDetailsCheck);
     setRemarks(row.remarks || "");
@@ -153,6 +157,11 @@ export default function ControlSampleCollectionPage() {
       toast.error("Collection date is required.");
       return;
     }
+    const resolvedUnit = (unit || requiredUnit).trim();
+    if (!resolvedUnit) {
+      toast.error("Unit is required.");
+      return;
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -169,8 +178,8 @@ export default function ControlSampleCollectionPage() {
           market: market.trim(),
           requiredQuantity: requiredQty,
           actualQuantity: qty,
-          unit: unit || requiredUnit || "UNIT",
-          collectionStage: "Initial",
+          unit: resolvedUnit,
+          collectionStage,
           physicalAppearanceCheck: appearance,
           codingDetailsCheck: coding,
           batchKind: "Standard",
@@ -197,8 +206,8 @@ export default function ControlSampleCollectionPage() {
         market: market.trim(),
         requiredQuantity: requiredQty,
         actualQuantity: qty,
-        unit: unit || requiredUnit || "UNIT",
-        collectionStage: "Initial",
+        unit: resolvedUnit,
+        collectionStage,
         collectedBy: profile.displayName || profile.email,
         physicalAppearanceCheck: appearance,
         codingDetailsCheck: coding,
@@ -333,6 +342,11 @@ export default function ControlSampleCollectionPage() {
                 </Select>
                 <Input label="Collection date" type="date" fullDate required value={collectionDate} onChange={(e) => setCollectionDate(e.target.value)} disabled={!canCollect} />
               </div>
+              <Select label="Collection stage" required value={collectionStage} onChange={(e) => setCollectionStage(e.target.value as CollectionStage)} disabled={!canCollect}>
+                {COLLECTION_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>{stage}</option>
+                ))}
+              </Select>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={appearance} onChange={(e) => setAppearance(e.target.checked)} disabled={!canCollect} /> Physical appearance checked</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={coding} onChange={(e) => setCoding(e.target.checked)} disabled={!canCollect} /> Coding details checked</label>
               <Textarea label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={!canCollect} />
@@ -340,7 +354,7 @@ export default function ControlSampleCollectionPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => void save(false)} loading={saving}>{editingId ? "Save draft" : "Save draft"}</Button>
                   <Button onClick={() => void save(true)} loading={saving}>{editingId ? "Finalize draft" : "Record collected"}</Button>
-                  {editingId ? <Button variant="ghost" onClick={() => { setEditingId(""); setActualQty(""); setRemarks(""); setCollectionDate(todayISO()); }}>Cancel edit</Button> : null}
+                  {editingId ? <Button variant="ghost" onClick={() => { setEditingId(""); setActualQty(""); setRemarks(""); setCollectionDate(todayISO()); setCollectionStage("Initial"); }}>Cancel edit</Button> : null}
                 </div>
               ) : null}
             </div>

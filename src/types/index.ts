@@ -658,6 +658,7 @@ export interface SampleReceipt {
   createdAt: string;
   checkedBy?: string;
   checkedDate?: string;
+  chargedQuantity?: number;
   chargedStudyId?: string;
   chargedAt?: string;
   updatedAt: string;

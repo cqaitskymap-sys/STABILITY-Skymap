@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
+import { downloadXlsx } from "@/lib/export-xlsx";
 import {
   Button,
   Card,
@@ -18,7 +18,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
-import { PrintDocument } from "@/components/print/print-document";
+import { PrintDocument, PrintLogo } from "@/components/print/print-document";
 import { DailyCollectionEntryForm, type DailyCollectionCatalog, type DailyCollectionEntryMode } from "@/components/daily-collection/entry-form";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
@@ -255,11 +255,8 @@ export default function DailyCollectionRecordPage() {
     downloadBlob(`daily-collection-record-${todayISO()}.csv`, toCsv(exportRows()));
   }
 
-  function exportExcel() {
-    const book = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(exportRows());
-    XLSX.utils.book_append_sheet(book, sheet, "Daily Collection");
-    XLSX.writeFile(book, `daily-collection-record-${todayISO()}.xlsx`);
+  async function exportExcel() {
+    await downloadXlsx(`daily-collection-record-${todayISO()}.xlsx`, "Daily Collection", exportRows());
   }
 
   if (!profile) return <LoadingSkeleton rows={8} />;
@@ -295,7 +292,8 @@ export default function DailyCollectionRecordPage() {
           title={registerTitle()}
           documentNumber="Annexure-II"
           companyName={companyName}
-          department="QUALITY ASSURANCE"
+          department="Quality Assurance"
+          orientation="landscape"
         >
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-[11px]">
@@ -361,6 +359,9 @@ export default function DailyCollectionRecordPage() {
 
           <div className="min-w-0 overflow-hidden rounded-2xl border-2 border-slate-700 bg-[#fbf8f1] shadow-sm">
             <div className="border-b-2 border-slate-700 px-4 py-4 text-center">
+              <div className="mb-2 flex justify-center">
+                <PrintLogo className="h-12" />
+              </div>
               <p className="text-[11px] font-semibold tracking-[0.18em] text-slate-600">{companyName}</p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quality Assurance</p>
               <h2 className="mt-1 text-base font-semibold uppercase tracking-wide text-slate-900 sm:text-lg">{registerTitle()}</h2>

@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
+import { cachedRead } from "@/lib/firebase/read-cache";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/sop";
 import { nowISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
@@ -17,7 +18,11 @@ function requireNumber(name: string, value: number, min: number, max?: number) {
   }
 }
 
-export async function getOrganizationSettings(): Promise<OrganizationSettings> {
+export function getOrganizationSettings(): Promise<OrganizationSettings> {
+  return cachedRead("org:settings", loadOrganizationSettings);
+}
+
+async function loadOrganizationSettings(): Promise<OrganizationSettings> {
   const snap = await getDoc(doc(getDb(), COLLECTIONS.settings, ORG_DOC));
   if (!snap.exists()) return { ...DEFAULT_ORG_SETTINGS };
   const data = snap.data() as Partial<OrganizationSettings>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Printer, RefreshCw } from "lucide-react";
 import {
@@ -22,11 +22,18 @@ export default function MonthlyPlannerPage() {
   const month = toMonthInput(new Date()) || formatDate(new Date(), "yyyy-MM");
   const [selectedMonth, setSelectedMonth] = useState(month);
   const [view, setView] = useState<"list" | "calendar" | "print">("list");
+  const [printNonce, setPrintNonce] = useState(0);
   const pulls = useAsync(listPullPoints, []);
 
   const rows = useMemo(() => {
     return (pulls.data || []).filter((p) => (p.plannedDate || "").startsWith(selectedMonth));
   }, [pulls.data, selectedMonth]);
+
+  useEffect(() => {
+    if (!printNonce || view !== "print") return;
+    const id = window.setTimeout(() => window.print(), 200);
+    return () => window.clearTimeout(id);
+  }, [printNonce, view]);
 
   const daysInMonth = useMemo(() => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -68,14 +75,14 @@ export default function MonthlyPlannerPage() {
             <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
               Export
             </Button>
-            <Button variant="outline" onClick={() => window.print()}>
+            <Button variant="outline" onClick={() => { setView("print"); setPrintNonce((n) => n + 1); }}>
               <Printer className="h-4 w-4" />
               Print
             </Button>
           </div>
         }
       />
-      <Card className="mb-4 p-4">
+      <Card className="mb-4 p-4 print:hidden">
         <div className="grid gap-3 sm:grid-cols-3">
           <Input label="Month" type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
           <div className="flex items-end gap-2">
@@ -169,7 +176,7 @@ export default function MonthlyPlannerPage() {
         </div>
       ) : null}
       {view === "print" && rows.length ? (
-        <PrintDocument title="Monthly Stability Planner" documentNumber={selectedMonth}>
+        <PrintDocument title="Monthly Stability Planner" documentNumber={selectedMonth} orientation="landscape">
           <table className="min-w-full text-left text-sm">
             <thead>
               <tr>

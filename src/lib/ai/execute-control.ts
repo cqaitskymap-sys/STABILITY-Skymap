@@ -296,7 +296,7 @@ async function createControlProduct(args: Record<string, unknown>, profile: AppU
 }
 
 async function createControlBatch(args: Record<string, unknown>, profile: AppUser, hasPermission: PermFn) {
-  const blocked = needAny(hasPermission, ["control.perform", "control.collect", "masters.manage"], "Controlled Sample or Masters");
+  const blocked = needAny(hasPermission, ["control.perform", "masters.manage"], "Controlled Sample or Masters");
   if (blocked) return blocked;
   const productName = str(args, "productName");
   const batchNumber = str(args, "batchNumber");

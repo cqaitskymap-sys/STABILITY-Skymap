@@ -1,5 +1,6 @@
 import { addDoc, collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
+import { invalidateReadCache } from "@/lib/firebase/read-cache";
 import { nowISO } from "@/lib/utils";
 import type { AuditLog } from "@/types";
 
@@ -36,6 +37,7 @@ export async function writeAuditLog(input: {
   userEmail: string;
   userRole?: string;
 }) {
+  invalidateReadCache();
   const meta = clientMeta();
   const payload: Record<string, unknown> = {
     action: input.action,

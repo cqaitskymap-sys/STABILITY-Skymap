@@ -175,33 +175,139 @@ tbody tr:hover {
   background-color: rgba(15, 23, 42, 0.025);
 }
 
+#print-root {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+}
+
+.print-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.print-sheet th,
+.print-sheet td {
+  border: 1px solid #cbd5e1;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.print-sheet thead th {
+  background: #f8fafc;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 @media print {
   @page {
+    size: A4 portrait;
     margin: 12mm;
   }
 
+  @page landscape {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
   body {
-    background: white !important;
+    background: #fff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   aside,
-  header,
+  .app-header,
+  .app-page-header,
+  .app-overlay,
   .no-print,
-  .print\:hidden {
+  .print\:hidden,
+  button,
+  [data-sonner-toaster] {
     display: none !important;
   }
 
+  .app-main-shift,
   main {
     padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
   }
 
   .print-only {
     display: block !important;
   }
 
-  .print-card {
+  .print-sheet-landscape,
+  .print-page-landscape {
+    page: landscape;
+  }
+
+  .print-sheet,
+  .print-page,
+  .print-page .surface-card {
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .print-sheet table,
+  .print-page table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10px;
+  }
+
+  .print-sheet th,
+  .print-sheet td,
+  .print-page th,
+  .print-page td {
+    border: 1px solid #94a3b8 !important;
+    padding: 4px 6px !important;
+    vertical-align: top;
+  }
+
+  .print-sheet thead,
+  .print-page thead {
+    display: table-header-group;
+  }
+
+  .print-sheet tr,
+  .print-page tr,
+  .print-card,
+  .print-keep {
     break-inside: avoid;
+  }
+
+  .print-card {
     border: 1px solid #cbd5e1;
     padding: 16px;
+  }
+
+  .print-masthead img,
+  .print-logo {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  body.printing-sheet > *:not(#print-root) {
+    display: none !important;
+  }
+
+  body.printing-sheet #print-root {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    width: auto !important;
   }
 }

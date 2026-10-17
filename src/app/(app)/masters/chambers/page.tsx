@@ -13,6 +13,7 @@ const CHAMBER_PRESETS = [
   { chamberId: "SMH/QA/SC/004", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
   { chamberId: "SMH/QA/SC/005", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
   { chamberId: "SMH/QA/SC/006", temperature: "30°C", relativeHumidity: "75% RH", studyType: "LT" },
+  { chamberId: "SMH/QA/CC/001", temperature: "NMT 15°C", relativeHumidity: "", studyType: "LT" },
   { chamberId: "SMH/QC/SC/025", temperature: "25°C", relativeHumidity: "60% RH", studyType: "LT" },
   { chamberId: "SMH/QC/SC/026", temperature: "30°C", relativeHumidity: "65% RH", studyType: "LT" },
   { chamberId: "SMH/QC/SC/027", temperature: "40°C", relativeHumidity: "75% RH", studyType: "ACC" },

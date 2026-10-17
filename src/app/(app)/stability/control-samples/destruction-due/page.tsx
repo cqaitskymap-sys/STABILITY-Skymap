@@ -100,7 +100,7 @@ export default function DestructionDuePage() {
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
       {print ? (
         <div className="mb-6">
-        <PrintDocument title="List of Controlled Samples Destruction" documentNumber="Annexure-IX">
+        <PrintDocument title="List of Controlled Samples Destruction" documentNumber="Annexure-IX" orientation="landscape">
           <table className="min-w-full text-xs">
             <thead>
               <tr className="border-b">{["Product", "Batch", "Mfg", "Exp", "Qty", "Location", "Eligible", "Hold", "Status"].map((h) => <th key={h} className="px-2 py-1 text-left">{h}</th>)}</tr>

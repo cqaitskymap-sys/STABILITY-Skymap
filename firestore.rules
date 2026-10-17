@@ -13,7 +13,8 @@ service cloud.firestore {
     function isActiveUser() {
       return isSignedIn()
         && userDocExists()
-        && (!('active' in userDoc()) || userDoc().active == true);
+        && (!('active' in userDoc()) || userDoc().active == true)
+        && (!('accountLocked' in userDoc()) || userDoc().accountLocked != true);
     }
     function usesCustomModules() {
       return userDocExists()
@@ -244,7 +245,7 @@ service cloud.firestore {
       allow write: if canManageMasters();
     }
     match /dailyCollectionRecords/{docId} {
-      allow read: if canControl() || hasPermission('inventory.view') || hasPermission('receiving.perform');
+      allow read: if canControl() || hasPermission('inventory.view') || hasPermission('receiving.perform') || hasPermission('reports.view');
       allow create, update: if canControl();
       allow delete: if false;
     }
@@ -254,22 +255,22 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /controlSamples/{docId} {
-      allow read: if canControl() || hasPermission('inventory.view');
+      allow read: if canControl() || hasPermission('inventory.view') || hasPermission('reports.view') || hasPermission('disposal.perform');
       allow create, update: if canControl();
       allow delete: if false;
     }
     match /controlSampleCollections/{docId} {
-      allow read: if canControl() || hasPermission('inventory.view');
+      allow read: if canControl() || hasPermission('inventory.view') || hasPermission('reports.view');
       allow create, update: if canControl();
       allow delete: if false;
     }
     match /controlSampleObservations/{docId} {
-      allow read: if canControl();
+      allow read: if canControl() || hasPermission('reports.view');
       allow create, update: if hasPermission('control.perform');
       allow delete: if false;
     }
     match /controlSampleWithdrawals/{docId} {
-      allow read: if canControl() || hasPermission('approve.records');
+      allow read: if canControl() || hasPermission('approve.records') || hasPermission('reports.view');
       allow create, update: if hasPermission('control.perform') || hasPermission('approve.records');
       allow delete: if false;
     }
@@ -279,12 +280,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /controlSampleDestructions/{docId} {
-      allow read: if canControl() || hasPermission('disposal.perform');
+      allow read: if canControl() || hasPermission('disposal.perform') || hasPermission('reports.view');
       allow create, update: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow delete: if false;
     }
     match /controlSampleDestructionLogs/{docId} {
-      allow read: if canControl() || hasPermission('disposal.perform');
+      allow read: if canControl() || hasPermission('disposal.perform') || hasPermission('reports.view');
       allow create: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow update, delete: if false;
     }
@@ -294,13 +295,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /controlSampleLocations/{docId} {
-      allow read: if canControl();
-      allow create, update: if hasPermission('control.perform');
+      allow read: if canControl() || canManageMasters() || hasPermission('reports.view');
+      allow create, update: if hasPermission('control.perform') || canManageMasters();
       allow delete: if false;
     }
     match /controlSampleBoxes/{docId} {
-      allow read: if canControl();
-      allow create, update: if hasPermission('control.perform');
+      allow read: if canControl() || canManageMasters() || hasPermission('reports.view');
+      allow create, update: if hasPermission('control.perform') || canManageMasters();
       allow delete: if false;
     }
     match /controlSampleQuantityMasters/{docId} {
@@ -314,13 +315,13 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /controlSampleHolds/{docId} {
-      allow read: if canControl();
-      allow create, update: if hasPermission('control.perform');
+      allow read: if canControl() || hasPermission('disposal.perform') || hasPermission('reports.view');
+      allow create, update: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow delete: if false;
     }
     match /controlSampleBoxCategories/{docId} {
-      allow read: if canControl();
-      allow create, update: if hasPermission('control.perform');
+      allow read: if canControl() || canManageMasters() || hasPermission('reports.view');
+      allow create, update: if hasPermission('control.perform') || canManageMasters();
       allow delete: if false;
     }
     match /analysisRequests/{docId} {

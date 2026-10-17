@@ -1,7 +1,13 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
+import type { FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -80,13 +86,29 @@ export function getFirebaseAuth() {
 
 export function getDb() {
   const s = store();
-  if (!s.db) s.db = getFirestore(getFirebaseApp());
+  if (!s.db) {
+    const app = getFirebaseApp();
+    if (typeof window === "undefined") {
+      s.db = getFirestore(app);
+    } else {
+      try {
+        s.db = initializeFirestore(app, {
+          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        });
+      } catch {
+        s.db = getFirestore(app);
+      }
+    }
+  }
   return s.db;
 }
 
-export function getFirebaseStorage() {
+export async function getFirebaseStorage() {
   const s = store();
-  if (!s.storage) s.storage = getStorage(getFirebaseApp());
+  if (!s.storage) {
+    const { getStorage } = await import("firebase/storage");
+    s.storage = getStorage(getFirebaseApp());
+  }
   return s.storage;
 }
 

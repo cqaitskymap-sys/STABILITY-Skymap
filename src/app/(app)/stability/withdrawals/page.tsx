@@ -210,6 +210,7 @@ function WithdrawalsPageInner() {
         user: profile,
       });
       toast.success(`Withdrawal ${result.withdrawalId} recorded successfully.`);
+      if (result.analysisWarning) toast.warning(result.analysisWarning);
       setConfirmOpen(false);
       setRemarks("");
       setReceivedBy("");

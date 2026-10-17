@@ -15,6 +15,7 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/ui";
+import { PrintPageBanner, PrintPageFooter } from "@/components/print/print-document";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
@@ -27,7 +28,6 @@ import {
 export default function StudyDetailPage() {
   const params = useParams<{ id: string }>();
   const studyDocId = params?.id ?? "";
-  const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME || "SKYMAP Stability";
 
   const detail = useAsync(async () => {
     if (!studyDocId) return null;
@@ -66,7 +66,8 @@ export default function StudyDetailPage() {
   const primarySample = samples[0];
 
   return (
-    <div>
+    <div className="print-page">
+      <PrintPageBanner title="Stability Study Summary" documentNumber={study.studyId} />
       <PageHeader
         title={study.studyId}
         description={`${study.productName} · ${study.batchNumber} · ${study.studyType}`}
@@ -94,11 +95,6 @@ export default function StudyDetailPage() {
           </div>
         }
       />
-
-      <div className="mb-4 hidden print:block">
-        <p className="text-lg font-semibold text-slate-900">{companyName}</p>
-        <p className="text-sm text-slate-500">Stability Study Summary</p>
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -258,9 +254,7 @@ export default function StudyDetailPage() {
         )}
       </Card>
 
-      <p className="mt-4 hidden text-xs text-slate-400 print:block">
-        Printed {formatDateTime(new Date().toISOString())} · {companyName}
-      </p>
+      <PrintPageFooter />
     </div>
   );
 }

@@ -21,7 +21,6 @@ export default function QuantityMasterPage() {
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState("");
-  const [effectiveDate, setEffectiveDate] = useState(todayISO());
   const [preparedBy, setPreparedBy] = useState("");
   const [checkedBy, setCheckedBy] = useState("");
   const [approvedBy, setApprovedBy] = useState("");
@@ -49,7 +48,7 @@ export default function QuantityMasterPage() {
         productName: product.productName,
         quantity: qty,
         unit: unit || "UNIT",
-        effectiveDate,
+        effectiveDate: todayISO(),
         preparedBy: preparedBy || undefined,
         checkedBy: checkedBy || undefined,
         approvedBy: approvedBy || undefined,
@@ -102,7 +101,6 @@ export default function QuantityMasterPage() {
                 ))}
               </Select>
             </div>
-            <Input label="Effective date" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} disabled={!can} />
             <div className="grid gap-3 sm:grid-cols-2">
               <Input label="Conversion batch quantity" type="number" value={conversionQty} onChange={(e) => setConversionQty(e.target.value)} disabled={!can} hint="SOP example is 1 shrink pack or 1 pack — keep this configurable." />
               <Input label="Conversion batch unit" value={conversionUnit} onChange={(e) => setConversionUnit(e.target.value)} disabled={!can} />

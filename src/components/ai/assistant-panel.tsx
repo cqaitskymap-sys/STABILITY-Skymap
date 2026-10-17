@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { executeSkymapTool } from "@/lib/ai/execute-tool";
 import { getControlContext } from "@/lib/ai/control-context";
 import { getInventoryContext } from "@/lib/ai/inventory-context";
-import { OPEN_AI_EVENT } from "@/lib/ai/events";
+import { OPEN_AI_EVENT, takePendingAiOpen } from "@/lib/ai/events";
 import { TOOL_LABELS } from "@/lib/ai/tools";
 import { getFirebaseAuth } from "@/lib/firebase/config";
 
@@ -171,11 +171,18 @@ export function AssistantPanel() {
   const busy = status === "submitted" || status === "streaming";
 
   useEffect(() => {
-    function onOpen(event: Event) {
-      const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt?.trim();
+    function apply(prompt?: string) {
       setOpen(true);
       if (prompt) void sendMessage({ text: prompt });
     }
+    function onOpen(event: Event) {
+      takePendingAiOpen();
+      const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt?.trim();
+      apply(prompt);
+    }
+    const pending = takePendingAiOpen();
+    if (pending?.prompt) apply(pending.prompt.trim());
+    else if (pending) apply();
     window.addEventListener(OPEN_AI_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_AI_EVENT, onOpen);
   }, [sendMessage]);
@@ -211,7 +218,7 @@ export function AssistantPanel() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(13,148,136,0.8)] transition hover:from-teal-600 hover:to-teal-800 sm:hidden"
+          className="no-print fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(13,148,136,0.8)] transition hover:from-teal-600 hover:to-teal-800 sm:hidden"
           aria-label="Open SkyMap AI assistant"
         >
           <Sparkles className="h-4 w-4" />
@@ -221,7 +228,7 @@ export function AssistantPanel() {
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-[2px]"
+          className="no-print fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-[2px]"
           onClick={() => setOpen(false)}
         >
           <div

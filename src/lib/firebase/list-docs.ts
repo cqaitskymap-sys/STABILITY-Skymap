@@ -1,5 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/config";
+import { cachedRead } from "@/lib/firebase/read-cache";
 
 function errorCode(err: unknown) {
   if (typeof err === "object" && err && "code" in err) {
@@ -9,7 +10,11 @@ function errorCode(err: unknown) {
 }
 
 /** List a collection; missing rules or empty permissions return [] instead of crashing the page. */
-export async function listDocs<T>(name: string, sortField = "createdAt"): Promise<T[]> {
+export function listDocs<T>(name: string, sortField = "createdAt"): Promise<T[]> {
+  return cachedRead(`docs:${name}:${sortField}`, () => fetchDocs<T>(name, sortField));
+}
+
+async function fetchDocs<T>(name: string, sortField: string): Promise<T[]> {
   try {
     const snap = await getDocs(collection(getDb(), name));
     return snap.docs

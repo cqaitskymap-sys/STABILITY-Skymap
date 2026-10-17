@@ -139,8 +139,8 @@ export async function executeSkymapTool(input: {
   const args = asRecord(input.input);
 
   try {
-    if (WRITE_TOOLS.has(name) && !profile?.active) {
-      return fail("Sign in with an active account to make changes.");
+    if (WRITE_TOOLS.has(name) && (!profile?.active || profile.accountLocked)) {
+      return fail("Sign in with an active, unlocked account to make changes.");
     }
 
     const result = await runTool(name, args, profile, hasPermission);
@@ -796,7 +796,7 @@ async function withdraw(args: Record<string, unknown>, profile: AppUser, hasPerm
     remarks: str(args, "remarks") || undefined,
     user: profile,
   });
-  return ok({ withdrawalId: result.withdrawalId });
+  return ok({ withdrawalId: result.withdrawalId, warning: result.analysisWarning });
 }
 
 async function move(args: Record<string, unknown>, profile: AppUser, hasPermission: PermFn) {

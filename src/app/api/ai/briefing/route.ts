@@ -8,13 +8,13 @@ import {
   snapshotText,
 } from "@/lib/ai/openrouter";
 import { QA_BRIEFING_PROMPT } from "@/lib/ai/system-prompt";
-import { requireSignedInUser } from "@/lib/ai/verify-user";
+import { requireActiveSignedInUser } from "@/lib/ai/verify-user";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
-    const user = await requireSignedInUser(request);
+    const user = await requireActiveSignedInUser(request);
     if (!user) {
       return Response.json({ error: "Sign in required." }, { status: 401 });
     }

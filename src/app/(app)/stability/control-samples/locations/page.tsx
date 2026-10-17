@@ -109,7 +109,7 @@ export default function LocationsPage() {
       {catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : null}
       {box ? (
         <div className="mb-6">
-          <PrintDocument title="Controlled Sample Location & Box No." documentNumber="Annexure-VIII">
+          <PrintDocument title="Controlled Sample Location & Box No." documentNumber="Annexure-VIII" orientation="landscape">
             <p className="mb-3 text-sm">{rackLabel(box.rackNumber, box.partitionNumber)} · Box {box.boxNumber}</p>
             <table className="min-w-full text-xs">
               <thead>

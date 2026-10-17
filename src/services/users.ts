@@ -1,6 +1,7 @@
 import { collection, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
 import { authEmailToEmployeeId } from "@/lib/auth-identity";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
+import { cachedRead } from "@/lib/firebase/read-cache";
 import { permissionsForRole, type Permission } from "@/lib/permissions";
 import { nowISO } from "@/lib/utils";
 import { writeAuditLog } from "@/services/audit";
@@ -15,7 +16,11 @@ function mapUserDoc(id: string, data: Record<string, unknown>): AppUser {
   return { uid: id, ...data, email, employeeId } as AppUser;
 }
 
-export async function listUsers() {
+export function listUsers() {
+  return cachedRead("users", loadUsers);
+}
+
+async function loadUsers() {
   const snap = await getDocs(collection(getDb(), COLLECTIONS.users));
   return snap.docs
     .map((d) => mapUserDoc(d.id, d.data() as Record<string, unknown>))

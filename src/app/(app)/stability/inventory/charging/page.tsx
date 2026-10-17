@@ -97,7 +97,7 @@ function SampleChargingPageInner() {
         batchId: receipt.batchId,
         manufacturingDate: receipt.manufacturingDate,
         expiryDate: receipt.expiryDate,
-        totalQuantity: String(receipt.sampleQuantity),
+        totalQuantity: String(Math.max(0, Number(receipt.sampleQuantity || 0) - Number(receipt.chargedQuantity || 0))),
         unit: receipt.unit,
       }));
     }
@@ -369,7 +369,7 @@ function SampleChargingPageInner() {
                       batchId: receipt.batchId,
                       manufacturingDate: receipt.manufacturingDate,
                       expiryDate: receipt.expiryDate,
-                      totalQuantity: String(receipt.sampleQuantity),
+                      totalQuantity: String(Math.max(0, Number(receipt.sampleQuantity || 0) - Number(receipt.chargedQuantity || 0))),
                       unit: receipt.unit,
                     }));
                   }
@@ -380,6 +380,9 @@ function SampleChargingPageInner() {
                 {readyReceipts.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.receiptId} — {r.productName} / {r.batchNumber}
+                    {Number(r.chargedQuantity || 0) > 0
+                      ? ` (${Math.max(0, Number(r.sampleQuantity || 0) - Number(r.chargedQuantity || 0))} ${r.unit} remaining)`
+                      : ""}
                   </option>
                 ))}
               </Select>

@@ -1,15 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { AssistantPanel } from "@/components/ai/assistant-panel";
-import { LoadingSkeleton, useClientMounted } from "@/components/ui";
+
+const AssistantPanel = dynamic(
+  () => import("@/components/ai/assistant-panel").then((mod) => mod.AssistantPanel),
+  { ssr: false }
+);
+import { Button, LoadingSkeleton, useClientMounted } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { resolveAppModule } from "@/lib/modules";
+import { moduleHref as moduleLandingHref, resolveAppModule } from "@/lib/modules";
 import { listAlerts } from "@/services/inventory";
 
 const TITLE_MAP: Record<string, string> = {
@@ -71,7 +76,7 @@ function resolveTitle(pathname: string) {
 }
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, logout, hasPermission } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const ready = useClientMounted() && !loading && !!user && !!profile;
@@ -82,6 +87,13 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/components/ai/assistant-panel");
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -102,8 +114,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const moduleHref =
     currentModule === "control-samples"
       ? "/stability/control-samples"
-      : currentModule === "admin"
-        ? "/stability/admin/users"
+      :     currentModule === "admin"
+        ? moduleLandingHref("admin", hasPermission)
         : "/stability/dashboard";
   const crumbs = isHome
     ? undefined
@@ -112,6 +124,22 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         { label: moduleLabel, href: title === moduleLabel ? undefined : moduleHref },
         ...(title === moduleLabel ? [] : [{ label: title }]),
       ];
+
+  if (!loading && user && !profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+          <h1 className="text-lg font-semibold text-slate-900">Session could not be verified</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            The signed-in account is missing, inactive, or locked. Sign in again with an active account.
+          </p>
+          <Button className="mt-4" onClick={() => void logout()}>
+            Sign in again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen overflow-x-hidden">
@@ -125,7 +153,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       )}
       {ready && !isHome ? <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} /> : null}
       <div
-        className={cn("min-w-0 transition-all", ready && !isHome ? (collapsed ? "lg:pl-[76px]" : "lg:pl-72") : "")}
+        className={cn("app-main-shift min-w-0 transition-all", ready && !isHome ? (collapsed ? "lg:pl-[76px]" : "lg:pl-72") : "")}
         hidden={!ready}
       >
         {ready ? (

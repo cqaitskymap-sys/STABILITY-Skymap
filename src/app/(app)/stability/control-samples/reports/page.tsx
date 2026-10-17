@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { RefreshCw } from "lucide-react";
+import { PrintPageBanner, PrintPageFooter } from "@/components/print/print-document";
 import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { CONTROL_SAMPLE_ANNEXURES, isDestructionEligible, isRetentionReviewDue } from "@/lib/control-samples";
+import { downloadXlsx } from "@/lib/export-xlsx";
 import { downloadBlob, formatDate, formatFullDate, toCsv } from "@/lib/utils";
 import {
   listBoxes,
@@ -20,11 +21,13 @@ import {
   listRacks,
   listRequisitions,
 } from "@/services/control-samples";
+import { listDailyCollectionRecords } from "@/services/daily-collection";
 import { getOrganizationSettings } from "@/services/organization";
 import { controlOrg } from "@/lib/control-samples";
 
 type ReportKey =
   | "register"
+  | "collection"
   | "daily-collection"
   | "product-wise"
   | "batch-wise"
@@ -42,6 +45,7 @@ type ReportKey =
 
 const REPORTS: { key: ReportKey; title: string }[] = [
   { key: "register", title: "Controlled Sample Register" },
+  { key: "collection", title: "Collection / Inward Report" },
   { key: "daily-collection", title: "Daily Collection Report" },
   { key: "product-wise", title: "Product-wise Controlled Sample Report" },
   { key: "batch-wise", title: "Batch-wise Controlled Sample Report" },
@@ -62,20 +66,33 @@ export default function ControlSampleReportsPage() {
   const { hasPermission } = useAuth();
   const admin = hasPermission("users.manage") || hasPermission("masters.manage");
   const data = useAsync(async () => {
-    const [samples, collections, observations, requisitions, destructions, logs, txs, holds, racks, boxes, settings] = await Promise.all([
-      listControlSamples(),
-      listCollections(),
-      listObservations(),
-      listRequisitions(),
-      listDestructions(),
-      listDestructionLogs(),
-      listControlTransactions(),
-      listHolds(),
-      listRacks(),
-      listBoxes(),
+    async function load<T>(read: () => Promise<T>, fallback: T) {
+      try {
+        return await read();
+      } catch (error) {
+        const code =
+          typeof error === "object" && error && "code" in error
+            ? String((error as { code?: string }).code || "")
+            : "";
+        if (code === "permission-denied" || code.includes("permission")) return fallback;
+        throw error;
+      }
+    }
+    const [samples, collections, dailyRecords, observations, requisitions, destructions, logs, txs, holds, racks, boxes, settings] = await Promise.all([
+      load(listControlSamples, []),
+      load(listCollections, []),
+      load(listDailyCollectionRecords, []),
+      load(listObservations, []),
+      load(listRequisitions, []),
+      load(listDestructions, []),
+      load(listDestructionLogs, []),
+      load(listControlTransactions, []),
+      load(listHolds, []),
+      load(listRacks, []),
+      load(listBoxes, []),
       getOrganizationSettings(),
     ]);
-    return { samples, collections, observations, requisitions, destructions, logs, txs, holds, racks, boxes, settings };
+    return { samples, collections, dailyRecords, observations, requisitions, destructions, logs, txs, holds, racks, boxes, settings };
   }, []);
   const [report, setReport] = useState<ReportKey>("register");
   const [from, setFrom] = useState("");
@@ -99,9 +116,13 @@ export default function ControlSampleReportsPage() {
         return data.data.samples.filter((s) => match(`${s.productName} ${s.batchNumber} ${s.controlSampleId}`)).map((s) => ({
           ID: s.controlSampleId, Product: s.productName, Batch: s.batchNumber, Qty: s.availableQuantity, Unit: s.unit, Rack: s.rackNumber || "", Box: s.boxNumber || "", Status: s.status,
         }));
-      case "daily-collection":
+      case "collection":
         return data.data.collections.filter((r) => inRange(r.date) && match(r.productName)).map((r) => ({
           Date: formatFullDate(r.date), Product: r.productName, Batch: r.batchNumber, Qty: r.actualQuantity, Stage: r.collectionStage, Status: r.status, CollectedBy: r.collectedBy,
+        }));
+      case "daily-collection":
+        return data.data.dailyRecords.filter((r) => inRange(r.date) && match(`${r.productName} ${r.serialDisplay}`)).map((r) => ({
+          Serial: r.serialDisplay, Date: formatFullDate(r.date), Product: r.productName, Batch: r.batchNumber, Qty: r.quantityCollected, Unit: r.quantityUnit, Status: r.status, CollectedBy: r.collectedByName,
         }));
       case "product-wise":
         return Object.values(data.data.samples.reduce<Record<string, { Product: string; Samples: number; Available: number }>>((acc, s) => {
@@ -168,14 +189,15 @@ export default function ControlSampleReportsPage() {
   function exportCsv() {
     downloadBlob(`control-sample-${report}.csv`, toCsv(rows));
   }
-  function exportXlsx() {
-    const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), "Report");
-    XLSX.writeFile(book, `control-sample-${report}.xlsx`);
+  async function exportXlsx() {
+    await downloadXlsx(`control-sample-${report}.xlsx`, "Report", rows);
   }
 
+  const reportTitle = REPORTS.find((item) => item.key === report)?.title || "Controlled Sample Report";
+
   return (
-    <div>
+    <div className="print-page print-page-landscape">
+      <PrintPageBanner title={reportTitle} documentNumber="Controlled Sample Report" department="Quality Assurance" />
       <PageHeader
         title="Controlled Sample Reports"
         description="Print, CSV, and Excel export for controlled sample records. These reports do not mix stability pull-point inventory."
@@ -184,8 +206,10 @@ export default function ControlSampleReportsPage() {
       {data.loading ? <LoadingSkeleton rows={8} /> : null}
       {data.error ? <ErrorState message={data.error} onRetry={data.reload} /> : null}
       <Card>
-        <CardHeader title="Filters" />
-        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="print:hidden">
+          <CardHeader title="Filters" />
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
           <Select label="Report" value={report} onChange={(e) => setReport(e.target.value as ReportKey)}>
             {REPORTS.map((r) => <option key={r.key} value={r.key}>{r.title}</option>)}
           </Select>
@@ -215,8 +239,9 @@ export default function ControlSampleReportsPage() {
           </div>
         )}
       </Card>
+      <PrintPageFooter />
       {admin ? (
-        <Card className="mt-6">
+        <Card className="mt-6 print:hidden">
           <CardHeader title="SOP annexure mapping" description="Visible to Admin / Masters. Not shown as operational QA procedure text." />
           <ul className="space-y-1 p-4 text-sm text-slate-600">
             {CONTROL_SAMPLE_ANNEXURES.map((a) => (

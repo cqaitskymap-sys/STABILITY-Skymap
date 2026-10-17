@@ -9,6 +9,7 @@ import {
   where,
 } from "firebase/firestore";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
+import { cachedRead, invalidateReadCache } from "@/lib/firebase/read-cache";
 import { nowISO } from "@/lib/utils";
 import type {
   Chamber,
@@ -35,6 +36,10 @@ function omitUndefined<T extends Record<string, unknown>>(input: T): T {
 }
 
 async function listCollection<T>(name: string, orderField = "createdAt") {
+  return cachedRead(`masters:${name}:${orderField}`, () => fetchCollection<T>(name, orderField));
+}
+
+async function fetchCollection<T>(name: string, orderField: string) {
   // Read every document, then sort here. An orderBy query omits records that do not have that field.
   const snap = await getDocs(collection(getDb(), name));
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T & { id: string }));
@@ -101,9 +106,11 @@ export async function listPackSizes() {
 
 async function listBatchesIn(collectionName: string, productId?: string) {
   if (productId) {
-    const q = query(collection(getDb(), collectionName), where("productId", "==", productId));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Batch));
+    return cachedRead(`batches:${collectionName}:${productId}`, async () => {
+      const q = query(collection(getDb(), collectionName), where("productId", "==", productId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Batch));
+    });
   }
   return listCollection<Batch>(collectionName);
 }
@@ -130,15 +137,18 @@ export async function createMaster<T extends Record<string, unknown>>(
 ) {
   const payload = omitUndefined({ ...data, createdAt: nowISO(), updatedAt: nowISO() } as Record<string, unknown>);
   const ref = await addDoc(collection(getDb(), collectionName), payload);
+  invalidateReadCache();
   return { id: ref.id, ...payload };
 }
 
 export async function updateMaster(collectionName: string, id: string, data: Record<string, unknown>) {
   await updateDoc(doc(getDb(), collectionName, id), omitUndefined({ ...data, updatedAt: nowISO() }));
+  invalidateReadCache();
 }
 
 export async function deleteMaster(collectionName: string, id: string) {
   await deleteDoc(doc(getDb(), collectionName, id));
+  invalidateReadCache();
 }
 
 export async function setMasterStatus(
@@ -147,6 +157,7 @@ export async function setMasterStatus(
   status: MasterStatus | Chamber["status"]
 ) {
   await updateDoc(doc(getDb(), collectionName, id), { status, updatedAt: nowISO() });
+  invalidateReadCache();
 }
 
 export function buildLocationLabel(chamberName: string, rack: string, shelf: string, position: string) {

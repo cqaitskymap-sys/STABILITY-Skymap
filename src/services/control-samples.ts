@@ -70,6 +70,19 @@ function requisitionHeld(rows: ControlSampleRequisition[], sampleDocId: string) 
     );
 }
 
+function isLinkedControlSample(controlSampleDocId?: string) {
+  return Boolean(controlSampleDocId && controlSampleDocId !== "pending");
+}
+
+async function uncommittedQuantity(row: ControlSample) {
+  const [requisitions, notes] = await Promise.all([listRequisitions(), listDestructions()]);
+  return (
+    finiteNumber(row.availableQuantity) -
+    requisitionHeld(requisitions, row.id) -
+    destructionReserved(notes, row.id)
+  );
+}
+
 function requisitionStatusAfterQuantities(
   required: number,
   issued: number,
@@ -381,7 +394,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
   if (row.status !== "Received" && row.status !== "Verification Pending") {
     throw new Error("QA must receive the sample before verification.");
   }
-  if (row.controlSampleDocId) throw new Error("This collection has already been verified.");
+  if (isLinkedControlSample(row.controlSampleDocId)) throw new Error("This collection has already been verified.");
   const settings = controlOrg(await getOrganizationSettings());
   const stamp = nowISO();
   const colRef = doc(getDb(), COLLECTIONS.controlSampleCollections, id);
@@ -392,7 +405,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
     if (current.status !== "Received" && current.status !== "Verification Pending") {
       throw new Error("QA must receive the sample before verification.");
     }
-    if (current.controlSampleDocId) throw new Error("This collection has already been verified.");
+    if (isLinkedControlSample(current.controlSampleDocId)) throw new Error("This collection has already been verified.");
     tx.update(colRef, {
       status: "Verified",
       controlSampleDocId: "pending",
@@ -459,6 +472,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
     } else {
       await updateDoc(colRef, {
         status: row.status,
+        controlSampleDocId: deleteField(),
         verifiedBy: deleteField(),
         verifiedAt: deleteField(),
         updatedAt: nowISO(),
@@ -741,13 +755,12 @@ export async function recordObservation(input: {
   if (!row) throw new Error("Controlled sample not found.");
   if (row.destructionHold) throw new Error("Cannot discard quantity from a sample that is on destruction hold.");
   if (input.discardedQuantity < 0) throw new Error("Discarded quantity cannot be negative.");
-  const reserved = destructionReserved(await listDestructions(), row.id);
-  const free = finiteNumber(row.availableQuantity) - reserved;
+  const free = await uncommittedQuantity(row);
   if (input.discardedQuantity > free) {
     throw new Error(
       free > 0
-        ? `Discarded quantity cannot exceed quantity that is not reserved for destruction (${free}).`
-        : "Available quantity is reserved for destruction."
+        ? `Discarded quantity cannot exceed quantity that is not committed to a requisition or destruction note (${free}).`
+        : "Available quantity is already committed to a requisition or destruction note."
     );
   }
   if (input.result === "Abnormal Observation" && !input.natureOfObservation && !input.otherObservation) {
@@ -1077,13 +1090,12 @@ export async function adjustControlSample(input: {
   const row = await getControlSample(input.id);
   if (!row) throw new Error("Controlled sample not found.");
   if (input.quantityDelta < 0) {
-    const reserved = destructionReserved(await listDestructions(), row.id);
-    const free = finiteNumber(row.availableQuantity) - reserved;
+    const free = await uncommittedQuantity(row);
     if (-input.quantityDelta > free) {
       throw new Error(
         free > 0
-          ? `Adjustment cannot reduce quantity reserved for destruction. Free quantity is ${free}.`
-          : "Available quantity is reserved for destruction."
+          ? `Adjustment cannot reduce quantity committed to a requisition or destruction note. Free quantity is ${free}.`
+          : "Available quantity is already committed to a requisition or destruction note."
       );
     }
   }
