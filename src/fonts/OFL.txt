@@ -1,0 +1,8 @@
+Plus Jakarta Sans
+Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
+
+Source Sans 3
+Copyright 2021 The Source Sans 3 Project Authors (https://github.com/adobe-fonts/source-sans)
+
+These fonts are licensed under the SIL Open Font License, Version 1.1.
+https://openfontlicense.org
