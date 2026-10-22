@@ -17,7 +17,7 @@ export default function ControlSampleProductsPage() {
       fields={[
         { key: "productName", label: "Product Name", required: true },
         { key: "genericName", label: "Generic Name" },
-        { key: "strength", label: "Strength" },
+        { key: "strength", label: "Pack Size" },
         { key: "dosageForm", label: "Dosage Form" },
         {
           key: "status",
@@ -32,7 +32,7 @@ export default function ControlSampleProductsPage() {
       ]}
       mapRow={(item) => ({
         Name: item.productName,
-        Strength: item.strength || "—",
+        "Pack Size": item.strength || "—",
         Form: item.dosageForm || "—",
         Status: item.status,
       })}

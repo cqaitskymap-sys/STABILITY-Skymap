@@ -600,13 +600,13 @@ async function createUnit(args: Record<string, unknown>, profile: AppUser, hasPe
   if (blocked) return blocked;
   const name = str(args, "name");
   const abbreviation = str(args, "abbreviation");
-  if (!name || !abbreviation) return fail("Name and abbreviation are required.");
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,11}$/.test(abbreviation)) {
+  if (!name) return fail("Name is required.");
+  if (abbreviation && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,11}$/.test(abbreviation)) {
     return fail("Abbreviation must start with a letter/number; max 12 chars.");
   }
   const items = await listUnits();
   if (items.some((i) => eq(i.name, name))) return fail("A unit with this name already exists.");
-  if (items.some((i) => eq(i.abbreviation, abbreviation))) {
+  if (abbreviation && items.some((i) => eq(i.abbreviation, abbreviation))) {
     return fail("A unit with this abbreviation already exists.");
   }
   const payload = {

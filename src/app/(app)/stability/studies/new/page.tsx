@@ -519,7 +519,7 @@ export default function NewStabilityStudyPage() {
                   <option value="">Select unit</option>
                   {activeUnits.map((u) => (
                     <option key={u.id} value={u.abbreviation || u.name}>
-                      {u.name} ({u.abbreviation})
+                      {u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name}
                     </option>
                   ))}
                 </Select>

@@ -22,7 +22,7 @@ Required fields:
 - Pull point: code (e.g. 3M), label, months.
 - Chamber: chamberId, chamberName, temperature, relativeHumidity, capacity, location.
 - Location: chamber, rack, shelf, position.
-- Unit: name, abbreviation.
+- Unit: name. Optional: abbreviation.
 - Charge study: productName, batchNumber, studyType, storageCondition, chamber, rack, shelf, position, unit, totalQuantity, pullAllocations [{code, quantity}].
 - Withdraw: actualQuantity plus pullPointDocId or productName+batchNumber+pullPoint.
 - Move: sampleId, toChamber, rack, shelf, position, reason.

@@ -146,7 +146,7 @@ export const skymapTools = {
     description: "Create a quantity unit (Bottle, Tablet, Vial).",
     inputSchema: z.object({
       name: z.string(),
-      abbreviation: z.string(),
+      abbreviation: z.string().optional(),
       status: statusSchema,
     }),
   }),
