@@ -28,11 +28,11 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-gradient-to-b from-teal-500 to-teal-600 text-white shadow-[0_1px_2px_rgba(13,148,136,0.35),0_8px_18px_-8px_rgba(13,148,136,0.55)] hover:from-teal-600 hover:to-teal-700",
-    secondary: "bg-slate-100/90 text-slate-800 hover:bg-slate-200/90",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+      "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-[0_10px_24px_-12px_rgba(99,102,241,0.9)] hover:from-indigo-400 hover:to-violet-500",
+    secondary: "border border-white/10 bg-white/8 text-slate-100 hover:bg-white/14",
+    ghost: "bg-transparent text-slate-300 hover:bg-white/8 hover:text-white",
     danger: "bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-sm hover:from-rose-600 hover:to-rose-700",
-    outline: "border border-slate-200 bg-white/80 text-slate-700 shadow-sm hover:border-slate-300 hover:bg-white",
+    outline: "border border-white/15 bg-white/6 text-slate-100 hover:border-indigo-300/40 hover:bg-white/12",
   };
   const sizes = {
     sm: "min-h-9 h-9 px-3 text-xs sm:min-h-8 sm:h-8",
@@ -40,7 +40,7 @@ export function Button({
     lg: "min-h-12 h-12 px-5 text-sm sm:min-h-11 sm:h-11",
   };
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold tracking-tight transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:translate-y-px",
+    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold tracking-tight transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 focus-visible:ring-offset-0 disabled:opacity-50 disabled:pointer-events-none active:translate-y-px",
     variants[variant],
     sizes[size],
     className
@@ -62,7 +62,7 @@ export function Button({
 }
 
 const fieldClass =
-  "h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:h-10 sm:text-sm";
+  "h-14 w-full min-w-0 rounded-xl border border-white/12 bg-[#07122c]/70 px-3 text-base leading-6 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] placeholder:text-slate-500 transition focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 sm:h-12 sm:text-sm sm:leading-5";
 
 export const Input = forwardRef<
   HTMLInputElement,
@@ -89,9 +89,9 @@ export const Input = forwardRef<
     return (
       <label className="block space-y-1.5">
         {label ? (
-          <span className="text-sm font-medium text-slate-700">
+          <span className="text-sm font-medium text-slate-300">
             {label}
-            {props.required ? <span className="text-rose-500"> *</span> : null}
+            {props.required ? <span className="text-rose-400"> *</span> : null}
           </span>
         ) : null}
         <span className="relative block">
@@ -137,14 +137,14 @@ export const Input = forwardRef<
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setPasswordVisible((visible) => !visible)}
-              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition hover:text-slate-700"
+              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition hover:text-slate-100"
             >
               {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           ) : null}
         </span>
-        {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
-        {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+        {hint && !error ? <span className="block text-xs text-slate-400">{hint}</span> : null}
+        {error ? <span className="block text-xs text-rose-300">{error}</span> : null}
       </label>
     );
   }
@@ -163,9 +163,9 @@ export function Select({
   return (
     <label className="block space-y-1.5">
       {label ? (
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-slate-300">
           {label}
-          {props.required ? <span className="text-rose-500"> *</span> : null}
+          {props.required ? <span className="text-rose-400"> *</span> : null}
         </span>
       ) : null}
       <select
@@ -179,8 +179,8 @@ export function Select({
       >
         {children}
       </select>
-      {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
-      {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+      {hint && !error ? <span className="block text-xs text-slate-400">{hint}</span> : null}
+      {error ? <span className="block text-xs text-rose-300">{error}</span> : null}
     </label>
   );
 }
@@ -196,16 +196,16 @@ export function Textarea({
   return (
     <label className="block space-y-1.5">
       {label ? (
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-slate-300">
           {label}
-          {props.required ? <span className="text-rose-500"> *</span> : null}
+          {props.required ? <span className="text-rose-400"> *</span> : null}
         </span>
       ) : null}
       <textarea
         autoCapitalize="characters"
         className={cn(
-          "min-h-24 w-full min-w-0 rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5 text-base text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] transition focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 sm:text-sm",
-          error && "border-rose-400 focus:border-rose-500 focus:ring-rose-200/70",
+          "min-h-24 w-full min-w-0 rounded-xl border border-white/12 bg-[#07122c]/70 px-3 py-2.5 text-base text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 sm:text-sm",
+          error && "border-rose-400 focus:border-rose-400 focus:ring-rose-400/20",
           className
         )}
         onChange={(e) => {
@@ -214,8 +214,8 @@ export function Textarea({
         }}
         {...props}
       />
-      {hint && !error ? <span className="block text-xs text-slate-500">{hint}</span> : null}
-      {error ? <span className="block text-xs text-rose-600">{error}</span> : null}
+      {hint && !error ? <span className="block text-xs text-slate-400">{hint}</span> : null}
+      {error ? <span className="block text-xs text-rose-300">{error}</span> : null}
     </label>
   );
 }
@@ -230,10 +230,10 @@ export function Card({ className, children }: { className?: string; children: Re
 
 export function CardHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-slate-100/90 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+    <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
       <div className="min-w-0">
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        {description ? <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p> : null}
+        <h2 className="text-base font-semibold text-white">{title}</h2>
+        {description ? <p className="mt-1 text-sm leading-6 text-slate-200">{description}</p> : null}
       </div>
       {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
     </div>
@@ -250,14 +250,14 @@ export function Badge({
   className?: string;
 }) {
   const tones = {
-    slate: "bg-slate-100/90 text-slate-700 ring-slate-200/80",
-    green: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-    yellow: "bg-amber-50 text-amber-700 ring-amber-100",
-    orange: "bg-orange-50 text-orange-700 ring-orange-100",
-    red: "bg-rose-50 text-rose-700 ring-rose-100",
-    blue: "bg-sky-50 text-sky-700 ring-sky-100",
-    teal: "bg-teal-50 text-teal-700 ring-teal-100",
-    purple: "bg-indigo-50 text-indigo-700 ring-indigo-100",
+    slate: "bg-white/8 text-slate-200 ring-white/10",
+    green: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/25",
+    yellow: "bg-amber-400/15 text-amber-200 ring-amber-300/25",
+    orange: "bg-orange-400/15 text-orange-200 ring-orange-300/25",
+    red: "bg-rose-400/15 text-rose-200 ring-rose-300/25",
+    blue: "bg-sky-400/15 text-sky-200 ring-sky-300/25",
+    teal: "bg-cyan-400/15 text-cyan-200 ring-cyan-300/25",
+    purple: "bg-violet-400/15 text-violet-200 ring-violet-300/30",
   };
   return (
     <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1", tones[tone], className)}>
@@ -357,21 +357,21 @@ export function StatCard({
   tone?: "teal" | "blue" | "indigo" | "amber" | "rose" | "emerald";
 }) {
   const tones = {
-    teal: "from-teal-500/15 to-teal-500/5 text-teal-700",
-    blue: "from-sky-500/15 to-sky-500/5 text-sky-700",
-    indigo: "from-indigo-500/15 to-indigo-500/5 text-indigo-700",
-    amber: "from-amber-500/15 to-amber-500/5 text-amber-700",
-    rose: "from-rose-500/15 to-rose-500/5 text-rose-700",
-    emerald: "from-emerald-500/15 to-emerald-500/5 text-emerald-700",
+    teal: "from-cyan-400/25 to-cyan-400/5 text-cyan-200",
+    blue: "from-sky-400/25 to-sky-400/5 text-sky-200",
+    indigo: "from-indigo-400/25 to-indigo-400/5 text-indigo-200",
+    amber: "from-amber-400/25 to-amber-400/5 text-amber-200",
+    rose: "from-rose-400/25 to-rose-400/5 text-rose-200",
+    emerald: "from-emerald-400/25 to-emerald-400/5 text-emerald-200",
   };
   return (
     <Card className="relative overflow-hidden p-4 sm:p-5">
-      <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br from-slate-200/50 to-transparent" />
+      <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-indigo-400/25 to-transparent blur-xl" />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-2xl font-semibold leading-none tracking-tight text-slate-900 sm:text-[1.7rem]">{value}</p>
-          {hint ? <p className="mt-2 text-xs text-slate-500">{hint}</p> : null}
+          <p className="text-[13px] font-medium text-slate-400">{title}</p>
+          <p className="mt-2 text-2xl font-semibold leading-none tracking-tight text-white sm:text-[1.7rem]">{value}</p>
+          {hint ? <p className="mt-2 text-xs text-slate-400">{hint}</p> : null}
         </div>
         <div className={cn("rounded-2xl bg-gradient-to-br p-2.5 shadow-inner", tones[tone])}>
           <Icon className="h-5 w-5" />
@@ -392,11 +392,11 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="mb-4 rounded-2xl bg-slate-100 p-3.5 text-slate-500 ring-1 ring-slate-200/80">
+      <div className="mb-4 rounded-2xl bg-white/6 p-3.5 text-slate-300 ring-1 ring-white/10">
         <Inbox className="h-6 w-6" />
       </div>
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      {description ? <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">{description}</p> : null}
+      <h3 className="text-base font-semibold text-white">{title}</h3>
+      {description ? <p className="mt-1 max-w-md text-sm leading-6 text-slate-400">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
@@ -415,11 +415,11 @@ export function LoadingSkeleton({ rows = 5 }: { rows?: number }) {
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="mb-4 rounded-2xl bg-rose-50 p-3.5 text-rose-600 ring-1 ring-rose-100">
+      <div className="mb-4 rounded-2xl bg-rose-400/15 p-3.5 text-rose-200 ring-1 ring-rose-300/30">
         <AlertTriangle className="h-6 w-6" />
       </div>
-      <h3 className="text-base font-semibold text-slate-900">Something went wrong</h3>
-      <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">{message}</p>
+      <h3 className="text-base font-semibold text-white">Something went wrong</h3>
+      <p className="mt-1 max-w-md text-sm leading-6 text-slate-400">{message}</p>
       {onRetry ? (
         <Button className="mt-4" variant="outline" onClick={onRetry}>
           Try again
@@ -472,7 +472,7 @@ export function Modal({
 
   const dialog = (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm max-sm:items-end max-sm:p-0"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#030712]/70 p-4 backdrop-blur-md max-sm:items-end max-sm:p-0"
       onClick={onClose}
       role="presentation"
     >
@@ -481,22 +481,22 @@ export function Modal({
         aria-modal="true"
         aria-labelledby="modal-title"
         className={cn(
-          "flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-white/40 bg-white shadow-2xl max-sm:max-h-[90dvh] max-sm:rounded-b-none max-sm:rounded-t-2xl",
+          "flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0b1733]/85 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] backdrop-blur-2xl max-sm:max-h-[90dvh] max-sm:rounded-b-none max-sm:rounded-t-2xl",
           widths[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-slate-100 px-4 py-4 sm:px-6">
-          <h3 id="modal-title" className="text-lg font-semibold tracking-tight text-slate-900">
+        <div className="shrink-0 border-b border-white/10 px-4 py-4 sm:px-6">
+          <h3 id="modal-title" className="text-lg font-semibold tracking-tight text-white">
             {title}
           </h3>
-          {description ? <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p> : null}
+          {description ? <p className="mt-1 text-sm leading-6 text-slate-300">{description}</p> : null}
         </div>
         {children ? (
           <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">{children}</div>
         ) : null}
         {footer ? (
-          <div className="shrink-0 border-t border-slate-100 px-4 py-3 sm:px-6">
+          <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-6">
             {footer}
           </div>
         ) : null}
@@ -572,8 +572,8 @@ export function Pager({
   suffix?: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-slate-500">
+    <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-slate-400">
         Showing {showing} of {total}
         {suffix}
       </p>
@@ -607,8 +607,8 @@ export function PageHeader({
   return (
     <div className="app-page-header mb-5 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-[1.7rem]">{title}</h1>
-        {description ? <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">{description}</p> : null}
+        <h1 className="text-xl font-semibold tracking-tight text-white sm:text-[1.7rem]">{title}</h1>
+        {description ? <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-200">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>

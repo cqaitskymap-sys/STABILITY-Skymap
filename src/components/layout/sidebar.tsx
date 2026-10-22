@@ -124,7 +124,7 @@ const NAV: NavGroup[] = [
       { label: "Controlled Sample Register", href: "/stability/control-samples/register", icon: Shield, permission: ["control.perform", "control.collect", "inventory.view"] },
       { label: "Periodic Observation", href: "/stability/control-samples/observation", icon: ClipboardCheck, permission: "control.perform" },
       { label: "Withdrawal / Requisition", href: "/stability/control-samples/withdrawal", icon: PackageMinus, permission: ["control.perform", "approve.records"] },
-      { label: "Storage", href: "/stability/control-samples/locations", icon: MapPin, permission: "control.perform" },
+      { label: "Storage", href: "/stability/control-samples/locations", icon: MapPin, permission: ["control.perform", "masters.manage"] },
       { label: "Destruction Due", href: "/stability/control-samples/destruction-due", icon: AlertTriangle, permission: ["control.perform", "disposal.perform"] },
       { label: "Destruction", href: "/stability/control-samples/destruction/new", icon: Trash2, permission: ["control.perform", "disposal.perform", "approve.records"] },
       { label: "Destruction Log", href: "/stability/control-samples/destruction-log", icon: ScrollText, permission: ["control.perform", "disposal.perform"] },
@@ -223,7 +223,7 @@ export function Sidebar({
   const allHrefs = useMemo(() => groups.flatMap((g) => g.items.map((item) => item.href)), [groups]);
 
   const content = (
-    <div className="flex h-full flex-col bg-[var(--sidebar)] text-slate-300">
+    <div className="flex h-full flex-col border-r border-white/10 bg-[var(--sidebar)] text-slate-300 shadow-[inset_-1px_0_0_rgba(255,255,255,0.04)] backdrop-blur-2xl">
       <div className="flex items-center justify-between gap-2 border-b border-white/8 px-3 py-3.5">
         <Link
           href="/home"
@@ -238,7 +238,7 @@ export function Sidebar({
           ) : (
             <div className="flex flex-col gap-1">
               <SkymapLogo priority className="h-11 w-auto max-w-[158px]" />
-              <p className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300/80">
+              <p className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-200/80">
                 {MODULE_SUBTITLE[moduleId]}
               </p>
             </div>
@@ -286,16 +286,13 @@ export function Sidebar({
                       className={cn(
                         "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] transition",
                         active
-                          ? "bg-teal-400/12 font-medium text-teal-200 shadow-[inset_0_0_0_1px_rgba(45,212,191,0.12)]"
+                          ? "bg-gradient-to-r from-indigo-500 to-violet-600 font-medium text-white shadow-[0_10px_22px_-12px_rgba(109,90,255,0.95)]"
                           : "text-slate-400 hover:bg-white/6 hover:text-slate-100",
                         collapsed && "justify-center px-2"
                       )}
                       title={item.label}
                     >
-                      {active ? (
-                        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-teal-400" />
-                      ) : null}
-                      <Icon className={cn("h-4 w-4 shrink-0", active ? "text-teal-300" : "text-slate-500 group-hover:text-slate-300")} />
+                      <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-slate-500 group-hover:text-slate-300")} />
                       {!collapsed ? <span className="truncate">{item.label}</span> : null}
                     </Link>
                   );
@@ -310,7 +307,7 @@ export function Sidebar({
         <div className="border-t border-white/8 p-4 text-xs text-slate-500">
           <div className="rounded-xl bg-white/4 px-3 py-2.5 ring-1 ring-white/6">
             <div className="flex items-center gap-2 text-slate-400">
-              <Settings2 className="h-3.5 w-3.5 text-teal-300" />
+              <Settings2 className="h-3.5 w-3.5 text-indigo-300" />
               {MODULE_SUBTITLE[moduleId]}
             </div>
             <DeveloperCredit className="mt-1.5" tone="light" />

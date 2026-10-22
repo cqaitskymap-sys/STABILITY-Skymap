@@ -1,6 +1,8 @@
-import { addDoc, collection, deleteField, doc, getDoc, runTransaction, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteField, doc, getDoc, getDocs, query, runTransaction, updateDoc, where } from "firebase/firestore";
 import { listDocs } from "@/lib/firebase/list-docs";
 import { COLLECTIONS, getDb } from "@/lib/firebase/config";
+import { invalidateReadCache } from "@/lib/firebase/read-cache";
+import { can, type Permission } from "@/lib/permissions";
 import {
   calcControlAvailable,
   controlOrg,
@@ -94,6 +96,10 @@ function requisitionStatusAfterQuantities(
   return "Approved";
 }
 
+function requirePermission(user: AppUser, permission: Permission, message: string) {
+  if (!can(user, permission)) throw new Error(message);
+}
+
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -127,6 +133,7 @@ async function audit(input: {
     userEmail: input.user.email,
     userRole: input.user.role,
   });
+  invalidateReadCache();
 }
 
 async function writeControlTx(input: Omit<ControlSampleTx, "id">) {
@@ -134,6 +141,14 @@ async function writeControlTx(input: Omit<ControlSampleTx, "id">) {
     collection(getDb(), COLLECTIONS.controlSampleTransactions),
     omitUndefined(input as unknown as Record<string, unknown>)
   );
+  invalidateReadCache();
+}
+
+async function findSampleLinkedToCollection(collectionDocId: string) {
+  const snap = await getDocs(collection(getDb(), COLLECTIONS.controlSamples));
+  const match = snap.docs.find((d) => d.data().collectionDocId === collectionDocId);
+  if (!match) return null;
+  return { id: match.id, ...match.data() } as ControlSample;
 }
 
 function qtySnapshot(row: ControlSample) {
@@ -246,42 +261,62 @@ export async function createQuantityMasterRevision(input: {
   user: AppUser;
 }) {
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Required quantity must be greater than zero.");
-  const existing = await getActiveQuantityMaster(input.productId);
   const stamp = nowISO();
-  if (existing) {
-    await updateDoc(doc(getDb(), COLLECTIONS.controlSampleQuantityMasters, existing.id), {
-      status: "Inactive",
+  const masters = collection(getDb(), COLLECTIONS.controlSampleQuantityMasters);
+  const known = await getDocs(query(masters, where("productId", "==", input.productId)));
+  const pointerRef = doc(getDb(), COLLECTIONS.counters, `CSQ_${input.productId}`);
+  const saved = await runTransaction(getDb(), async (tx) => {
+    const pointerSnap = await tx.get(pointerRef);
+    const knownSnaps = [];
+    for (const entry of known.docs) knownSnaps.push(await tx.get(entry.ref));
+    const pointerId = pointerSnap.exists() ? String(pointerSnap.data().activeId || "") : "";
+    const pointerMaster = pointerId && !known.docs.some((entry) => entry.id === pointerId)
+      ? await tx.get(doc(masters, pointerId))
+      : null;
+
+    let revision = pointerSnap.exists() ? Number(pointerSnap.data().revision || 0) : 0;
+    let previousRevisionId: string | undefined;
+    for (const snap of [...knownSnaps, pointerMaster].filter((snap) => snap?.exists())) {
+      if (!snap) continue;
+      const rev = Number(snap.data()?.revisionNumber || 0);
+      if (rev > revision) revision = rev;
+      if (snap.data()?.status === "Active") {
+        previousRevisionId = snap.id;
+        tx.update(snap.ref, { status: "Inactive", updatedAt: stamp });
+      }
+    }
+    const ref = doc(masters);
+    const payload: Omit<ControlSampleQuantityMaster, "id"> = {
+      productId: input.productId,
+      productName: input.productName,
+      quantity: input.quantity,
+      unit: input.unit,
+      revisionNumber: revision + 1,
+      previousRevisionId,
+      effectiveDate: input.effectiveDate,
+      preparedBy: input.preparedBy,
+      checkedBy: input.checkedBy,
+      approvedBy: input.approvedBy,
+      conversionBatchQuantity: input.conversionBatchQuantity,
+      conversionBatchUnit: input.conversionBatchUnit,
+      status: "Active",
+      createdBy: input.user.uid,
+      createdByName: input.user.displayName || input.user.email,
+      createdAt: stamp,
       updatedAt: stamp,
-    });
-  }
-  const payload: Omit<ControlSampleQuantityMaster, "id"> = {
-    productId: input.productId,
-    productName: input.productName,
-    quantity: input.quantity,
-    unit: input.unit,
-    revisionNumber: (existing?.revisionNumber || 0) + 1,
-    previousRevisionId: existing?.id,
-    effectiveDate: input.effectiveDate,
-    preparedBy: input.preparedBy,
-    checkedBy: input.checkedBy,
-    approvedBy: input.approvedBy,
-    conversionBatchQuantity: input.conversionBatchQuantity,
-    conversionBatchUnit: input.conversionBatchUnit,
-    status: "Active",
-    createdBy: input.user.uid,
-    createdByName: input.user.displayName || input.user.email,
-    createdAt: stamp,
-    updatedAt: stamp,
-  };
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.controlSampleQuantityMasters), omitUndefined(payload as unknown as Record<string, unknown>));
+    };
+    tx.set(ref, omitUndefined(payload as unknown as Record<string, unknown>));
+    tx.set(pointerRef, { activeId: ref.id, revision: payload.revisionNumber, productId: input.productId }, { merge: true });
+    return { id: ref.id, ...payload };
+  });
   await audit({
     action: "Create",
-    recordId: ref.id,
-    newValue: { product: input.productName, revision: payload.revisionNumber, quantity: input.quantity },
+    recordId: saved.id,
+    newValue: { product: input.productName, revision: saved.revisionNumber, quantity: input.quantity },
     user: input.user,
     reason: "Annexure-I quantity master revision",
   });
-  return { id: ref.id, ...payload };
+  return saved;
 }
 
 export async function listCollections() {
@@ -352,6 +387,7 @@ export async function submitCollection(id: string, user: AppUser) {
 }
 
 export async function receiveCollection(id: string, user: AppUser) {
+  requirePermission(user, "control.perform", "QA Controlled Sample permission is required to receive a collection.");
   const row = await getCollection(id);
   if (!row) throw new Error("Collection record not found.");
   if (row.status !== "Submitted") throw new Error("Sample must be submitted before QA receipt.");
@@ -366,6 +402,7 @@ export async function receiveCollection(id: string, user: AppUser) {
 }
 
 export async function recordVerificationException(id: string, input: { discrepancy: string; remarks: string; user: AppUser }) {
+  requirePermission(input.user, "control.perform", "QA Controlled Sample permission is required to record a verification exception.");
   const row = await getCollection(id);
   if (!row) throw new Error("Collection record not found.");
   if (row.status !== "Received" && row.status !== "Verification Pending") {
@@ -389,12 +426,14 @@ export async function recordVerificationException(id: string, input: { discrepan
 }
 
 export async function verifyAndLogCollection(id: string, user: AppUser) {
+  requirePermission(user, "control.perform", "QA Controlled Sample permission is required to verify a collection.");
   const row = await getCollection(id);
   if (!row) throw new Error("Collection record not found.");
-  if (row.status !== "Received" && row.status !== "Verification Pending") {
+  if (isLinkedControlSample(row.controlSampleDocId)) throw new Error("This collection has already been verified.");
+  const retryLink = row.status === "Verified";
+  if (!retryLink && row.status !== "Received" && row.status !== "Verification Pending") {
     throw new Error("QA must receive the sample before verification.");
   }
-  if (isLinkedControlSample(row.controlSampleDocId)) throw new Error("This collection has already been verified.");
   const settings = controlOrg(await getOrganizationSettings());
   const stamp = nowISO();
   const colRef = doc(getDb(), COLLECTIONS.controlSampleCollections, id);
@@ -402,18 +441,25 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
     const snap = await tx.get(colRef);
     if (!snap.exists()) throw new Error("Collection record not found.");
     const current = { id: snap.id, ...snap.data() } as ControlSampleCollection;
-    if (current.status !== "Received" && current.status !== "Verification Pending") {
+    if (isLinkedControlSample(current.controlSampleDocId)) throw new Error("This collection has already been verified.");
+    if (current.status !== "Received" && current.status !== "Verification Pending" && current.status !== "Verified") {
       throw new Error("QA must receive the sample before verification.");
     }
-    if (isLinkedControlSample(current.controlSampleDocId)) throw new Error("This collection has already been verified.");
-    tx.update(colRef, {
-      status: "Verified",
-      controlSampleDocId: "pending",
-      verifiedBy: user.displayName || user.email,
-      verifiedAt: stamp,
-      updatedAt: stamp,
-    });
+    if (current.controlSampleDocId !== "pending") {
+      tx.update(colRef, {
+        status: "Verified",
+        controlSampleDocId: "pending",
+        verifiedBy: user.displayName || user.email,
+        verifiedAt: stamp,
+        updatedAt: stamp,
+      });
+    }
   });
+  const alreadyLinked = await findSampleLinkedToCollection(id);
+  if (alreadyLinked) {
+    await updateDoc(colRef, { controlSampleDocId: alreadyLinked.id, status: "Verified", updatedAt: nowISO() });
+    return alreadyLinked;
+  }
   let created: Awaited<ReturnType<typeof createControlSample>> | null = null;
   try {
     created = await createControlSample({
@@ -429,6 +475,7 @@ export async function verifyAndLogCollection(id: string, user: AppUser) {
       unit: row.unit,
       collectionDate: row.date,
       collectionStage: row.collectionStage,
+      collectionDocId: id,
       motherBatch: row.motherBatch,
       conversionBatch: row.conversionBatch,
       brand: row.brand,
@@ -548,6 +595,7 @@ export async function storeControlSample(input: {
   position?: string;
   user: AppUser;
 }) {
+  requirePermission(input.user, "control.perform", "QA Controlled Sample permission is required to store a sample.");
   const row = await getControlSample(input.id);
   if (!row) throw new Error("Controlled sample not found.");
   if (!input.storageArea?.trim()) throw new Error("Storage area is required.");
@@ -596,10 +644,13 @@ export async function storeControlSample(input: {
     })
   );
   if (row.id) {
-    const collections = await listCollections();
-    const linked = collections.find((c) => c.controlSampleDocId === row.id);
-    if (linked) {
+    const snap = await getDocs(collection(getDb(), COLLECTIONS.controlSampleCollections));
+    const linked = snap.docs
+      .map((entry) => ({ id: entry.id, ...entry.data() }) as ControlSampleCollection)
+      .find((c) => c.controlSampleDocId === row.id);
+    if (linked && linked.status !== "Stored") {
       await updateDoc(doc(getDb(), COLLECTIONS.controlSampleCollections, linked.id), { status: "Stored", updatedAt: nowISO() });
+      invalidateReadCache();
     }
   }
   await audit({ action: "Movement", recordId: row.controlSampleId, newValue: { toLocation }, user: input.user });
@@ -895,6 +946,7 @@ export async function createRequisition(input: {
 }
 
 export async function approveRequisition(id: string, user: AppUser, approved: boolean, remarks?: string) {
+  requirePermission(user, "approve.records", "Electronic approval permission is required to approve or reject a requisition.");
   const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleWithdrawals, id));
   if (!snap.exists()) throw new Error("Requisition not found.");
   const row = { id: snap.id, ...snap.data() } as ControlSampleRequisition;
@@ -1260,6 +1312,7 @@ function isEligibleNow(row: ControlSample, settings: ReturnType<typeof controlOr
 }
 
 export async function approveDestruction(id: string, user: AppUser) {
+  requirePermission(user, "approve.records", "Electronic approval permission is required to approve a destruction note.");
   const snap = await getDoc(doc(getDb(), COLLECTIONS.controlSampleDestructions, id));
   if (!snap.exists()) throw new Error("Destruction note not found.");
   const row = { id: snap.id, ...snap.data() } as ControlSampleDestruction;
@@ -1476,7 +1529,13 @@ export async function getControlDashboard() {
     withdrawalRequests: requisitions.filter((r) => r.status === "Submitted" || r.status === "Approved").length,
     destructionDue: dueDestroy.length,
     destructionOverdue: overdueDestroy.length,
-    recentlyDestroyed: samples.filter((s) => s.status === "Destroyed" || s.status === "Disposed").length,
+    recentlyDestroyed: samples.filter((s) => {
+      if (s.status !== "Destroyed" && s.status !== "Disposed") return false;
+      const when = (s.updatedAt || s.createdAt || "").slice(0, 10);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      return Boolean(when) && when >= cutoff.toISOString().slice(0, 10);
+    }).length,
     recentCollections: collections.slice(0, 8),
     observationDueRows: dueObs.slice(0, 8),
     destructionDueRows: dueDestroy.slice(0, 8),

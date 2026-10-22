@@ -76,8 +76,9 @@ export default function ControlSampleCollectionPage() {
   const selectedProduct = products.find((p) => p.id === productId);
   const selectedBatch = batches.find((b) => b.id === batchId);
   const qtyMaster = useAsync(async () => (productId ? getActiveQuantityMaster(productId) : null), [productId]);
-  const requiredQty = qtyMaster.data?.quantity ?? 0;
-  const requiredUnit = qtyMaster.data?.unit || unit;
+  const qtyReady = !productId || !qtyMaster.loading;
+  const requiredQty = qtyReady ? (qtyMaster.data?.quantity ?? 0) : 0;
+  const requiredUnit = qtyReady ? qtyMaster.data?.unit || unit : unit;
   const markets = (catalog.data?.markets || []).filter((m) => m.status === "Active" || m.id === marketId);
 
   function applyProduct(nextProductId: string) {
@@ -89,10 +90,8 @@ export default function ControlSampleCollectionPage() {
     setBatchId("");
     setManufacturingDate("");
     setExpiryDate("");
-    if (product?.market) {
-      setMarket(product.market);
-      setMarketId(marketMatch?.id || "");
-    }
+    setMarket(product?.market || "");
+    setMarketId(product?.market ? marketMatch?.id || "" : "");
   }
 
   function applyBatch(nextBatchId: string) {
@@ -130,6 +129,10 @@ export default function ControlSampleCollectionPage() {
   async function save(finalize: boolean) {
     if (!profile || !canCollect || !selectedProduct || !selectedBatch) {
       toast.error("Product and batch are required.");
+      return;
+    }
+    if (qtyMaster.loading) {
+      toast.error("Quantity master is still loading for this product.");
       return;
     }
     const qty = Number(actualQty);
@@ -330,7 +333,9 @@ export default function ControlSampleCollectionPage() {
                 </p>
               ) : null}
               <p className="text-sm text-slate-600">
-                Required quantity (Annexure-I{qtyMaster.data ? ` rev ${qtyMaster.data.revisionNumber}` : " — not configured"}): <strong>{requiredQty || "—"} {requiredUnit}</strong>
+                {qtyMaster.loading
+                  ? "Loading Annexure-I quantity…"
+                  : <>Required quantity (Annexure-I{qtyMaster.data ? ` rev ${qtyMaster.data.revisionNumber}` : " — not configured"}): <strong>{requiredQty || "—"} {requiredUnit}</strong></>}
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Input label="Actual quantity collected" type="number" required value={actualQty} onChange={(e) => setActualQty(e.target.value)} disabled={!canCollect} />

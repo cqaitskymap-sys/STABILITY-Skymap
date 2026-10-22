@@ -218,7 +218,7 @@ export function AssistantPanel() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="no-print fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(13,148,136,0.8)] transition hover:from-teal-600 hover:to-teal-800 sm:hidden"
+          className="no-print fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(99,102,241,0.85)] transition hover:from-indigo-400 hover:to-violet-500 sm:hidden"
           aria-label="Open SkyMap AI assistant"
         >
           <Sparkles className="h-4 w-4" />
@@ -232,13 +232,13 @@ export function AssistantPanel() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex h-full w-full max-w-md flex-col border-l border-white/20 bg-white shadow-2xl pt-[env(safe-area-inset-top)]"
+            className="flex h-full w-full max-w-md flex-col border-l border-white/10 bg-[#071022]/80 shadow-2xl backdrop-blur-2xl pt-[env(safe-area-inset-top)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-4 py-4 text-white">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-br from-[#071022] via-[#121c40] to-indigo-950 px-4 py-4 text-white">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-400/20 ring-1 ring-white/10">
-                  <Bot className="h-5 w-5 text-teal-200" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-400/20 ring-1 ring-white/10">
+                  <Bot className="h-5 w-5 text-indigo-100" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">SkyMap QA Assistant</p>
@@ -261,7 +261,7 @@ export function AssistantPanel() {
 
             <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {!messages.length ? (
-                <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-4 text-sm text-teal-950">
+                <div className="rounded-2xl border border-indigo-300/25 bg-indigo-400/10 p-4 text-sm text-indigo-50">
                   {controlModule
                     ? "Ask me about observation due, destruction due, or to add a controlled sample product, collect a batch, store a sample, or record an observation. I use your Controlled Sample permissions."
                     : "Ask me to add a product, create a batch, charge a study, or withdraw samples — I will do it with your permissions. I can also explain overdue pulls, chambers, and alerts."}
@@ -275,7 +275,7 @@ export function AssistantPanel() {
                   if (!text) return null;
                   return (
                     <div key={message.id} className="flex justify-end">
-                      <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl bg-teal-700 px-3.5 py-2.5 text-sm leading-6 text-white">
+                      <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 px-3.5 py-2.5 text-sm leading-6 text-white">
                         {text}
                       </div>
                     </div>
@@ -344,7 +344,7 @@ export function AssistantPanel() {
                       ? "e.g. Which controlled samples are due for observation?"
                       : "e.g. Add product Paracetamol 500 mg tablet…"
                   }
-                  className="min-h-12 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  className="min-h-12 flex-1 resize-none rounded-xl border border-white/12 bg-[#07122c]/80 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20"
                 />
                 {busy ? (
                   <Button type="button" variant="outline" onClick={() => stop()} aria-label="Stop">

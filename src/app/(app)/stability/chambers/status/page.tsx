@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, PageHeader } from "@/components/ui";
+import { Card, EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
 import { getOrganizationSettings } from "@/services/organization";
 import { listChambers } from "@/services/masters";
@@ -22,6 +22,13 @@ export default function ChamberStatusPage() {
           Future path: Chamber PLC → Gateway / Middleware → API → Next.js → Firebase → this dashboard. Simulation/test data stays separated and is off unless an administrator enables it.
         </p>
       </Card>
+      {chambers.loading || org.loading ? <LoadingSkeleton rows={4} /> : null}
+      {chambers.error || org.error ? (
+        <ErrorState message={chambers.error || org.error || "Unable to load chambers."} onRetry={() => { chambers.reload(); org.reload(); }} />
+      ) : null}
+      {!chambers.loading && !chambers.error && !(chambers.data || []).length ? (
+        <EmptyState title="No chambers" description="Add chambers in Masters before current status can be shown." />
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
         {(chambers.data || []).map((c) => (
           <Card key={c.id} className="p-4">

@@ -64,6 +64,13 @@ export default function StudyDetailPage() {
 
   const { study, pulls, samples, transactions } = detail.data;
   const primarySample = samples[0];
+  function canWithdrawPull(sampleDocId: string, status: string) {
+    if (status === "Withdrawn" || status === "Cancelled" || status === "Completed") return false;
+    const sample = samples.find((item) => item.id === sampleDocId);
+    if (!sample) return true;
+    if (sample.availableQuantity <= 0) return false;
+    return sample.status !== "Disposed" && sample.status !== "Depleted" && sample.status !== "Fully Withdrawn";
+  }
 
   return (
     <div className="print-page">
@@ -183,7 +190,7 @@ export default function StudyDetailPage() {
                       <StatusBadge status={p.status} />
                     </td>
                     <td className="px-4 py-3 print:hidden">
-                      {p.status !== "Withdrawn" ? (
+                      {canWithdrawPull(p.sampleDocId, p.status) ? (
                         <Link href={`/stability/withdrawals?pull=${p.id}`}>
                           <Button size="sm" variant="outline">
                             Withdraw
@@ -211,7 +218,7 @@ export default function StudyDetailPage() {
                 <p className="mt-2 text-sm text-slate-600">
                   Planned {p.plannedQuantity} · Actual {p.actualQuantity}
                 </p>
-                {p.status !== "Withdrawn" ? (
+                {canWithdrawPull(p.sampleDocId, p.status) ? (
                   <Link href={`/stability/withdrawals?pull=${p.id}`} className="mt-3 block">
                     <Button size="sm" variant="outline" className="w-full">
                       Withdraw

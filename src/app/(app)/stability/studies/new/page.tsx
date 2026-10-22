@@ -31,7 +31,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { addMonthsToDate, formatDate, friendlyError, todayISO } from "@/lib/utils";
-import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow } from "@/lib/sop";
+import { DEFAULT_ORG_SETTINGS, isChargingBeyondWindow, splitOrientation } from "@/lib/sop";
 import { peekNextId } from "@/services/ids";
 import { createStudyAndCharge } from "@/services/inventory";
 import { getOrganizationSettings } from "@/services/organization";
@@ -126,6 +126,10 @@ export default function NewStabilityStudyPage() {
 
   const totalQuantity = Number(form.totalQuantity) || 0;
   const reservedQuantity = Number(form.reservedQuantity) || 0;
+  const orientation = splitOrientation(
+    totalQuantity,
+    form.applyInvertedSplit ? Number(form.invertedPercent || 25) : 0
+  );
   const totalRequired = sumAllocations(form.pullAllocations);
   const totalChargedNeeded = totalRequired + reservedQuantity;
 
@@ -530,6 +534,31 @@ export default function NewStabilityStudyPage() {
                     onChange={(e) => updateField("notes", e.target.value)}
                   />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-slate-200 sm:col-span-3">
+                  <input
+                    type="checkbox"
+                    checked={form.applyInvertedSplit}
+                    onChange={(e) => updateField("applyInvertedSplit", e.target.checked)}
+                  />
+                  Apply inverted split
+                </label>
+                <Input
+                  label="Inverted %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.invertedPercent}
+                  disabled={!form.applyInvertedSplit}
+                  onChange={(e) => updateField("invertedPercent", e.target.value)}
+                />
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                  <p className="text-slate-400">Upright</p>
+                  <p className="text-lg font-semibold text-white">{orientation.uprightQuantity}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                  <p className="text-slate-400">Inverted</p>
+                  <p className="text-lg font-semibold text-white">{orientation.invertedQuantity}</p>
+                </div>
               </div>
             </Card>
           ) : null}
@@ -674,6 +703,14 @@ export default function NewStabilityStudyPage() {
                 <ReviewRow label="Chamber" value={selectedChamber?.chamberName} />
                 <ReviewRow label="Location" value={selectedLocation?.label} />
                 <ReviewRow label="Total Quantity" value={`${totalQuantity} ${form.unit}`} />
+                <ReviewRow
+                  label="Orientation"
+                  value={
+                    form.applyInvertedSplit
+                      ? `Upright ${orientation.uprightQuantity} / Inverted ${orientation.invertedQuantity} (${form.invertedPercent || 25}%)`
+                      : "Upright only"
+                  }
+                />
                 <ReviewRow label="Reserve" value={String(reservedQuantity)} />
                 <ReviewRow label="Pull Required" value={String(totalRequired)} />
                 <ReviewRow label="Notes" value={form.notes || "—"} />
@@ -745,6 +782,18 @@ export default function NewStabilityStudyPage() {
                   if (lateCharging && orgSettings.requireLateChargingReason && !form.lateChargingReason.trim()) {
                     toast.error(
                       `Charging beyond ${orgSettings.chargingWindowDays} days of the receive date requires a reason.`
+                    );
+                    return;
+                  }
+                  if (
+                    form.applyInvertedSplit &&
+                    orientation.uprightQuantity > 0 &&
+                    orientation.invertedQuantity > 0 &&
+                    !orgSettings.allowMultiOccupancy &&
+                    form.locationId
+                  ) {
+                    toast.error(
+                      "Inverted split creates two samples in one location. Turn off the inverted split, or enable multi-occupancy in Organization."
                     );
                     return;
                   }

@@ -247,12 +247,10 @@ export default function StabilitySettingsPage() {
             description="Create users, manage accounts, and assign module access."
           />
           <div className="p-4">
-            <Link href="/stability/admin/users">
-              <Button>
-                <Users className="h-4 w-4" />
-                Open User Management
-              </Button>
-            </Link>
+            <Button href="/stability/admin/users">
+              <Users className="h-4 w-4" />
+              Open User Management
+            </Button>
           </div>
         </Card>
 
@@ -276,11 +274,9 @@ export default function StabilitySettingsPage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {missingMasters.map((m) => (
-                    <Link key={m.href} href={m.href}>
-                      <Button size="sm" variant="outline" disabled={!canMasters}>
-                        Configure {m.label}
-                      </Button>
-                    </Link>
+                    <Button key={m.href} href={canMasters ? m.href : undefined} size="sm" variant="outline" disabled={!canMasters}>
+                      Configure {m.label}
+                    </Button>
                   ))}
                 </div>
                 {!canMasters ? (
@@ -314,7 +310,7 @@ export default function StabilitySettingsPage() {
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <span className="text-slate-500">{label}</span>
+      <span className="text-slate-200">{label}</span>
       <span className="font-medium text-slate-900">{value}</span>
     </div>
   );

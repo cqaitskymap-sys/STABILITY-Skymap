@@ -113,7 +113,7 @@ export default function ControlSampleReportsPage() {
     const result = ((): Record<string, string | number>[] => {
     switch (report) {
       case "register":
-        return data.data.samples.filter((s) => match(`${s.productName} ${s.batchNumber} ${s.controlSampleId}`)).map((s) => ({
+        return data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(`${s.productName} ${s.batchNumber} ${s.controlSampleId}`)).map((s) => ({
           ID: s.controlSampleId, Product: s.productName, Batch: s.batchNumber, Qty: s.availableQuantity, Unit: s.unit, Rack: s.rackNumber || "", Box: s.boxNumber || "", Status: s.status,
         }));
       case "collection":
@@ -125,26 +125,26 @@ export default function ControlSampleReportsPage() {
           Serial: r.serialDisplay, Date: formatFullDate(r.date), Product: r.productName, Batch: r.batchNumber, Qty: r.quantityCollected, Unit: r.quantityUnit, Status: r.status, CollectedBy: r.collectedByName,
         }));
       case "product-wise":
-        return Object.values(data.data.samples.reduce<Record<string, { Product: string; Samples: number; Available: number }>>((acc, s) => {
+        return Object.values(data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(s.productName)).reduce<Record<string, { Product: string; Samples: number; Available: number }>>((acc, s) => {
           acc[s.productName] = acc[s.productName] || { Product: s.productName, Samples: 0, Available: 0 };
           acc[s.productName].Samples += 1;
           acc[s.productName].Available += s.availableQuantity || 0;
           return acc;
         }, {}));
       case "batch-wise":
-        return data.data.samples.filter((s) => match(`${s.productName} ${s.batchNumber}`)).map((s) => ({
+        return data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(`${s.productName} ${s.batchNumber}`)).map((s) => ({
           Product: s.productName, Batch: s.batchNumber, Available: s.availableQuantity, Issued: s.issuedQuantity, Returned: s.returnedQuantity, Destroyed: s.destroyedQuantity || s.disposedQuantity, Status: s.status,
         }));
       case "location-wise":
-        return data.data.samples.filter((s) => match(s.storageArea || "")).map((s) => ({
+        return data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(`${s.storageArea || ""} ${s.productName}`)).map((s) => ({
           Area: s.storageArea || "", Product: s.productName, Batch: s.batchNumber, Qty: s.availableQuantity,
         }));
       case "rack-wise":
-        return data.data.samples.filter((s) => match(s.rackNumber || "")).map((s) => ({
+        return data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(`${s.rackNumber || ""} ${s.productName}`)).map((s) => ({
           Rack: s.rackNumber || "", Partition: s.partitionNumber || "", Product: s.productName, Batch: s.batchNumber, Qty: s.availableQuantity,
         }));
       case "box-wise":
-        return data.data.samples.filter((s) => match(s.boxNumber || "")).map((s) => ({
+        return data.data.samples.filter((s) => inRange(s.collectionDate || s.createdAt) && match(`${s.boxNumber || ""} ${s.productName}`)).map((s) => ({
           Box: s.boxNumber || "", Rack: s.rackNumber || "", Product: s.productName, Batch: s.batchNumber, Qty: s.availableQuantity,
         }));
       case "observation":
@@ -160,7 +160,7 @@ export default function ControlSampleReportsPage() {
           Number: r.requisitionNumber, Product: r.productName, Returned: r.quantityReturned, ReturnedBy: r.returnedBy || "", Date: formatDate(r.returnDate),
         }));
       case "destruction-due":
-        return data.data.samples.filter((s) => isDestructionEligible(s, cfg) || s.destructionHold).filter((s) => match(s.productName)).map((s) => ({
+        return data.data.samples.filter((s) => (isDestructionEligible(s, cfg) || s.destructionHold) && inRange(s.destructionEligibleDate || s.expiryDate) && match(s.productName)).map((s) => ({
           Product: s.productName, Batch: s.batchNumber, Expiry: formatDate(s.expiryDate), Eligible: formatDate(s.destructionEligibleDate), Qty: s.availableQuantity, Hold: s.destructionHold ? "Yes" : "No",
         }));
       case "destruction":
@@ -176,7 +176,7 @@ export default function ControlSampleReportsPage() {
           ID: t.transactionId, Type: t.transactionType, Product: t.productName, Batch: t.batchNumber, Qty: t.quantity, Previous: t.previousQuantity, New: t.newQuantity, User: t.performedByName, At: t.performedAt,
         }));
       case "holds":
-        return data.data.holds.filter((h) => match(h.controlSampleId)).map((h) => ({
+        return data.data.holds.filter((h) => inRange(h.holdDate) && match(`${h.controlSampleId} ${h.reason}`)).map((h) => ({
           Sample: h.controlSampleId, Type: h.holdType, Reason: h.reason, Active: h.active ? "Yes" : "No", AppliedBy: h.appliedBy, ReleasedBy: h.releasedBy || "",
         }));
       default:
@@ -222,7 +222,7 @@ export default function ControlSampleReportsPage() {
           <Button variant="outline" onClick={exportCsv}>CSV</Button>
           <Button variant="outline" onClick={exportXlsx}>Excel</Button>
         </div>
-        {!rows.length ? <EmptyState title="No rows for this report" /> : (
+        {!data.loading && !data.error && !rows.length ? <EmptyState title="No rows for this report" /> : rows.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-xs uppercase text-slate-500">
@@ -237,7 +237,7 @@ export default function ControlSampleReportsPage() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </Card>
       <PrintPageFooter />
       {admin ? (

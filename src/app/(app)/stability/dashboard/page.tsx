@@ -23,6 +23,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime, roundPct } from "@/lib/utils";
 import { DashboardBriefing } from "@/components/ai/dashboard-briefing";
@@ -30,6 +31,7 @@ import { getChamberUtilization, getDashboardStats, getRecentActivity } from "@/s
 import { listPullPoints } from "@/services/inventory";
 
 export default function StabilityDashboardPage() {
+  const { hasPermission } = useAuth();
   const stats = useAsync(getDashboardStats, []);
   const chambers = useAsync(getChamberUtilization, []);
   const activity = useAsync(getRecentActivity, []);
@@ -52,15 +54,13 @@ export default function StabilityDashboardPage() {
         description="Live view of studies, inventory balance, upcoming pulls, and chamber utilization."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/stability/studies/new">
-              <Button>Create Stability Study</Button>
-            </Link>
-            <Link href="/stability/inventory/charging">
-              <Button variant="outline">Charge Sample</Button>
-            </Link>
-            <Link href="/stability/withdrawals/upcoming">
-              <Button variant="outline">Upcoming Withdrawals</Button>
-            </Link>
+            {hasPermission("studies.create") ? <Button href="/stability/studies/new">Create Stability Study</Button> : null}
+            {hasPermission("charging.perform") || hasPermission("studies.create") ? (
+              <Button href="/stability/inventory/charging" variant="outline">Charge Sample</Button>
+            ) : null}
+            {hasPermission("withdrawal.perform") || hasPermission("inventory.view") || hasPermission("reports.view") ? (
+              <Button href="/stability/withdrawals/upcoming" variant="outline">Upcoming Withdrawals</Button>
+            ) : null}
           </div>
         }
       />
@@ -249,7 +249,7 @@ export default function StabilityDashboardPage() {
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-600"
+                          className="h-full rounded-full bg-gradient-to-r from-indigo-400 via-sky-400 to-cyan-300"
                           style={{ width: `${roundPct(c.usedCapacity, c.capacity)}%` }}
                         />
                       </div>

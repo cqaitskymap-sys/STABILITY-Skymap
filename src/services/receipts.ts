@@ -141,7 +141,9 @@ export async function markReceiptCharged(receiptDocId: string, studyId: string, 
 export async function voidSampleReceipt(receiptDocId: string, reason: string, user: AppUser) {
   const existing = await getSampleReceipt(receiptDocId);
   if (!existing) throw new Error("Inward record not found.");
-  if (existing.status === "Charged") throw new Error("Charged inward records cannot be voided.");
+  if (existing.status === "Charged" || Number(existing.chargedQuantity || 0) > 0) {
+    throw new Error("Inward records that already have charged quantity cannot be voided.");
+  }
   if (!reason.trim()) throw new Error("A reason is required to void this record.");
   await updateDoc(doc(getDb(), COLLECTIONS.sampleReceipts, receiptDocId), {
     status: "Voided" satisfies ReceiptStatus,

@@ -141,62 +141,72 @@ export function roundPct(used: number, capacity: number) {
   return Math.min(100, Math.round((used / capacity) * 100));
 }
 
+function daysUntilDue(plannedDate: string) {
+  const dueEnd = effectiveDueDate(plannedDate);
+  if (!dueEnd) return null;
+  const today = startOfDay(new Date());
+  const end = startOfDay(parseISO(`${dueEnd}T00:00:00`));
+  const days = differenceInCalendarDays(end, today);
+  return Number.isNaN(days) ? null : days;
+}
+
+/** Month-picker dates (`YYYY-MM-01`) stay open through month-end. Specific days use the day and window. */
+function schedulePullStatus(plannedDate: string, windowDays: number): PullPointStatus {
+  if (!plannedDate) return "Upcoming";
+  const dueEnd = effectiveDueDate(plannedDate);
+  if (!dueEnd) return "Upcoming";
+  const daysUntil = daysUntilDue(plannedDate);
+  if (daysUntil == null) return "Upcoming";
+
+  const raw = plannedDate.trim().slice(0, 10);
+  const monthBound = /^\d{4}-\d{2}-01$/.test(raw);
+  if (monthBound) {
+    const today = startOfDay(new Date());
+    const dueMonth = dueEnd.slice(0, 7);
+    const nowMonth = format(today, "yyyy-MM");
+    if (nowMonth < dueMonth) {
+      const nextMonth = format(addMonths(today, 1), "yyyy-MM");
+      return nextMonth === dueMonth ? "Due Soon" : "Upcoming";
+    }
+    if (nowMonth === dueMonth) return "Due";
+    if (daysUntil < 0 && Math.abs(daysUntil) <= windowDays) return "Within Window";
+    return "Overdue";
+  }
+
+  if (daysUntil > 7) return "Upcoming";
+  if (daysUntil > 0) return "Due Soon";
+  if (daysUntil === 0) return "Due Today";
+  if (Math.abs(daysUntil) <= windowDays) return "Within Window";
+  return "Overdue";
+}
+
 export function derivePullStatus(
   plannedDate: string,
   actualQuantity: number,
   plannedQuantity: number,
   windowDays = 7
 ): PullPointStatus {
-  if (actualQuantity > 0 && actualQuantity >= plannedQuantity) return "Withdrawn";
-  if (actualQuantity > 0 && actualQuantity < plannedQuantity) return "Partially Withdrawn";
-  if (!plannedDate) return "Upcoming";
-
-  const dueEnd = effectiveDueDate(plannedDate);
-  if (!dueEnd) return "Upcoming";
-  const dueMonth = dueEnd.slice(0, 7);
-  const nowMonth = format(new Date(), "yyyy-MM");
-  if (nowMonth < dueMonth) {
-    const nextMonth = format(addMonths(startOfDay(new Date()), 1), "yyyy-MM");
-    return nextMonth === dueMonth ? "Due Soon" : "Upcoming";
+  const actual = Number(actualQuantity) || 0;
+  const planned = Number(plannedQuantity) || 0;
+  const schedule = schedulePullStatus(plannedDate, windowDays);
+  if (actual > 0 && planned > 0 && actual >= planned) return "Withdrawn";
+  if (actual > 0 && actual < planned) {
+    return schedule === "Overdue" ? "Overdue" : "Partially Withdrawn";
   }
-  if (nowMonth === dueMonth) return "Due";
-  try {
-    const today = startOfDay(new Date());
-    const end = startOfDay(parseISO(`${dueEnd}T00:00:00`));
-    const daysPast = differenceInCalendarDays(today, end);
-    if (Number.isNaN(daysPast)) return "Upcoming";
-    if (daysPast <= windowDays) return "Within Window";
-    return "Overdue";
-  } catch {
-    return "Upcoming";
-  }
+  return schedule;
 }
 
-/** Month-aware urgency for open pulls (including partially withdrawn remaining qty). */
+/** Day-count urgency. Due today is the due date itself, not the whole calendar month. */
 export function pullDueUrgency(
   plannedDate: string,
   windowDays = 7
 ): "Overdue" | "Due Today" | "Due Soon" | null {
-  if (!plannedDate) return null;
-  const dueEnd = effectiveDueDate(plannedDate);
-  if (!dueEnd) return null;
-  const dueMonth = dueEnd.slice(0, 7);
-  const nowMonth = format(new Date(), "yyyy-MM");
-  if (nowMonth < dueMonth) {
-    const nextMonth = format(addMonths(startOfDay(new Date()), 1), "yyyy-MM");
-    return nextMonth === dueMonth ? "Due Soon" : null;
-  }
-  if (nowMonth === dueMonth) return "Due Today";
-  try {
-    const today = startOfDay(new Date());
-    const end = startOfDay(parseISO(`${dueEnd}T00:00:00`));
-    const daysPast = differenceInCalendarDays(today, end);
-    if (Number.isNaN(daysPast)) return null;
-    if (daysPast <= windowDays) return null;
-    return "Overdue";
-  } catch {
-    return null;
-  }
+  const daysUntil = daysUntilDue(plannedDate);
+  if (daysUntil == null) return null;
+  if (daysUntil === 0) return "Due Today";
+  if (daysUntil > 0 && daysUntil <= 7) return "Due Soon";
+  if (daysUntil < 0 && Math.abs(daysUntil) > windowDays) return "Overdue";
+  return null;
 }
 
 /** Shared UI + backend reconciliation status (threshold ≥ 5 → Investigation Required). */

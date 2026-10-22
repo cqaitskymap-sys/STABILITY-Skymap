@@ -12,7 +12,7 @@ export default function ControlSampleProductsPage() {
       description="Products used only for controlled sample collection, register, and quantity master. These are not shared with stability inventory."
       collectionName={COLLECTIONS.controlSampleProducts}
       recordType="controlSampleProduct"
-      managePermission={["control.perform", "masters.manage"]}
+      managePermission={["control.perform", "control.collect", "masters.manage"]}
       loader={listControlProducts}
       fields={[
         { key: "productName", label: "Product Name", required: true },

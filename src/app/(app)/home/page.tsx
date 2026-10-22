@@ -19,21 +19,21 @@ const MODULE_VISUAL: Record<
 > = {
   "control-samples": {
     icon: Shield,
-    accent: "hover:border-teal-300 hover:shadow-teal-200/50",
-    iconWrap: "bg-gradient-to-br from-teal-500 to-teal-700 text-white shadow-teal-600/30",
-    glow: "from-teal-400/20",
+    accent: "hover:border-cyan-300/40 hover:shadow-cyan-500/20",
+    iconWrap: "bg-gradient-to-br from-cyan-400 to-sky-600 text-white shadow-cyan-500/30",
+    glow: "from-cyan-400/30",
   },
   stability: {
     icon: Boxes,
-    accent: "hover:border-sky-300 hover:shadow-sky-200/50",
-    iconWrap: "bg-gradient-to-br from-sky-500 to-indigo-700 text-white shadow-sky-600/30",
-    glow: "from-sky-400/20",
+    accent: "hover:border-indigo-300/40 hover:shadow-indigo-500/20",
+    iconWrap: "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-indigo-500/30",
+    glow: "from-indigo-400/30",
   },
   admin: {
     icon: ShieldCheck,
-    accent: "hover:border-slate-300 hover:shadow-slate-300/60",
-    iconWrap: "bg-gradient-to-br from-slate-700 to-slate-950 text-white shadow-slate-700/30",
-    glow: "from-slate-400/20",
+    accent: "hover:border-violet-300/40 hover:shadow-violet-500/20",
+    iconWrap: "bg-gradient-to-br from-violet-500 to-fuchsia-700 text-white shadow-violet-500/30",
+    glow: "from-violet-400/25",
   },
 };
 
@@ -47,11 +47,11 @@ export default function ModuleHomePage() {
         <div className="mb-5 flex justify-center">
           <SkymapLogo priority className="h-14 w-auto max-w-[200px] sm:h-16" />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-700">Quality Assurance</p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-200">Quality Assurance</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
           Welcome{profile?.displayName ? `, ${profile.displayName}` : ""}
         </h2>
-        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-400">
           Select a module to continue. Each area opens with its own menu and workflows.
         </p>
       </div>
@@ -70,7 +70,7 @@ export default function ModuleHomePage() {
                 key={mod.id}
                 href={moduleHref(mod.id, hasPermission)}
                 className={cn(
-                  "group relative overflow-hidden rounded-3xl border border-slate-200/90 bg-white/90 p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl",
+                  "surface-card group relative overflow-hidden rounded-3xl p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl",
                   visual.accent
                 )}
               >
@@ -78,9 +78,9 @@ export default function ModuleHomePage() {
                 <div className={cn("relative mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg", visual.iconWrap)}>
                   <Icon className="h-7 w-7" />
                 </div>
-                <h3 className="relative text-lg font-semibold tracking-tight text-slate-900">{mod.title}</h3>
-                <p className="relative mt-2 text-sm leading-6 text-slate-500">{mod.description}</p>
-                <span className="relative mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700">
+                <h3 className="relative text-lg font-semibold tracking-tight text-white">{mod.title}</h3>
+                <p className="relative mt-2 text-sm leading-6 text-slate-400">{mod.description}</p>
+                <span className="relative mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-200">
                   Open module
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                 </span>

@@ -8,11 +8,11 @@ import {
   Button,
   Card,
   CardHeader,
-  ConfirmDialog,
   EmptyState,
   ErrorState,
   Input,
   LoadingSkeleton,
+  Modal,
   PageHeader,
   Select,
   StatusBadge,
@@ -75,6 +75,14 @@ export default function SampleInwardPage() {
     }
     if (!unit.trim()) {
       toast.error("Unit is required.");
+      return;
+    }
+    if (!(receivedBy.trim() || profile.displayName?.trim())) {
+      toast.error("Sample received by is required.");
+      return;
+    }
+    if (!dateReceived) {
+      toast.error("Date received is required.");
       return;
     }
     setSaving(true);
@@ -277,7 +285,8 @@ export default function SampleInwardPage() {
                           Mark COA received
                         </Button>
                       ) : null}
-                      {row.status === "COA Received - Ready for Charging" ? (
+                      {row.status === "COA Received - Ready for Charging" ||
+                      (row.status === "Charged" && Number(row.chargedQuantity || 0) < Number(row.sampleQuantity || 0)) ? (
                         <Link href={`/stability/inventory/charging?receipt=${row.id}`}>
                           <Button size="sm" variant="outline">
                             <PackagePlus className="h-3.5 w-3.5" />
@@ -288,7 +297,10 @@ export default function SampleInwardPage() {
                       <Button size="sm" variant="ghost" onClick={() => setPrintId(row.id)}>
                         Print
                       </Button>
-                      {row.status !== "Charged" && row.status !== "Voided" && canReceive ? (
+                      {row.status !== "Charged" &&
+                      row.status !== "Voided" &&
+                      Number(row.chargedQuantity || 0) <= 0 &&
+                      canReceive ? (
                         <Button size="sm" variant="ghost" onClick={() => setVoidId(row.id)}>
                           Void
                         </Button>
@@ -332,26 +344,41 @@ export default function SampleInwardPage() {
         </div>
       ) : null}
 
-      <ConfirmDialog
+      <Modal
         open={!!voidId}
         title="Void inward record?"
         description="The record will be archived as Voided. Historical inward data is retained."
-        confirmLabel="Void"
-        tone="danger"
-        loading={saving}
-        onCancel={() => setVoidId(null)}
-        onConfirm={() => void onVoid()}
-      />
-      {voidId ? (
-        <div className="mt-3 max-w-lg">
-          <Textarea
-            label="Void reason"
-            required
-            value={voidReason}
-            onChange={(e) => setVoidReason(e.target.value)}
-          />
-        </div>
-      ) : null}
+        onClose={() => {
+          if (saving) return;
+          setVoidId(null);
+          setVoidReason("");
+        }}
+        size="sm"
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVoidId(null);
+                setVoidReason("");
+              }}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" loading={saving} onClick={() => void onVoid()} disabled={!voidReason.trim()}>
+              Void
+            </Button>
+          </div>
+        }
+      >
+        <Textarea
+          label="Void reason"
+          required
+          value={voidReason}
+          onChange={(e) => setVoidReason(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

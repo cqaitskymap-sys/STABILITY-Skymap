@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -467,8 +468,6 @@ export async function createStudyAndCharge(input: {
     throw new Error("Sample must be received and COA-cleared before charging. Open Sample Inward first.");
   }
   let receiptIdForAudit: string | undefined;
-  let receiptAlreadyCharged = 0;
-  let receiptInwardQty = 0;
   if (input.receiptDocId) {
     const receiptSnap = await getDoc(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId));
     if (!receiptSnap.exists()) throw new Error("Selected inward record was not found.");
@@ -480,16 +479,14 @@ export async function createStudyAndCharge(input: {
       chargedQuantity?: number;
       unit?: string;
     };
-    if (receipt.status === "Charged") throw new Error("This inward record has already been charged.");
     if (receipt.status === "Voided") throw new Error("This inward record has been voided.");
-    if (receipt.status !== "COA Received - Ready for Charging" && !receipt.chargingEligibility) {
+    if (receipt.status !== "COA Received - Ready for Charging" && receipt.status !== "Charged" && !receipt.chargingEligibility) {
       throw new Error("COA has not been received. Sample is not eligible for charging.");
     }
     const inwardQty = Number(receipt.sampleQuantity || 0);
     const alreadyCharged = Number(receipt.chargedQuantity || 0);
-    receiptInwardQty = inwardQty;
-    receiptAlreadyCharged = alreadyCharged;
     const remainingInward = Math.max(0, inwardQty - alreadyCharged);
+    if (inwardQty > 0 && remainingInward <= 0) throw new Error("This inward record has already been charged.");
     if (inwardQty > 0 && input.totalQuantity > remainingInward) {
       throw new Error(
         `Charged quantity cannot exceed the remaining inward quantity (${remainingInward}${receipt.unit ? ` ${receipt.unit}` : ""}).`
@@ -523,6 +520,16 @@ export async function createStudyAndCharge(input: {
     input.totalQuantity,
     input.applyInvertedSplit === false ? 0 : (input.invertedPercent ?? settings.invertedPercentDefault)
   );
+  if (
+    input.locationId &&
+    !settings.allowMultiOccupancy &&
+    orientation.invertedQuantity > 0 &&
+    orientation.uprightQuantity > 0
+  ) {
+    throw new Error(
+      "Inverted split creates two samples. Turn off the inverted split, or enable multi-occupancy in Organization, before using one location."
+    );
+  }
   const incubationDate = input.incubationDate || input.chargingDate;
 
   const studyId = await nextSequentialId("STB");
@@ -774,48 +781,113 @@ export async function createStudyAndCharge(input: {
     );
   }
 
-  if (input.receiptDocId) {
-    const nextCharged = receiptAlreadyCharged + input.totalQuantity;
-    const fullyCharged = receiptInwardQty <= 0 || nextCharged >= receiptInwardQty;
-    const receiptPatch: Record<string, unknown> = {
-      chargedQuantity: nextCharged,
-      chargedStudyId: studyId,
-      updatedAt: stamp,
-    };
-    if (fullyCharged) {
-      receiptPatch.status = "Charged";
-      receiptPatch.chargedAt = stamp;
-    }
-    batch.update(doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId), receiptPatch);
-  }
-
   const chamberRef = doc(getDb(), COLLECTIONS.chambers, input.chamberId);
-  await runTransaction(getDb(), async (tx) => {
-    const snap = await tx.get(chamberRef);
-    if (!snap.exists()) throw new Error("Selected chamber was not found.");
-    const live = snap.data();
-    if (isChamberClosed(live.status)) {
-      throw new Error("Cannot allocate samples to an inactive or out-of-service chamber.");
-    }
-    const used = Number(live.usedCapacity || 0);
-    const cap = Number(live.capacity || 0);
-    if (used + input.totalQuantity > cap) {
-      throw new Error("Chamber capacity is insufficient for this charge quantity.");
-    }
-    tx.update(chamberRef, { usedCapacity: used + input.totalQuantity, updatedAt: stamp });
-  });
-
+  let chamberReserved = false;
+  let receiptReserved = false;
+  const receiptRef = input.receiptDocId ? doc(getDb(), COLLECTIONS.sampleReceipts, input.receiptDocId) : null;
+  let receiptRollback: {
+    chargedQuantity: number;
+    status?: string;
+    chargedStudyId?: string;
+    chargedAt?: string;
+    hadChargedStudyId: boolean;
+    hadChargedAt: boolean;
+  } | null = null;
   try {
-    await batch.commit();
-  } catch (err) {
+    if (receiptRef) {
+      receiptRollback = await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(receiptRef);
+        if (!snap.exists()) throw new Error("Selected inward record was not found.");
+        const receipt = snap.data() as {
+          status?: string;
+          chargingEligibility?: boolean;
+          sampleQuantity?: number;
+          chargedQuantity?: number;
+          chargedStudyId?: string;
+          chargedAt?: string;
+          unit?: string;
+        };
+        if (receipt.status === "Voided") throw new Error("This inward record has been voided.");
+        if (receipt.status !== "COA Received - Ready for Charging" && receipt.status !== "Charged" && !receipt.chargingEligibility) {
+          throw new Error("COA has not been received. Sample is not eligible for charging.");
+        }
+        const inwardQty = Number(receipt.sampleQuantity || 0);
+        const alreadyCharged = Number(receipt.chargedQuantity || 0);
+        const remainingInward = Math.max(0, inwardQty - alreadyCharged);
+        if (inwardQty > 0 && remainingInward <= 0) throw new Error("This inward record has already been charged.");
+        if (inwardQty > 0 && input.totalQuantity > remainingInward) {
+          throw new Error(
+            `Charged quantity cannot exceed the remaining inward quantity (${remainingInward}${receipt.unit ? ` ${receipt.unit}` : ""}).`
+          );
+        }
+        if (receipt.unit && input.unit && receipt.unit.trim().toLowerCase() !== input.unit.trim().toLowerCase()) {
+          throw new Error(`Charging unit (${input.unit}) must match the inward unit (${receipt.unit}).`);
+        }
+        const nextCharged = alreadyCharged + input.totalQuantity;
+        const fullyCharged = inwardQty <= 0 || nextCharged >= inwardQty;
+        const patch: Record<string, unknown> = {
+          chargedQuantity: nextCharged,
+          chargedStudyId: studyId,
+          updatedAt: stamp,
+        };
+        if (fullyCharged) {
+          patch.status = "Charged";
+          patch.chargedAt = stamp;
+        }
+        tx.update(receiptRef, patch);
+        return {
+          chargedQuantity: alreadyCharged,
+          status: receipt.status,
+          chargedStudyId: receipt.chargedStudyId,
+          chargedAt: receipt.chargedAt,
+          hadChargedStudyId: receipt.chargedStudyId != null,
+          hadChargedAt: receipt.chargedAt != null,
+        };
+      });
+      receiptReserved = true;
+    }
+
     await runTransaction(getDb(), async (tx) => {
       const snap = await tx.get(chamberRef);
-      if (!snap.exists()) return;
-      tx.update(chamberRef, {
-        usedCapacity: Math.max(0, Number(snap.data().usedCapacity || 0) - input.totalQuantity),
-        updatedAt: nowISO(),
-      });
-    }).catch(() => undefined);
+      if (!snap.exists()) throw new Error("Selected chamber was not found.");
+      const live = snap.data();
+      if (isChamberClosed(live.status)) {
+        throw new Error("Cannot allocate samples to an inactive or out-of-service chamber.");
+      }
+      const used = Number(live.usedCapacity || 0);
+      const cap = Number(live.capacity || 0);
+      if (used + input.totalQuantity > cap) {
+        throw new Error("Chamber capacity is insufficient for this charge quantity.");
+      }
+      tx.update(chamberRef, { usedCapacity: used + input.totalQuantity, updatedAt: stamp });
+    });
+    chamberReserved = true;
+    await batch.commit();
+  } catch (err) {
+    if (chamberReserved) {
+      await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(chamberRef);
+        if (!snap.exists()) return;
+        tx.update(chamberRef, {
+          usedCapacity: Math.max(0, Number(snap.data().usedCapacity || 0) - input.totalQuantity),
+          updatedAt: nowISO(),
+        });
+      }).catch(() => undefined);
+    }
+    if (receiptReserved && receiptRef && receiptRollback) {
+      const previous = receiptRollback;
+      await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(receiptRef);
+        if (!snap.exists()) return;
+        tx.update(receiptRef, {
+          chargedQuantity: previous.chargedQuantity,
+          status: previous.status ?? "COA Received - Ready for Charging",
+          chargedStudyId: previous.hadChargedStudyId ? previous.chargedStudyId : deleteField(),
+          chargedAt: previous.hadChargedAt ? previous.chargedAt : deleteField(),
+          updatedAt: nowISO(),
+        });
+      }).catch(() => undefined);
+    }
     throw err;
   }
 
@@ -860,6 +932,7 @@ export async function createStudyAndCharge(input: {
     console.error("Study created but audit log failed:", auditErr);
   }
 
+  invalidateReadCache();
   return { studyDocId: studyRef.id, sampleDocId: primarySampleDocId, studyId, sampleId: primarySampleId };
 }
 

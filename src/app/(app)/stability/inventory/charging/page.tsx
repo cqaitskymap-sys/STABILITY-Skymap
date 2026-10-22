@@ -55,6 +55,24 @@ export default function SampleChargingPage() {
   );
 }
 
+function receiptRemaining(receipt: { sampleQuantity?: number; chargedQuantity?: number }) {
+  const inward = Number(receipt.sampleQuantity || 0);
+  const charged = Number(receipt.chargedQuantity || 0);
+  return inward > 0 ? Math.max(0, inward - charged) : Number(receipt.sampleQuantity || 0);
+}
+
+function receiptCanCharge(receipt: { status?: string; chargingEligibility?: boolean; sampleQuantity?: number; chargedQuantity?: number }) {
+  if (receipt.status === "Voided") return false;
+  const eligible =
+    receipt.status === "COA Received - Ready for Charging" ||
+    receipt.status === "Charged" ||
+    Boolean(receipt.chargingEligibility);
+  if (!eligible) return false;
+  const inward = Number(receipt.sampleQuantity || 0);
+  if (inward <= 0) return receipt.status === "COA Received - Ready for Charging" || Boolean(receipt.chargingEligibility);
+  return receiptRemaining(receipt) > 0;
+}
+
 function SampleChargingPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -89,7 +107,7 @@ function SampleChargingPageInner() {
   const receipt = (masters.data?.receipts || []).find((r) => r.id === receiptFromUrl) || null;
   if (receipt && appliedReceiptId !== receipt.id) {
     setAppliedReceiptId(receipt.id);
-    if (receipt.status === "COA Received - Ready for Charging") {
+    if (receiptCanCharge(receipt)) {
       setForm((prev) => ({
         ...prev,
         receiptDocId: receipt.id,
@@ -97,12 +115,12 @@ function SampleChargingPageInner() {
         batchId: receipt.batchId,
         manufacturingDate: receipt.manufacturingDate,
         expiryDate: receipt.expiryDate,
-        totalQuantity: String(Math.max(0, Number(receipt.sampleQuantity || 0) - Number(receipt.chargedQuantity || 0))),
+        totalQuantity: String(receiptRemaining(receipt)),
         unit: receipt.unit,
       }));
     }
   }
-  const receiptNotReady = Boolean(receipt && receipt.status !== "COA Received - Ready for Charging");
+  const receiptNotReady = Boolean(receipt && !receiptCanCharge(receipt));
 
   const activeProducts = useMemo(
     () => (masters.data?.products || []).filter((p) => p.status === "Active"),
@@ -171,9 +189,7 @@ function SampleChargingPageInner() {
     totalQuantity,
     form.applyInvertedSplit ? Number(form.invertedPercent || 25) : 0
   );
-  const readyReceipts = (masters.data?.receipts || []).filter(
-    (r) => r.status === "COA Received - Ready for Charging"
-  );
+  const readyReceipts = (masters.data?.receipts || []).filter((r) => receiptCanCharge(r));
   const activeReasons = (masters.data?.reasons || []).filter((r) => r.status === "Active");
 
   function updateField<K extends keyof ChargeFormState>(key: K, value: ChargeFormState[K]) {
@@ -259,10 +275,23 @@ function SampleChargingPageInner() {
       );
       return;
     }
+    const requireReceipt = masters.data?.settings.requireReceiptBeforeCharging ?? false;
+    if (requireReceipt && !form.receiptDocId) {
+      toast.error("Sample must be received and COA-cleared before charging. Select an inward record.");
+      return;
+    }
     const selectedReceipt = readyReceipts.find((r) => r.id === form.receiptDocId);
-    if (selectedReceipt && totalQuantity > Number(selectedReceipt.sampleQuantity || 0)) {
+    const remainingInward = selectedReceipt ? receiptRemaining(selectedReceipt) : null;
+    if (selectedReceipt && remainingInward != null && totalQuantity > remainingInward) {
       toast.error(
-        `Charged quantity cannot exceed the inward quantity (${selectedReceipt.sampleQuantity} ${selectedReceipt.unit}).`
+        `Charged quantity cannot exceed the remaining inward quantity (${remainingInward} ${selectedReceipt.unit}).`
+      );
+      return;
+    }
+    const allowMulti = masters.data?.settings.allowMultiOccupancy ?? false;
+    if (form.applyInvertedSplit && orientation.uprightQuantity > 0 && orientation.invertedQuantity > 0 && !allowMulti && form.locationId) {
+      toast.error(
+        "Inverted split creates two samples in one location. Turn off the inverted split, or enable multi-occupancy in Organization."
       );
       return;
     }
@@ -356,7 +385,8 @@ function SampleChargingPageInner() {
             />
             <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
               <Select
-                label="Inward record (optional)"
+                label={masters.data?.settings.requireReceiptBeforeCharging ? "Inward record" : "Inward record (optional)"}
+                required={Boolean(masters.data?.settings.requireReceiptBeforeCharging)}
                 value={form.receiptDocId}
                 onChange={(e) => {
                   const receipt = readyReceipts.find((r) => r.id === e.target.value);

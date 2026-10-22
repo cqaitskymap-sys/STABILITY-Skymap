@@ -30,15 +30,14 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
     if (cached !== undefined) {
       setResolvedKey(depsKey);
       setState({ data: cached, loading: false, error: null });
+    } else if (!state.loading || state.error) {
+      setState((prev) => ({ ...prev, loading: true, error: null }));
     }
   }
 
   useEffect(() => {
     let cancelled = false;
     const cached = readFresh<T>(key, PAGE_TTL);
-    if (cached === undefined) {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-    }
 
     void Promise.resolve()
       .then(() => loader())

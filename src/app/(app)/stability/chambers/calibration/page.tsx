@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { addDaysISO } from "@/lib/sop";
@@ -74,7 +74,7 @@ export default function CalibrationPage() {
         </Card>
         <Card>
           <CardHeader title="History" />
-          {!(rows.data || []).length ? <EmptyState title="No calibration records" /> : (
+          {rows.loading ? <LoadingSkeleton rows={4} /> : rows.error ? <ErrorState message={rows.error} onRetry={rows.reload} /> : !(rows.data || []).length ? <EmptyState title="No calibration records" /> : (
             <div className="space-y-3 p-4">
               {(rows.data || []).map((r) => (
                 <div key={r.id} className="flex items-start justify-between rounded-xl border border-slate-200 p-4">

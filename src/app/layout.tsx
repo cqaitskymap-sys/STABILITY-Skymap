@@ -36,7 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#0d9488",
+  themeColor: "#071433",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -46,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       data-scroll-behavior="smooth"
       className={`${plusJakarta.variable} ${sourceSans.variable} h-full`}
     >
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="glass-app min-h-full antialiased">{children}</body>
     </html>
   );
 }

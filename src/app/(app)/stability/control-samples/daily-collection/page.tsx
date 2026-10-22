@@ -357,7 +357,7 @@ export default function DailyCollectionRecordPage() {
             </div>
           </Card>
 
-          <div className="min-w-0 overflow-hidden rounded-2xl border-2 border-slate-700 bg-[#fbf8f1] shadow-sm">
+          <div className="paper-sheet min-w-0 overflow-hidden rounded-2xl border-2 border-slate-700 bg-[#fbf8f1] text-slate-900 shadow-sm">
             <div className="border-b-2 border-slate-700 px-4 py-4 text-center">
               <div className="mb-2 flex justify-center">
                 <PrintLogo className="h-12" />
@@ -563,6 +563,9 @@ function RowActions({
       <Button size="sm" variant="ghost" className="h-7 min-h-0 px-2" onClick={onView}>View</Button>
       {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={onEdit}>Edit</Button> : null}
       {row.status === "Draft" && canCreate ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("submit")}>Submit</Button> : null}
+      {(row.status === "Draft" || row.status === "Submitted") && (canCreate || canReview) ? (
+        <Button size="sm" variant="ghost" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("cancel")}>Cancel</Button>
+      ) : null}
       {row.status === "Submitted" && canReview ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("review")}>Review</Button> : null}
       {row.status === "Reviewed" && canReview ? <Button size="sm" className="h-7 min-h-0 px-2" onClick={() => onWorkflow("finalize")}>Finalize</Button> : null}
       {row.status === "Finalized" && canCorrect ? <Button size="sm" variant="outline" className="h-7 min-h-0 px-2" onClick={onCorrect}>Correct</Button> : null}

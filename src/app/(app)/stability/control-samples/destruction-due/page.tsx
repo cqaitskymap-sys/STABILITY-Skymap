@@ -9,7 +9,7 @@ import { PrintDocument } from "@/components/print/print-document";
 import { CsTable } from "@/components/control-samples/cs-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
-import { downloadBlob, formatDate, toCsv, todayISO } from "@/lib/utils";
+import { downloadBlob, formatDate, friendlyError, toCsv, todayISO } from "@/lib/utils";
 import { controlOrg, isDestructionEligible } from "@/lib/control-samples";
 import { applyDestructionHold, listControlSamples, listHolds, releaseDestructionHold } from "@/services/control-samples";
 import { getOrganizationSettings } from "@/services/organization";
@@ -61,7 +61,7 @@ export default function DestructionDuePage() {
       setReason("");
       await catalog.reload();
     } catch (err) {
-      toast.error(String(err));
+      toast.error(friendlyError(err));
     } finally {
       setSaving(false);
     }
@@ -75,7 +75,7 @@ export default function DestructionDuePage() {
       toast.success("Hold released.");
       await catalog.reload();
     } catch (err) {
-      toast.error(String(err));
+      toast.error(friendlyError(err));
     } finally {
       setSaving(false);
     }

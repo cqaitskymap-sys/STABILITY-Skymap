@@ -493,25 +493,21 @@ export function MasterPage<T extends { id: string; status?: string }>({
               {fields.map((f) => {
                 if (f.type === "select") {
                   return (
-                    <label key={f.key} className="block space-y-1.5">
-                      <span className="text-sm font-medium text-slate-700">
-                        {f.label}
-                        {f.required ? <span className="text-rose-500"> *</span> : null}
-                      </span>
-                      <select
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus:border-teal-500 focus:outline-none focus:ring-4 focus:ring-teal-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 sm:h-10 sm:text-sm"
-                        value={values[f.key] || ""}
-                        disabled={f.disabled || f.readOnly}
-                        onChange={(e) => applyFieldChange(f, e.target.value)}
-                      >
-                        {selectOptions(f).map((o) => (
-                          <option key={o.value || o.label} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      {f.hint ? <span className="block text-xs text-slate-500">{f.hint}</span> : null}
-                    </label>
+                    <Select
+                      key={f.key}
+                      label={f.label}
+                      required={f.required}
+                      hint={f.hint}
+                      value={values[f.key] || ""}
+                      disabled={f.disabled || f.readOnly}
+                      onChange={(e) => applyFieldChange(f, e.target.value)}
+                    >
+                      {selectOptions(f).map((o) => (
+                        <option key={o.value || o.label} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
                   );
                 }
 

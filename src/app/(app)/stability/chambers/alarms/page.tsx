@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, LoadingSkeleton, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { ALARM_TYPE_DEFAULTS } from "@/lib/sop";
@@ -21,6 +21,24 @@ export default function ChamberAlarmsPage() {
   const [saving, setSaving] = useState(false);
 
   const chamber = (chambers.data || []).find((c) => c.id === chamberId);
+
+  async function updateAlarm(id: string, action: "acknowledge" | "rectify" | "close") {
+    if (!profile || !can) return;
+    setSaving(true);
+    try {
+      if (action === "acknowledge") await acknowledgeAlarm(id, "", profile);
+      if (action === "rectify") await rectifyAlarm(id, "", profile);
+      if (action === "close") await closeAlarm(id, profile);
+      toast.success(
+        action === "close" ? "Alarm closed." : action === "rectify" ? "Alarm marked rectified." : "Alarm acknowledged."
+      );
+      await alarms.reload();
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function create() {
     if (!profile || !can || !chamber) return toast.error("Select a chamber.");
@@ -70,7 +88,7 @@ export default function ChamberAlarmsPage() {
         </Card>
         <Card>
           <CardHeader title="Alarm log" />
-          {!(alarms.data || []).length ? (
+          {alarms.loading ? <LoadingSkeleton rows={4} /> : alarms.error ? <ErrorState message={alarms.error} onRetry={alarms.reload} /> : !(alarms.data || []).length ? (
             <EmptyState title="No alarms" description="Hardware events can be recorded here when reported by engineering or imported later." />
           ) : (
             <div className="space-y-3 p-4">
@@ -84,17 +102,17 @@ export default function ChamberAlarmsPage() {
                     <StatusBadge status={a.status} />
                   </div>
                   {can && a.status === "Active" ? (
-                    <Button className="mt-2" size="sm" variant="outline" onClick={() => profile && acknowledgeAlarm(a.id, remark, profile).then(() => alarms.reload())}>
+                    <Button className="mt-2" size="sm" variant="outline" loading={saving} onClick={() => void updateAlarm(a.id, "acknowledge")}>
                       Acknowledge
                     </Button>
                   ) : null}
                   {can && a.status === "Acknowledged" ? (
-                    <Button className="mt-2" size="sm" variant="outline" onClick={() => profile && rectifyAlarm(a.id, remark, profile).then(() => alarms.reload())}>
+                    <Button className="mt-2" size="sm" variant="outline" loading={saving} onClick={() => void updateAlarm(a.id, "rectify")}>
                       Rectify
                     </Button>
                   ) : null}
                   {can && a.status === "Rectified" ? (
-                    <Button className="mt-2" size="sm" onClick={() => profile && closeAlarm(a.id, profile).then(() => alarms.reload())}>
+                    <Button className="mt-2" size="sm" loading={saving} onClick={() => void updateAlarm(a.id, "close")}>
                       Close
                     </Button>
                   ) : null}

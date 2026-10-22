@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
+import { Card, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select } from "@/components/ui";
 import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate } from "@/lib/utils";
@@ -58,7 +58,7 @@ export default function MktPage() {
           <Input label="End date" type="date" monthBound="end" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
       </Card>
-      {!temps.length ? (
+      {logs.loading ? <LoadingSkeleton rows={4} /> : logs.error ? <ErrorState message={logs.error} onRetry={logs.reload} /> : !temps.length ? (
         <EmptyState title="Insufficient / incomplete data" description="No imported temperature readings in this range. MKT will not be calculated from empty or fake data." />
       ) : (
         <PrintDocument title="MKT Report" documentNumber={chamber?.chamberId}>

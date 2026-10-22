@@ -33,7 +33,7 @@ export default function ControlSampleBatchesPage() {
       description="Batches used only for controlled sample collection. These are not shared with stability inventory."
       collectionName={COLLECTIONS.controlSampleBatches}
       recordType="controlSampleBatch"
-      managePermission={["control.perform", "masters.manage"]}
+      managePermission={["control.perform", "control.collect", "masters.manage"]}
       loader={listControlBatches}
       fields={[
         {

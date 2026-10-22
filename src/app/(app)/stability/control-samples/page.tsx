@@ -14,11 +14,14 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatDateTime, formatFullDate } from "@/lib/utils";
 import { getControlDashboard } from "@/services/control-samples";
 
 export default function ControlSampleDashboardPage() {
+  const { hasPermission } = useAuth();
+  const canCollect = hasPermission("control.collect") || hasPermission("control.perform");
   const dash = useAsync(getControlDashboard, []);
   const data = dash.data;
   const stats = useMemo(() => {
@@ -26,7 +29,7 @@ export default function ControlSampleDashboardPage() {
     return [
       { title: "Total Controlled Samples", value: data.total, icon: Shield, tone: "teal" as const },
       { title: "Available Controlled Samples", value: data.available, icon: Boxes, tone: "emerald" as const },
-      { title: "Samples Under Periodic Observation", value: data.observationDue, icon: ClipboardCheck, tone: "blue" as const },
+      { title: "Observations Due", value: data.observationDue, icon: ClipboardCheck, tone: "blue" as const },
       { title: "Samples Requiring Attention", value: data.requiringAttention, icon: AlertTriangle, tone: "amber" as const },
       { title: "Withdrawal Requests", value: data.withdrawalRequests, icon: PackageMinus, tone: "indigo" as const },
       { title: "Samples Due for Destruction", value: data.destructionDue, icon: Trash2, tone: "amber" as const },
@@ -46,8 +49,8 @@ export default function ControlSampleDashboardPage() {
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
-            <Button href="/stability/control-samples/collection">New collection</Button>
-            <Button href="/stability/control-samples/daily-collection" variant="outline">Daily Collection Record</Button>
+            {canCollect ? <Button href="/stability/control-samples/collection">New collection</Button> : null}
+            {canCollect ? <Button href="/stability/control-samples/daily-collection" variant="outline">Daily Collection Record</Button> : null}
           </div>
         }
       />

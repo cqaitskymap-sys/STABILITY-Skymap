@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Textarea } from "@/components/ui";
 import { SignatureModal } from "@/components/approval/signature-modal";
 import { PrintDocument } from "@/components/print/print-document";
 import { useAuth } from "@/contexts/auth-context";
@@ -60,7 +60,7 @@ export default function ProtocolsPage() {
         </Card>
         <Card>
           <CardHeader title="Protocols" />
-          {!(rows.data || []).length ? <EmptyState title="No protocols yet" /> : (
+          {rows.loading ? <LoadingSkeleton rows={4} /> : rows.error ? <ErrorState message={rows.error} onRetry={rows.reload} /> : !(rows.data || []).length ? <EmptyState title="No protocols yet" /> : (
             <div className="space-y-4 p-4">
               {(rows.data || []).map((p) => (
                 <PrintDocument key={p.id} title="Stability Study Protocol" documentNumber={p.protocolNumber}>

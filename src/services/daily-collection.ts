@@ -7,6 +7,7 @@ import {
   toDailyCollectionInput,
   validateDailyCollectionInput,
 } from "@/lib/daily-collection";
+import { can } from "@/lib/permissions";
 import { nowISO, todayISO } from "@/lib/utils";
 import { nextYearSerial } from "@/services/ids";
 import { writeAuditLog } from "@/services/audit";
@@ -232,6 +233,7 @@ export async function submitDailyCollectionRecord(id: string, user: AppUser) {
 }
 
 export async function reviewDailyCollectionRecord(id: string, user: AppUser, remarks?: string) {
+  if (!can(user, "control.perform")) throw new Error("QA Controlled Sample permission is required to review a daily collection record.");
   const row = await requireRecord(id);
   assertStatus(row, ["Submitted"], "reviewed");
   const stamp = nowISO();
@@ -260,6 +262,7 @@ export async function reviewDailyCollectionRecord(id: string, user: AppUser, rem
 }
 
 export async function finalizeDailyCollectionRecord(id: string, user: AppUser, reason?: string) {
+  if (!can(user, "control.perform")) throw new Error("QA Controlled Sample permission is required to finalize a daily collection record.");
   const row = await requireRecord(id);
   assertStatus(row, ["Reviewed"], "finalized");
   const stamp = nowISO();
@@ -313,6 +316,7 @@ export async function correctDailyCollectionRecord(
   id: string,
   input: DailyCollectionInput & { user: AppUser; reason: string; allowFutureDate?: boolean }
 ) {
+  if (!can(input.user, "control.perform")) throw new Error("QA Controlled Sample permission is required to correct a daily collection record.");
   const row = await requireRecord(id);
   assertStatus(row, ["Finalized"], "corrected");
   const { user, allowFutureDate, reason, ...fields } = input;

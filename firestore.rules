@@ -246,7 +246,14 @@ service cloud.firestore {
     }
     match /dailyCollectionRecords/{docId} {
       allow read: if canControl() || hasPermission('inventory.view') || hasPermission('receiving.perform') || hasPermission('reports.view');
-      allow create, update: if canControl();
+      allow create: if canControl();
+      allow update: if hasPermission('control.perform')
+        || (hasPermission('control.collect')
+            && resource.data.status == 'Draft'
+            && request.resource.data.status in ['Draft', 'Submitted', 'Cancelled'])
+        || (hasPermission('control.collect')
+            && resource.data.status == 'Submitted'
+            && request.resource.data.status == 'Cancelled');
       allow delete: if false;
     }
     match /sampleReceipts/{docId} {
@@ -256,12 +263,19 @@ service cloud.firestore {
     }
     match /controlSamples/{docId} {
       allow read: if canControl() || hasPermission('inventory.view') || hasPermission('reports.view') || hasPermission('disposal.perform');
-      allow create, update: if canControl();
+      allow create, update: if hasPermission('control.perform') || hasPermission('disposal.perform');
       allow delete: if false;
     }
     match /controlSampleCollections/{docId} {
       allow read: if canControl() || hasPermission('inventory.view') || hasPermission('reports.view');
-      allow create, update: if canControl();
+      allow create: if canControl();
+      allow update: if hasPermission('control.perform')
+        || (hasPermission('control.collect')
+            && resource.data.status == 'Draft'
+            && request.resource.data.status in ['Draft', 'Collected', 'Submitted'])
+        || (hasPermission('control.collect')
+            && resource.data.status == 'Collected'
+            && request.resource.data.status == 'Submitted');
       allow delete: if false;
     }
     match /controlSampleObservations/{docId} {
@@ -271,7 +285,10 @@ service cloud.firestore {
     }
     match /controlSampleWithdrawals/{docId} {
       allow read: if canControl() || hasPermission('approve.records') || hasPermission('reports.view');
-      allow create, update: if hasPermission('control.perform') || hasPermission('approve.records');
+      allow create: if hasPermission('control.perform');
+      allow update: if (resource.data.status == 'Submitted' && request.resource.data.status in ['Approved', 'Rejected'])
+        ? hasPermission('approve.records')
+        : (hasPermission('control.perform') || hasPermission('approve.records'));
       allow delete: if false;
     }
     match /controlSampleMovements/{docId} {
@@ -281,7 +298,10 @@ service cloud.firestore {
     }
     match /controlSampleDestructions/{docId} {
       allow read: if canControl() || hasPermission('disposal.perform') || hasPermission('reports.view');
-      allow create, update: if hasPermission('control.perform') || hasPermission('disposal.perform');
+      allow create: if hasPermission('control.perform') || hasPermission('disposal.perform');
+      allow update: if (resource.data.status in ['QA Initiated', 'Note Created'] && request.resource.data.status == 'Approved')
+        ? hasPermission('approve.records')
+        : (hasPermission('control.perform') || hasPermission('disposal.perform') || hasPermission('approve.records'));
       allow delete: if false;
     }
     match /controlSampleDestructionLogs/{docId} {

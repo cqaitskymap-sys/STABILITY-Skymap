@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f6fb;
-  --foreground: #0f172a;
-  --brand: #0d9488;
-  --brand-strong: #0f766e;
-  --brand-soft: #ccfbf1;
-  --card: #ffffff;
-  --border: #e2e8f0;
-  --sidebar: #08111f;
-  --sidebar-muted: #94a3b8;
+  --background: #060d1f;
+  --foreground: #e8eefc;
+  --brand: #6d7cff;
+  --brand-strong: #8b5cf6;
+  --brand-soft: rgba(109, 124, 255, 0.16);
+  --card: rgba(12, 24, 52, 0.62);
+  --border: rgba(160, 186, 255, 0.18);
+  --sidebar: rgba(6, 12, 28, 0.72);
+  --sidebar-muted: #93a4c8;
 }
 
 @theme inline {
@@ -42,17 +42,18 @@ html {
 body {
   min-width: 0;
   background:
-    radial-gradient(1200px 480px at 110% -10%, rgba(13, 148, 136, 0.12), transparent 42%),
-    radial-gradient(900px 420px at -8% -12%, rgba(56, 189, 248, 0.1), transparent 38%),
-    radial-gradient(700px 280px at 40% 120%, rgba(99, 102, 241, 0.06), transparent 46%),
-    var(--background);
+    radial-gradient(980px 560px at 92% -12%, rgba(56, 120, 255, 0.42), transparent 56%),
+    radial-gradient(760px 520px at -12% 8%, rgba(109, 70, 230, 0.32), transparent 52%),
+    radial-gradient(640px 420px at 48% 115%, rgba(14, 90, 190, 0.22), transparent 50%),
+    linear-gradient(180deg, #071433 0%, #050914 100%);
   color: var(--foreground);
   font-family: var(--font-source-sans), "Segoe UI", sans-serif;
+  color-scheme: dark;
 }
 
 ::selection {
-  background: rgba(13, 148, 136, 0.18);
-  color: #0f172a;
+  background: rgba(109, 124, 255, 0.35);
+  color: #f8fbff;
 }
 
 h1,
@@ -72,14 +73,14 @@ h3 {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(140, 168, 230, 0.35);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(170, 194, 255, 0.55);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -133,16 +134,18 @@ select {
   }
 
   .surface-card {
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(168, 194, 255, 0.18);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+      rgba(10, 22, 48, 0.58);
     box-shadow:
-      0 1px 1px rgba(15, 23, 42, 0.03),
-      0 10px 32px -16px rgba(15, 23, 42, 0.18);
-    backdrop-filter: blur(12px);
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 22px 48px -28px rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(18px);
   }
 
   .skeleton-shimmer {
-    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 45%, #e2e8f0 100%);
+    background: linear-gradient(90deg, rgba(24, 42, 82, 0.7) 0%, rgba(90, 120, 190, 0.35) 45%, rgba(24, 42, 82, 0.7) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.4s ease-in-out infinite;
   }
@@ -172,7 +175,323 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background-color: rgba(15, 23, 42, 0.025);
+  background-color: rgba(110, 150, 255, 0.08);
+}
+
+/* Screen-only glass remap for the light utility classes already used across pages.
+   Print sheets stay paper-white. */
+@media screen {
+  .glass-app :is(
+    .bg-white,
+    .bg-white\/70,
+    .bg-white\/80,
+    .bg-white\/90,
+    .bg-white\/92,
+    .bg-slate-50,
+    .bg-slate-50\/40,
+    .bg-slate-50\/60,
+    .bg-slate-50\/70,
+    .bg-slate-50\/80,
+    .bg-slate-100,
+    .bg-slate-100\/90
+  ) {
+    background-color: rgba(12, 26, 58, 0.62);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+  }
+
+  .glass-app :is(.text-slate-900, .text-slate-800, .text-slate-100) {
+    color: #f7f9ff;
+  }
+
+  .glass-app :is(.text-slate-700, .text-slate-600, .text-slate-300, .text-slate-200) {
+    color: #e4ecff;
+  }
+
+  .glass-app :is(.text-slate-500, .text-slate-400) {
+    color: #b7c6e4;
+  }
+
+  .glass-app :is(.text-teal-950, .text-teal-900, .text-teal-800, .text-teal-700),
+  .glass-app :is(.text-sky-800, .text-sky-700) {
+    color: #c5e7ff;
+  }
+
+  .glass-app :is(.text-emerald-800, .text-emerald-700) {
+    color: #9af0c8;
+  }
+
+  .glass-app :is(.text-rose-800, .text-rose-700, .text-rose-600, .text-rose-500) {
+    color: #ffb7c6;
+  }
+
+  .glass-app :is(.text-amber-900, .text-amber-800, .text-amber-700, .text-amber-600) {
+    color: #ffd89a;
+  }
+
+  .glass-app :is(.text-indigo-800, .text-indigo-700) {
+    color: #d4cbff;
+  }
+
+  .glass-app :is(.text-orange-800, .text-orange-700, .text-orange-600) {
+    color: #ffd0ae;
+  }
+
+  .glass-app :is(
+    .border-slate-100,
+    .border-slate-100\/90,
+    .border-slate-200,
+    .border-slate-200\/70,
+    .border-slate-200\/80,
+    .border-slate-200\/90,
+    .border-slate-300,
+    .border-slate-400
+  ) {
+    border-color: rgba(160, 186, 255, 0.18);
+  }
+
+  .glass-app :is(.border-teal-100, .border-teal-200, .border-teal-300) {
+    border-color: rgba(125, 211, 252, 0.35);
+  }
+
+  .glass-app :is(.border-amber-100, .border-amber-200) {
+    border-color: rgba(251, 191, 36, 0.35);
+  }
+
+  .glass-app :is(.border-rose-100, .border-rose-200) {
+    border-color: rgba(251, 113, 133, 0.35);
+  }
+
+  .glass-app :is(.border-emerald-100, .border-emerald-200) {
+    border-color: rgba(52, 211, 153, 0.35);
+  }
+
+  .glass-app :is(
+    .bg-teal-50,
+    .bg-teal-50\/50,
+    .bg-teal-50\/60,
+    .bg-teal-50\/70,
+    .bg-teal-50\/80,
+    .bg-teal-50\/90,
+    .bg-teal-100,
+    .bg-sky-50,
+    .bg-sky-100
+  ) {
+    background-color: rgb(14 58 72 / 0.82);
+    color: #e8f7ff;
+  }
+
+  .glass-app .bg-emerald-50 {
+    background-color: rgb(12 64 48 / 0.82);
+    color: #d9ffef;
+  }
+
+  .glass-app :is(.bg-amber-50, .bg-yellow-50) {
+    background-color: rgb(64 42 10 / 0.86);
+    color: #ffe7c2;
+  }
+
+  .glass-app .bg-rose-50 {
+    background-color: rgb(64 20 32 / 0.86);
+    color: #ffd5de;
+  }
+
+  .glass-app .bg-indigo-50 {
+    background-color: rgb(32 24 72 / 0.86);
+    color: #e6deff;
+  }
+
+  .glass-app .bg-orange-50 {
+    background-color: rgb(64 32 10 / 0.86);
+    color: #ffe0cc;
+  }
+
+  .glass-app :is(.ring-slate-200, .ring-slate-200\/80, .ring-slate-100) {
+    --tw-ring-color: rgba(160, 186, 255, 0.22);
+  }
+
+  .glass-app :is(.hover\:bg-slate-50, .hover\:bg-slate-100, .hover\:bg-slate-50\/60):hover,
+  .glass-app :is(.hover\:bg-white):hover {
+    background-color: rgba(109, 140, 255, 0.14);
+    background-image: none;
+  }
+
+  .glass-app :is(.hover\:bg-teal-50, .hover\:bg-teal-50\/50):hover {
+    background-color: rgba(56, 189, 248, 0.16);
+  }
+
+  .glass-app :is(.hover\:text-slate-900, .hover\:text-slate-800):hover,
+  .glass-app :is(.hover\:text-teal-800, .hover\:text-teal-700):hover {
+    color: #ffffff;
+  }
+
+  .glass-app .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  .glass-app .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(160, 186, 255, 0.16);
+  }
+
+  .glass-app thead:is(
+    .bg-white,
+    .bg-slate-50,
+    .bg-slate-50\/40,
+    .bg-slate-50\/60,
+    .bg-slate-50\/80,
+    .bg-slate-100
+  ) {
+    background-color: rgba(8, 16, 38, 0.94);
+    background-image: none;
+    box-shadow: none;
+  }
+
+  .glass-app input,
+  .glass-app select,
+  .glass-app textarea {
+    color-scheme: dark;
+  }
+
+  .glass-app select {
+    min-height: 3.5rem;
+    height: auto;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+    line-height: 1.45;
+  }
+
+  .glass-app select option {
+    background-color: #102044;
+    color: #f7f9ff;
+    line-height: 1.45;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .glass-app .from-white {
+    --tw-gradient-from: rgba(18, 36, 78, 0.85);
+  }
+
+  .glass-app :is(.to-slate-50, .to-slate-50\/70, .to-slate-50\/80) {
+    --tw-gradient-to: rgba(8, 18, 42, 0.35);
+  }
+
+  .glass-app .print-sheet,
+  .glass-app #print-root,
+  .glass-app .print-sheet :is(
+    .bg-white,
+    .bg-white\/70,
+    .bg-white\/80,
+    .bg-white\/90,
+    .bg-slate-50,
+    .bg-slate-100
+  ),
+  .glass-app #print-root :is(.bg-white, .bg-slate-50) {
+    background-color: #fff;
+    background-image: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    color: #0f172a;
+  }
+
+  .glass-app .print-sheet :is(.text-slate-900, .text-slate-800),
+  .glass-app #print-root :is(.text-slate-900, .text-slate-800) {
+    color: #0f172a;
+  }
+
+  .glass-app .print-sheet :is(.text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300, .text-slate-200, .text-slate-100),
+  .glass-app #print-root :is(.text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300, .text-slate-200, .text-slate-100) {
+    color: #334155;
+  }
+
+  .glass-app .print-sheet :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-slate-900),
+  .glass-app #print-root :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-slate-900) {
+    border-color: #cbd5e1;
+  }
+
+  /* QA register stays cream paper with dark ink. */
+  .glass-app .paper-sheet {
+    background-color: #fbf8f1;
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet :is(
+    .bg-white,
+    .bg-white\/70,
+    .bg-white\/80,
+    .bg-white\/90,
+    .bg-slate-50,
+    .bg-slate-100,
+    .bg-slate-100\/90
+  ) {
+    background-color: #fff;
+    background-image: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet :is(.text-slate-900, .text-slate-800, .text-slate-700, .text-slate-600, .text-slate-300, .text-slate-200, .text-slate-100) {
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet :is(h1, h2, h3, h4, p).text-white,
+  .glass-app .print-sheet :is(h1, h2, h3, h4, p).text-white,
+  .glass-app #print-root :is(h1, h2, h3, h4, p).text-white {
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet :is(.text-slate-500, .text-slate-400) {
+    color: #334155;
+  }
+
+  .glass-app .paper-sheet :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-slate-400, .border-slate-700) {
+    border-color: #64748b;
+  }
+
+  .glass-app .paper-sheet thead,
+  .glass-app .paper-sheet thead tr,
+  .glass-app .paper-sheet th {
+    background-color: #e7eef6;
+    background-image: none;
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet tbody td {
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet tbody tr:hover,
+  .glass-app .paper-sheet tbody tr:hover td {
+    background-color: #f4f7fb;
+    color: #0f172a;
+  }
+
+  .glass-app .paper-sheet button:not(.text-white),
+  .glass-app .paper-sheet button:not(.text-white):hover {
+    border: 1px solid #93c5fd;
+    background-color: #eff6ff;
+    background-image: none;
+    color: #1d4ed8;
+  }
+
+  .glass-app .paper-sheet :is(.text-amber-900, .text-amber-800, .text-amber-700, .text-amber-600),
+  .glass-app .print-sheet :is(.text-amber-900, .text-amber-800, .text-amber-700, .text-amber-600) {
+    color: #92400e;
+  }
+
+  .glass-app .paper-sheet :is(.text-rose-800, .text-rose-700, .text-rose-600, .text-rose-500),
+  .glass-app .print-sheet :is(.text-rose-800, .text-rose-700, .text-rose-600, .text-rose-500) {
+    color: #be123c;
+  }
+
+  .glass-app .paper-sheet :is(.text-teal-900, .text-teal-800, .text-teal-700),
+  .glass-app .print-sheet :is(.text-teal-900, .text-teal-800, .text-teal-700) {
+    color: #0f766e;
+  }
+
+  .glass-app .paper-sheet :is(.bg-amber-50, .bg-rose-50, .bg-emerald-50, .bg-teal-50, .bg-yellow-50),
+  .glass-app .print-sheet :is(.bg-amber-50, .bg-rose-50, .bg-emerald-50, .bg-teal-50, .bg-yellow-50) {
+    background-color: #fff7ed;
+    color: #0f172a;
+  }
 }
 
 #print-root {
@@ -253,7 +572,13 @@ tbody tr:hover {
   .print-page,
   .print-page .surface-card {
     background: #fff !important;
+    color: #0f172a !important;
     box-shadow: none !important;
+  }
+
+  .print-page :is(h1, h2, h3, p, th, td, li, span, label, div, a),
+  .print-sheet :is(h1, h2, h3, p, th, td, li, span, label, div, a) {
+    color: #0f172a !important;
   }
 
   .print-sheet table,

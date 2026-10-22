@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select, Textarea } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, friendlyError, todayISO } from "@/lib/utils";
@@ -19,7 +19,8 @@ export default function CleaningPage() {
   const [cleaningAgent, setCleaningAgent] = useState("");
   const [durationFrom, setDurationFrom] = useState("");
   const [durationTo, setDurationTo] = useState("");
-  const [cleanedBy, setCleanedBy] = useState(profile?.displayName || "");
+  const [cleanedBy, setCleanedBy] = useState<string | null>(null);
+  const cleanedByValue = cleanedBy ?? profile?.displayName ?? "";
   const [checkedBy, setCheckedBy] = useState("");
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,6 +28,7 @@ export default function CleaningPage() {
 
   async function save() {
     if (!profile || !can || !chamber) return toast.error("Select a chamber.");
+    if (!cleanedByValue.trim()) return toast.error("Cleaned by is required.");
     setSaving(true);
     try {
       await createCleaningRecord({
@@ -36,7 +38,7 @@ export default function CleaningPage() {
         cleaningAgent,
         durationFrom,
         durationTo,
-        cleanedBy,
+        cleanedBy: cleanedByValue.trim(),
         checkedBy,
         remarks,
         user: profile,
@@ -67,7 +69,7 @@ export default function CleaningPage() {
               <Input label="From" type="time" value={durationFrom} onChange={(e) => setDurationFrom(e.target.value)} disabled={!can} />
               <Input label="To" type="time" value={durationTo} onChange={(e) => setDurationTo(e.target.value)} disabled={!can} />
             </div>
-            <Input label="Cleaned by" value={cleanedBy} onChange={(e) => setCleanedBy(e.target.value)} disabled={!can} />
+            <Input label="Cleaned by" value={cleanedByValue} onChange={(e) => setCleanedBy(e.target.value)} disabled={!can} />
             <Input label="Checked by" value={checkedBy} onChange={(e) => setCheckedBy(e.target.value)} disabled={!can} />
             <Textarea label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={!can} />
             {can ? <Button onClick={() => void save()} loading={saving}>Save record</Button> : null}
@@ -75,7 +77,7 @@ export default function CleaningPage() {
         </Card>
         <Card>
           <CardHeader title="History" />
-          {!(rows.data || []).length ? <EmptyState title="No cleaning records" /> : (
+          {rows.loading ? <LoadingSkeleton rows={4} /> : rows.error ? <ErrorState message={rows.error} onRetry={rows.reload} /> : !(rows.data || []).length ? <EmptyState title="No cleaning records" /> : (
             <div className="space-y-3 p-4">
               {(rows.data || []).map((r) => (
                 <div key={r.id} className="rounded-xl border border-slate-200 p-4">

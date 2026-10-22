@@ -40,20 +40,20 @@ export function Header({
   const isHome = pathname === "/home";
 
   return (
-    <header className="app-header sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+    <header className="app-header sticky top-0 z-30 border-b border-white/10 bg-[#071022]/55 pt-[env(safe-area-inset-top)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl">
       <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {!hideNav ? (
             <>
               <button
-                className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden"
+                className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
                 onClick={onMenuClick}
                 aria-label="Open navigation"
               >
                 <Menu className="h-5 w-5" />
               </button>
               <button
-                className="hidden rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 lg:inline-flex"
+                className="hidden rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white lg:inline-flex"
                 onClick={onToggleCollapse}
                 aria-label="Toggle sidebar"
               >
@@ -63,12 +63,12 @@ export function Header({
           ) : null}
           <div className="min-w-0">
             {breadcrumbs?.length ? (
-              <div className="mb-0.5 hidden items-center gap-1 text-xs text-slate-500 sm:flex">
+              <div className="mb-0.5 hidden items-center gap-1 text-xs text-slate-400 sm:flex">
                 {breadcrumbs.map((b, i) => (
                   <span key={b.label} className="flex min-w-0 items-center gap-1">
                     {i > 0 ? <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" /> : null}
                     {b.href ? (
-                      <Link href={b.href} className="truncate transition hover:text-teal-700">
+                      <Link href={b.href} className="truncate transition hover:text-white">
                         {b.label}
                       </Link>
                     ) : (
@@ -78,7 +78,7 @@ export function Header({
                 ))}
               </div>
             ) : null}
-            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 sm:text-xl">{title}</h1>
+            <h1 className="truncate text-base font-semibold tracking-tight text-white sm:text-xl">{title}</h1>
           </div>
         </div>
 
@@ -87,7 +87,7 @@ export function Header({
             <>
               <Link
                 href="/home"
-                className="inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-teal-800 sm:px-2.5"
+                className="inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-2.5"
                 aria-label="All modules"
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -96,7 +96,7 @@ export function Header({
               <button
                 type="button"
                 onClick={() => openAiAssistant()}
-                className="hidden items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-teal-800 transition hover:bg-teal-50 sm:inline-flex"
+                className="hidden items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-indigo-200 transition hover:bg-indigo-400/15 sm:inline-flex"
                 aria-label="Ask SkyMap AI"
               >
                 <Sparkles className="h-4 w-4" />
@@ -105,7 +105,7 @@ export function Header({
               {hasPermission("reports.view") ? (
                 <Link
                   href="/stability/alerts"
-                  className="relative rounded-xl p-2 text-slate-600 transition hover:bg-slate-100"
+                  className="relative rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
                   aria-label="Alerts"
                 >
                   <Bell className="h-5 w-5" />
@@ -118,12 +118,12 @@ export function Header({
               ) : null}
             </>
           ) : null}
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/70 p-1 shadow-sm sm:gap-2.5 sm:px-2 sm:py-1.5 sm:pr-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-[11px] font-bold text-white">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/12 bg-white/6 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:gap-2.5 sm:px-2 sm:py-1.5 sm:pr-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-[11px] font-bold text-white">
               {initials(profile?.displayName)}
             </div>
             <div className="hidden min-w-0 text-right sm:block">
-              <p className="max-w-[10rem] truncate text-sm font-medium leading-tight text-slate-800 lg:max-w-[14rem]">
+              <p className="max-w-[10rem] truncate text-sm font-medium leading-tight text-slate-100 lg:max-w-[14rem]">
                 {profile?.displayName}
               </p>
               <p className="max-w-[10rem] truncate text-[11px] text-slate-500 lg:max-w-[14rem]">

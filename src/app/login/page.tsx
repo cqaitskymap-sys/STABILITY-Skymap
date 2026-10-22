@@ -61,11 +61,11 @@ function LoginForm() {
 
   function onRememberChange(checked: boolean) {
     setKeepSignedIn(checked);
-    if (!checked) clearRememberedLogin();
+    if (employeeId == null && rememberedId) setEmployeeId(rememberedId);
   }
 
   return (
-    <div className="relative min-h-dvh overflow-hidden">
+    <div className="relative min-h-dvh overflow-x-hidden">
       <Image
         src="/brand/stability-lab-bg.png"
         alt=""
@@ -74,13 +74,13 @@ function LoginForm() {
         sizes="100vw"
         className="object-cover object-center scale-105"
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-slate-950/55 to-teal-950/70" />
-      <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-sky-400/15 blur-3xl" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050914]/88 via-[#071433]/60 to-indigo-950/75" />
+      <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 rounded-full bg-indigo-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-sky-400/20 blur-3xl" />
 
       <div className="relative z-10 flex min-h-dvh">
         <section className="hidden flex-1 flex-col justify-end p-12 lg:flex xl:p-16">
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-100 backdrop-blur">
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-100 backdrop-blur">
             <FlaskConical className="h-3.5 w-3.5" />
             Skymap Pharmaceuticals Pvt. Ltd.
           </div>
@@ -100,10 +100,10 @@ function LoginForm() {
           <DeveloperCredit className="mt-8" tone="light" />
         </section>
 
-        <section className="flex w-full items-center justify-center px-4 py-[max(2.5rem,env(safe-area-inset-top))] lg:w-[min(100%,34rem)] lg:justify-end lg:pr-10 xl:pr-16">
-          <Card className="relative w-full max-w-md overflow-hidden border-white/20 bg-white/92 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 px-4 py-6 text-white sm:px-6 sm:py-8">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-teal-400/20 blur-2xl" />
+        <section className="flex w-full items-center justify-center px-4 py-8 lg:w-[min(100%,34rem)] lg:justify-end lg:py-10 lg:pr-10 xl:pr-16">
+          <Card className="relative w-full max-w-md overflow-hidden border-white/15 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.7)]">
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#071022] via-[#101a3d] to-indigo-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-indigo-400/25 blur-2xl" />
               <div className="relative flex flex-col items-center text-center">
                 <SkymapLogo priority className="h-16 w-auto max-w-[220px]" />
                 <p className="mt-3 text-sm font-medium text-sky-200">Stability Management System</p>
@@ -111,7 +111,7 @@ function LoginForm() {
               </div>
             </div>
             <form onSubmit={onSubmit} className="space-y-4 px-4 py-5 sm:px-6 sm:py-6">
-              <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-3.5 text-sm text-teal-900">
+              <div className="rounded-2xl border border-indigo-300/25 bg-indigo-400/10 p-3.5 text-sm text-indigo-100">
                 <div className="mb-1 flex items-center gap-2 font-semibold">
                   <ShieldCheck className="h-4 w-4" />
                   QA secure access
@@ -144,7 +144,7 @@ function LoginForm() {
                   type="checkbox"
                   checked={rememberChecked}
                   onChange={(e) => onRememberChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 accent-teal-700"
+                  className="h-4 w-4 rounded border-white/20 accent-indigo-400"
                 />
                 <span className="text-sm text-slate-700">Keep me signed in on this device</span>
               </label>

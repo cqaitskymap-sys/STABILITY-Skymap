@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select, Textarea } from "@/components/ui";
 import { PrintDocument, PrintFieldGrid } from "@/components/print/print-document";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
@@ -95,7 +95,7 @@ export default function WaterLossPage() {
         </Card>
         <Card>
           <CardHeader title="Records" />
-          {!(catalog.data?.rows || []).length ? <EmptyState title="No water-loss studies" /> : (
+          {catalog.loading ? <LoadingSkeleton rows={4} /> : catalog.error ? <ErrorState message={catalog.error} onRetry={catalog.reload} /> : !(catalog.data?.rows || []).length ? <EmptyState title="No water-loss studies" /> : (
             <div className="space-y-3 p-4">
               {(catalog.data?.rows || []).map((r) => (
                 <PrintDocument key={r.id} title="Water Loss Study" documentNumber={r.studyRef}>

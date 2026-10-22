@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, LoadingSkeleton, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDateTime, friendlyError, nowISO } from "@/lib/utils";
@@ -93,7 +93,7 @@ export default function ExcursionsPage() {
         </Card>
         <Card>
           <CardHeader title="Excursion log" description={`${(studies.data || []).length} studies in inventory may be linked when a chamber is selected.`} />
-          {!(rows.data || []).length ? (
+          {rows.loading ? <LoadingSkeleton rows={4} /> : rows.error ? <ErrorState message={rows.error} onRetry={rows.reload} /> : !(rows.data || []).length ? (
             <EmptyState title="No excursions recorded" />
           ) : (
             <div className="space-y-3 p-4">
@@ -103,7 +103,7 @@ export default function ExcursionsPage() {
                     <div>
                       <p className="font-semibold">{e.excursionId} · {e.chamberName}</p>
                       <p className="text-sm text-slate-500">{e.parameter} · {e.durationHours || 0}h · {formatDateTime(e.startTime)}</p>
-                      <p className="text-xs text-slate-500">Affected samples: {e.affectedSampleIds.length}</p>
+                      <p className="text-xs text-slate-500">Affected samples: {(e.affectedSampleIds || []).length}</p>
                     </div>
                     <StatusBadge status={e.status} />
                   </div>

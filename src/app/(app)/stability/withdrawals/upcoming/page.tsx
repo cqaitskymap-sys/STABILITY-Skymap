@@ -26,7 +26,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { useAsync } from "@/hooks/useAsync";
 import { effectiveDueDate, formatDate, paginate, todayISO } from "@/lib/utils";
-import { listPullPoints } from "@/services/inventory";
+import { listPullPoints, listSamples } from "@/services/inventory";
 import { listChambers } from "@/services/masters";
 import type { PullPointStatus, StudyPullPoint } from "@/types";
 
@@ -62,30 +62,12 @@ function dueHint(plannedDate: string, status: PullPointStatus) {
 
 function matchesWindow(pull: StudyPullPoint, window: WindowFilter) {
   if (window === "all") return true;
-  if (window === "overdue") return pull.status === "Overdue" || daysUntil(pull.plannedDate) < 0;
   const days = daysUntil(pull.plannedDate);
-  if (window === "today") {
-    return pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue" || days <= 0;
-  }
-  if (window === "7") return days <= 7 || pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue";
-  if (window === "30") return days <= 30 || pull.status === "Due Soon" || pull.status === "Due" || pull.status === "Due Today" || pull.status === "Overdue";
+  if (window === "overdue") return pull.status === "Overdue";
+  if (window === "today") return days === 0 || pull.status === "Overdue";
+  if (window === "7") return days <= 7;
+  if (window === "30") return days <= 30;
   return true;
-}
-
-function statusPriority(status: PullPointStatus) {
-  switch (status) {
-    case "Overdue":
-      return 0;
-    case "Due Today":
-    case "Due":
-      return 1;
-    case "Due Soon":
-      return 2;
-    case "Partially Withdrawn":
-      return 3;
-    default:
-      return 4;
-  }
 }
 
 export default function UpcomingWithdrawalsPage() {
@@ -93,6 +75,7 @@ export default function UpcomingWithdrawalsPage() {
   const canWithdraw = hasPermission("withdrawal.perform");
 
   const pulls = useAsync(listPullPoints, []);
+  const samples = useAsync(listSamples, []);
   const chambers = useAsync(listChambers, []);
   const [window, setWindow] = useState<WindowFilter>("7");
   const [studyType, setStudyType] = useState("all");
@@ -101,8 +84,15 @@ export default function UpcomingWithdrawalsPage() {
   const [page, setPage] = useState(1);
 
   const openPulls = useMemo(() => {
-    return (pulls.data || []).filter((p) => OPEN_STATUSES.includes(p.status));
-  }, [pulls.data]);
+    const bySample = new Map((samples.data || []).map((sample) => [sample.id, sample]));
+    return (pulls.data || []).filter((p) => {
+      if (!OPEN_STATUSES.includes(p.status)) return false;
+      const sample = bySample.get(p.sampleDocId);
+      if (!sample) return true;
+      if (sample.availableQuantity <= 0) return false;
+      return sample.status !== "Disposed" && sample.status !== "Depleted" && sample.status !== "Fully Withdrawn";
+    });
+  }, [pulls.data, samples.data]);
 
   const studyTypes = useMemo(() => {
     const set = new Set(openPulls.map((p) => p.studyType).filter(Boolean));
@@ -126,9 +116,12 @@ export default function UpcomingWithdrawalsPage() {
 
   const stats = useMemo(() => {
     return {
-      overdue: openPulls.filter((p) => p.status === "Overdue" || daysUntil(p.plannedDate) < 0).length,
-      dueToday: openPulls.filter((p) => p.status === "Due Today" || daysUntil(p.plannedDate) === 0).length,
-      dueSoon: openPulls.filter((p) => p.status === "Due Soon").length,
+      overdue: openPulls.filter((p) => p.status === "Overdue").length,
+      dueToday: openPulls.filter((p) => daysUntil(p.plannedDate) === 0).length,
+      dueSoon: openPulls.filter((p) => {
+        const days = daysUntil(p.plannedDate);
+        return days > 0 && days <= 7;
+      }).length,
       open: openPulls.length,
     };
   }, [openPulls]);
@@ -146,11 +139,7 @@ export default function UpcomingWithdrawalsPage() {
           .toLowerCase()
           .includes(q);
       })
-      .sort((a, b) => {
-        const byStatus = statusPriority(a.status) - statusPriority(b.status);
-        if (byStatus !== 0) return byStatus;
-        return a.plannedDate.localeCompare(b.plannedDate);
-      });
+      .sort((a, b) => daysUntil(a.plannedDate) - daysUntil(b.plannedDate) || a.plannedDate.localeCompare(b.plannedDate));
   }, [openPulls, window, studyType, chamberId, search]);
 
   const paged = paginate(filtered, page, 12);
@@ -176,6 +165,7 @@ export default function UpcomingWithdrawalsPage() {
               variant="outline"
               onClick={() => {
                 void pulls.reload();
+                void samples.reload();
                 void chambers.reload();
               }}
             >

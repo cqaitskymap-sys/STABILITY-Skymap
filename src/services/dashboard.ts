@@ -90,7 +90,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     activeChambers: activeChambers.length,
     chamberUtilization: roundPct(usedCapacity, totalCapacity),
     samplesAwaitingCoa: receipts.filter((r) => r.status === "Received - Awaiting COA").length,
-    samplesReadyForCharging: receipts.filter((r) => r.status === "COA Received - Ready for Charging").length,
+    samplesReadyForCharging: receipts.filter((r) => {
+      if (r.status === "COA Received - Ready for Charging") return true;
+      if (r.status !== "Charged") return false;
+      const inward = Number(r.sampleQuantity || 0);
+      return inward > 0 && Number(r.chargedQuantity || 0) < inward;
+    }).length,
     controlSampleCount: controls.length,
     pendingReconciliation: samples.filter((s) => s.status === "Under Reconciliation").length,
     activeChamberAlarms: alarms.filter((a) => a.status === "Active").length,

@@ -41,13 +41,17 @@ export default function QuantityMasterPage() {
       toast.error("Controlled sample quantity must be greater than zero.");
       return;
     }
+    if (!unit.trim()) {
+      toast.error("Select a unit from the unit master.");
+      return;
+    }
     setSaving(true);
     try {
       await createQuantityMasterRevision({
         productId: product.id,
         productName: product.productName,
         quantity: qty,
-        unit: unit || "UNIT",
+        unit: unit.trim(),
         effectiveDate: todayISO(),
         preparedBy: preparedBy || undefined,
         checkedBy: checkedBy || undefined,
@@ -94,7 +98,7 @@ export default function QuantityMasterPage() {
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <Input label="Controlled sample quantity" type="number" required value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={!can} />
-              <Select label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!can}>
+              <Select label="Unit" required value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!can}>
                 <option value="">Select unit</option>
                 {(catalog.data?.units || []).filter((u) => u.status === "Active").map((u) => (
                   <option key={u.id} value={u.abbreviation || u.name}>{u.abbreviation || u.name}</option>

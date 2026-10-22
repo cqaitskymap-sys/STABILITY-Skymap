@@ -322,17 +322,17 @@ export default function AdminUsersPage() {
               className={cn(
                 "rounded-2xl border p-4 text-left transition",
                 active
-                  ? "border-teal-300 bg-teal-50/90 shadow-[0_8px_24px_-16px_rgba(13,148,136,0.7)]"
-                  : "border-slate-200 bg-white/80 hover:border-slate-300"
+                  ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-50 shadow-[0_8px_24px_-16px_rgba(34,211,238,0.45)]"
+                  : "border-slate-200 bg-white/80 text-slate-100 hover:border-slate-300"
               )}
             >
               <div className="mb-2 flex items-center gap-2">
-                <Icon className={cn("h-4 w-4", active ? "text-teal-700" : "text-slate-500")} />
-                <span className={cn("text-sm font-semibold", active ? "text-teal-900" : "text-slate-800")}>
+                <Icon className={cn("h-4 w-4", active ? "text-cyan-200" : "text-slate-300")} />
+                <span className={cn("text-sm font-semibold", active ? "text-white" : "text-slate-100")}>
                   {item.label}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">{item.description}</p>
+              <p className={cn("text-xs", active ? "text-cyan-100/80" : "text-slate-300")}>{item.description}</p>
             </button>
           );
         })}

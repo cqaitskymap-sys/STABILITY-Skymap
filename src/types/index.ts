@@ -732,6 +732,8 @@ export interface ControlSample {
   conversionBatch?: string;
   brand?: string;
   conversionNoteRef?: string;
+  /** Collection document that created this sample during QA verification. */
+  collectionDocId?: string;
   status: ControlSampleStatus;
   remarks?: string;
   createdBy: string;

@@ -36,15 +36,32 @@ const TITLE_MAP: Record<string, string> = {
   "/stability/disposal": "Sample Disposal",
   "/stability/transactions": "Inventory Transactions",
   "/stability/alerts": "Alerts",
+  "/stability/tasks": "Tasks",
   "/stability/reports": "Reports",
   "/stability/settings": "Settings",
+  "/stability/protocols": "Protocols",
+  "/stability/water-loss": "Water Loss Study",
+  "/stability/analysis": "Analysis Requests",
+  "/stability/scheduler": "Monthly Plan",
+  "/stability/inventory/receiving": "Sample Inward",
+  "/stability/chambers": "Chamber Dashboard",
+  "/stability/chambers/status": "Current Status",
+  "/stability/chambers/alarms": "Alarms",
+  "/stability/chambers/excursions": "Excursions",
+  "/stability/chambers/cleaning": "Cleaning",
+  "/stability/chambers/calibration": "Calibration",
+  "/stability/chambers/mapping": "Mapping",
+  "/stability/chambers/maintenance": "Maintenance",
+  "/stability/chambers/mkt": "MKT Report",
   "/masters/products": "Stability Product Master",
   "/masters/batches": "Stability Batch Master",
   "/masters/study-types": "Study Type Master",
+  "/masters/study-reasons": "Study Reason Master",
   "/masters/storage-conditions": "Storage Condition Master",
   "/masters/pull-points": "Pull Point Master",
   "/masters/chambers": "Chamber Master",
   "/masters/locations": "Storage Location Master",
+  "/masters/packaging": "Packaging Master",
   "/masters/units": "Unit Master",
   "/masters/markets": "Market Master",
   "/masters/pack-sizes": "Pack Size Master",
@@ -53,7 +70,7 @@ const TITLE_MAP: Record<string, string> = {
   "/stability/control-samples/register": "Controlled Sample Register",
   "/stability/control-samples/observation": "Periodic Observation",
   "/stability/control-samples/withdrawal": "Withdrawal / Requisition",
-  "/stability/control-samples/locations": "Where samples are stored",
+  "/stability/control-samples/locations": "Storage",
   "/stability/control-samples/destruction-due": "Destruction Due",
   "/stability/control-samples/destruction/new": "Destruction",
   "/stability/control-samples/destruction-log": "Destruction Log",
@@ -128,9 +145,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   if (!loading && user && !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <h1 className="text-lg font-semibold text-slate-900">Session could not be verified</h1>
-          <p className="mt-2 text-sm text-slate-600">
+        <div className="surface-card w-full max-w-md rounded-2xl p-6">
+          <h1 className="text-lg font-semibold text-white">Session could not be verified</h1>
+          <p className="mt-2 text-sm text-slate-300">
             The signed-in account is missing, inactive, or locked. Sign in again with an active account.
           </p>
           <Button className="mt-4" onClick={() => void logout()}>
@@ -145,8 +162,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-hidden">
       {ready ? null : (
         <div className="flex min-h-screen items-center justify-center px-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/80 p-5 shadow-sm backdrop-blur">
-            <div className="mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r from-teal-400 to-teal-600" />
+          <div className="surface-card w-full max-w-md rounded-2xl p-5">
+            <div className="mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500" />
             <LoadingSkeleton rows={5} />
           </div>
         </div>
